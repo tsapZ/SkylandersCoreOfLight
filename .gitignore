@@ -1,0 +1,11 @@
+/out/
+/logs/
+/scratch/
+/dist/
+
+# Game data and figure dumps: never commit
+*.iso
+*.xex
+*.sky
+*.dump
+**/figures/**/*.bin
