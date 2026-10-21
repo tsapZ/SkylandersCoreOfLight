@@ -18,8 +18,9 @@ not inferred.
 1. **Finish the three games** on the recompilation path: the owner's play test feedback, ultrawide,
    installers (SSARecomp, GiantsRecomp, SwapForceRecomp).
 2. **The next games, one by one, each in its own repository:** Trap Team, SuperChargers,
-   Imaginators (discs of the first two are dumped; Imaginators is not owned in a usable language
-   yet).
+   Imaginators (all three started 2026-10-21, see the table below; the owner's SuperChargers and
+   Imaginators discs are Spanish / Italian pressings, Imaginators' German can come from the
+   owner's PS3 disc).
 3. **This hub:** launcher, figure library, profiles; it starts the games' own exes, so it doesn't
    care how a game is built.
 4. **A native renderer** (the Xbox 360 D3D layer on D3D12/Vulkan, a shared library, the emulated GPU
@@ -27,6 +28,21 @@ not inferred.
    docs/native-renderer.md. Its cheap first step, a counting build, can come earlier.
 5. **Decompilation:** an open decision for after that, per game, starting with the smallest
    (Giants: 23,632 functions; Spyro's Adventure 31,215; Swap Force 81,745).
+
+## The games (2026-10-21)
+
+| Game | Repository | State |
+|---|---|---|
+| Spyro's Adventure | [SSARecomp](https://github.com/tsapZ/SSARecomp) | playable (Chapter 1 to the hub), portal menu with the game's pictures, owner play-tested |
+| Giants | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | playable, portal menu with portraits, upgrades and hats, owner play-tested |
+| Swap Force | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | playable (tutorial and hub), the most complete: native 3D option, 4K |
+| Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots, menus, Chapter 1 with a figure on the emulated portal (no codegen fix needed) |
+| SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots through the title and menus into the opening movie (28 function starts registered) |
+| Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots to the title and the licence agreement (30 function starts registered); German from the PS3 disc researched |
+
+All six share the SDK fork (`tsapZ/rexglue-sdk`, branch `skylanders`) and the portal library
+(`tsapZ/skylanders-portal`, branch `feature/portal-menu`): the portal, player, settings and
+achievement menus are the same everywhere.
 
 ## Now, next, later
 
