@@ -37,8 +37,8 @@ not inferred.
 | Giants | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | playable, portal menu with portraits, upgrades and hats, owner play-tested |
 | Swap Force | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | playable (tutorial and hub), the most complete: native 3D option, 4K, a shorter figure intro as an option |
 | Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots (logo movies skipped), menus, Chapter 1 with a figure; the portal menu opens by itself and shows the game's portraits |
-| SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots (logo movies skipped), menus, the first level; the portal menu opens by itself and shows the game's collection icons; the disc is Spanish / Italian |
-| Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots through the licence (Y) and the menus into the first level; the portal menu (Guide) shows the game's icons; the disc is Spanish / Italian, German from the PS3 disc researched |
+| SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots (logo movies skipped), menus, the first level; the portal menu opens by itself and shows the game's collection icons; the disc is Spanish / Italian, the German tool is ready for the PS3 disc |
+| Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots through the licence (Y) and the menus into the first level; the portal menu opens by itself with the game's icons; German text (and experimentally voices) from the owner's PS3 disc with tools/german_text.py |
 
 All six share the SDK fork (`tsapZ/rexglue-sdk`, branch `skylanders`) and the portal library
 (`tsapZ/skylanders-portal`, branch `feature/portal-menu`): the portal, player, settings and
