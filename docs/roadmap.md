@@ -36,8 +36,8 @@ not inferred.
 | Spyro's Adventure | [SSARecomp](https://github.com/tsapZ/SSARecomp) | playable (Chapter 1 to the hub), portal menu with the game's pictures, owner play-tested |
 | Giants | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | playable, portal menu with portraits, upgrades and hats, owner play-tested |
 | Swap Force | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | playable (tutorial and hub), the most complete: native 3D option, 4K |
-| Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots, menus, Chapter 1 with a figure on the emulated portal (no codegen fix needed) |
-| SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots through the title and menus into the opening movie (28 function starts registered) |
+| Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots (logo movies skipped), menus, Chapter 1 with a figure on the emulated portal, the portal menu with Guide |
+| SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots (logo movies skipped), menus, the first level with a figure and the loaner vehicle (28 function starts registered) |
 | Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots to the title and the licence agreement (30 function starts registered); German from the PS3 disc researched |
 
 All six share the SDK fork (`tsapZ/rexglue-sdk`, branch `skylanders`) and the portal library
