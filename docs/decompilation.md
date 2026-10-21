@@ -112,3 +112,11 @@ Das ist eine Größenordnung, keine Zusage. Die tatsächliche Rate zeigt erst ei
 2. **Pilot:** etwa 50 Funktionen aus dem Bereich, den wir kennen (Portal und Figuren), ersetzen und
    prüfen; danach die Rate messen und die Schätzung korrigieren.
 3. Dann die Entscheidung des Besitzers, ob und wie weit es weitergeht.
+
+## Gestartet (2026-10-22)
+
+Das private Repository [tsapZ/GiantsDecomp](https://github.com/tsapZ/GiantsDecomp) hat den Ansatz
+(docs/approach.md), die Bestandsaufnahme mit Schätzung (docs/plan.md) und die erste Funktion:
+die CRC-16 der Figurendaten (sub_82201FD8), in lesbarem C++, im laufenden Giants eingesetzt und
+gegen das recompilierte Original auf allen 2^24 Eingaben geprüft („matches the original“).
+GiantsRecomp baut das nur mit `GIANTS_DECOMP_DIR` ein; ohne bleibt das Spiel wie bisher.
