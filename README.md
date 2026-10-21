@@ -27,10 +27,10 @@ every game's data is known (decision 2026-10-19). Until then each game is comple
 |---|---|---|
 | Spyro's Adventure (2011) | [SSARecomp](https://github.com/tsapZ/SSARecomp) | Chapter 1 playable, portal and portal menu |
 | Giants (2012) | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | first level playable, portal menu with the game's pictures and upgrades |
-| Swap Force (2013) | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | first level played through, real USB portal, settings menu |
-| Trap Team (2014) | not started | disc dumped |
-| SuperChargers (2015) | not started | disc dumped |
-| Imaginators (2016) | not started | |
+| Swap Force (2013) | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | tutorial and hub played, real USB portal, settings menu, native 3D option |
+| Trap Team (2014) | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | Chapter 1 with a figure, the portal menu with the game's portraits |
+| SuperChargers (2015) | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | the first level, the portal menu with the game's collection icons |
+| Imaginators (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | the first level, the portal menu with the game's icons, German from the owner's PS3 disc |
 
 All of them are the Xbox 360 versions, recompiled to native Windows with ReXGlue, so they share
 one toolchain, one portal and one settings menu.
