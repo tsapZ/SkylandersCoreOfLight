@@ -29,20 +29,24 @@ not inferred.
 5. **Decompilation:** an open decision for after that, per game, starting with the smallest
    (Giants: 23,632 functions; Spyro's Adventure 31,215; Swap Force 81,745).
 
-## The games (2026-10-21, morning)
+## The games (2026-10-21, afternoon)
 
 | Game | Repository | State |
 |---|---|---|
 | Spyro's Adventure | [SSARecomp](https://github.com/tsapZ/SSARecomp) | playable (Chapter 1 to the hub), portal menu with the game's pictures, owner play-tested; native 3D option |
 | Giants | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | playable, portal menu with portraits, upgrades and hats, owner play-tested; ultrawide |
 | Swap Force | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | playable (tutorial and hub), the most complete: native 3D option, 4K, a shorter figure intro as an option |
-| Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots (logo movies skipped), menus, Chapter 1 with a figure; the portal menu opens by itself and shows the game's portraits; native 3D option, ultrawide |
+| Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots (logo movies skipped), menus, Chapter 1 with a figure; the portal menu opens by itself (players 1 and 2) and shows the game's collection cards and element symbols; native 3D option, ultrawide |
 | SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots (logo movies skipped), menus, the first level; the portal menu opens by itself and shows the game's collection icons; German text and voices from the owner's English / German 360 disc (tools/german_text.py); native 3D option, ultrawide |
 | Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots through the licence (Y) and the menus into the first level; the portal menu opens by itself with the game's icons; German text (and experimentally voices) from the owner's PS3 disc with tools/german_text.py; native 3D option, ultrawide |
 
 All six share the SDK fork (`tsapZ/rexglue-sdk`, branch `skylanders`) and the portal library
 (`tsapZ/skylanders-portal`, branch `feature/portal-menu`): the portal, player, settings and
-achievement menus are the same everywhere.
+achievement menus are the same everywhere. Each game hands the library its own look, read from
+the owner's disc at start: its bitmap fonts for the menus' titles and text (each game's
+`src/game/game_fonts.cpp`), its pictures of the figures, and its element symbols and coin where
+the disc has them. The library knows every figure's element up to Imaginators, read from the
+games' own data (Trap Team's character scenes, SuperChargers' and Imaginators' toy data).
 
 ## Now, next, later
 
