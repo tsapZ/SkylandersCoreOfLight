@@ -4,8 +4,10 @@ The hub for the recompiled Skylanders games. In the games the Core of Light hold
 together; here it ties the games together: one launcher, a library of your Skylanders, profiles,
 and online co-op with each player's own portal.
 
-**Status: planning.** Nothing is built yet. The hub comes after all games are recompiled, when
-every game's data is known (decision 2026-10-19). Until then each game is complete on its own.
+**Status: the launcher's first version** (2026-10-22, [docs/launcher.md](docs/launcher.md)): one
+screen that finds the six games, checks their discs, shows a few of their settings and starts
+each game's own exe. Settings pages, the figure library, profiles and online co-op are still
+planned. Each game stays complete on its own.
 
 ## Principles
 
@@ -41,7 +43,7 @@ element symbols and coin.
 
 | Part | Issues |
 |---|---|
-| Launcher: start every game, find the discs, settings per game | #5, #6, #7 |
+| Launcher: start every game, find the discs, settings per game | #5, #6, #7 (first version: [docs/launcher.md](docs/launcher.md)) |
 | Figure library: every Skylander's stats without a game running | #8 |
 | Profiles like an Xbox account, each with its own saves and figures | #4 |
 | Online co-op with each player's own real portal (proposal) | #1, #2, #3, [docs/online-coop.md](docs/online-coop.md) |

@@ -3,8 +3,14 @@
 ## Goal
 
 The hub for the recompiled Skylanders games (SSARecomp, GiantsRecomp, SwapForceRecomp, later Trap
-Team, SuperChargers, Imaginators): launcher, figure library, profiles, online co-op. Planning only
-until all games are recompiled; see README.md and docs/roadmap.md.
+Team, SuperChargers, Imaginators): launcher, figure library, profiles, online co-op. The
+launcher's first version exists (docs/launcher.md, src/); see README.md and docs/roadmap.md.
+
+## Build
+
+From a Visual Studio 2022 x64 developer prompt: `git submodule update --init`, then
+`cmake --preset release` and `cmake --build --preset release` (out/build/release/coreoflight.exe).
+Tests that start a game use a stand-in exe or a copied `--user_data_root`, never the owner's saves.
 
 ## Rules
 

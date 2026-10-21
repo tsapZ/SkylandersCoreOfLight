@@ -8,7 +8,7 @@ not inferred.
 | Phase | State | Issues | What |
 |---|---|---|---|
 | 0 Repository | ✅ | – | this repo; the online co-op proposal and the profiles idea moved here from SwapForceRecomp (its #28, #29, #30, #51) |
-| 1 Launcher | ⬜ | #5, #6, #7 | one menu that finds and starts every game, settings per game |
+| 1 Launcher | 🟡 first version | #5, #6, #7 | one menu that finds and starts every game (done: finding, disc check, starting; docs/launcher.md), settings per game (open) |
 | 2 Figure library | ⬜ | #8 | the owner's Skylanders without a game running |
 | 3 Profiles | ⬜ | #4 | name, picture, own saves and figures per profile |
 | 4 Online co-op (stretch) | 🟡 proposal written | #1, #2, #3 | building it is a separate decision |
@@ -59,5 +59,5 @@ edges in its own proportions where the game's UI width was found (not yet in Tra
 |---|---|---|
 | Now | Step 1, the three games; then step 2 | me, play tests by the owner |
 | Now | Keep the parts the hub needs shared: menus, figure decoding and the figure folder stay in `skylanders-portal` | me |
-| After all games | Phase 1, the launcher | both |
+| Now | Phase 1, the launcher: first version built 2026-10-22 (finds, checks and starts the games); next the settings pages (#7) and ISO extraction (#6) | me, a try by the owner |
 | Later | Figure library, profiles; online co-op only after the owner agrees to the proposal | both |
