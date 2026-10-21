@@ -158,6 +158,47 @@ Wie Unleashed, dazu `ReflectionResolution` (1/8 bis voll, Standard 1/2) und `Rad
 9. **Cutscenes/FMVs:** unverzerrt pillarboxen statt strecken (Unleashed, Banjo).
 10. **Langfristig ein nativer Renderer** wie Skate 3 (mit emuliertem Fallback); sehr hoher Aufwand.
 
+## Nachtrag 2026-10-22: Stand der Ideen und neue Funde
+
+**Umgesetzt (in allen Spielen, wo es das Spiel hergibt):**
+
+- Idee 1, Szene in Ausgabeauflösung: „Natives 3D-Bild“ (`scene_size`) in Spyro's Adventure, Swap
+  Force, Trap Team, SuperChargers und Imaginators; Giants fehlt noch (GiantsRecomp #25).
+- Idee 2, HUD-Ultrawide: in allen sechs Spielen; Idee 9, Filme unverzerrt mit Seitenbalken: in allen
+  sechs.
+- Spiel-AA bei hoher Auflösung: das FXAA des Spiels rechnet mit der internen Auflösung
+  (`fxaa_follow_resolution_scale`) in Swap Force, Trap Team, SuperChargers und Imaginators; Giants
+  #26, Spyro's Adventure hat kein FXAA.
+- Standards nach Wunsch des Besitzers: 60 FPS und CAS-Schärfung ab Werk (Preset „Qualität“ ohne die
+  Auflösung, die das Installationsprogramm pro Bildschirm setzt), Anisotropie und der schnelle
+  RTV-Renderpfad waren schon wählbar.
+
+**Offen (als Issues angelegt):** Bloom- und Bewegungsunschärfe-Stärke nur in Swap Force (Idee 6;
+SSARecomp #35, GiantsRecomp #27, TrapTeamRecomp #5, SuperChargersRecomp #3, ImaginatorsRecomp #3).
+
+**Neu gefunden:**
+
+- **Xenia, Presentation-Update:** FSR, FXAA, CAS und VRR bei fast keinen Kosten; die nicht
+  quadratischen Skalierungen 1×2 und 2×1 bringen sichtbar mehr Details für viel weniger GPU-Last
+  als 2×2 und kommen mit FSR und FXAA nahe an native Qualität
+  ([xenia.jp](https://xenia.jp/updates/2022/01/29/presenting-the-presentation-update-amd-fidelityfx-fsr-fxaa-cas-vrr.html)).
+  Für uns: eine Stufe „1,5×“ bzw. 2×1 für schwächere GPUs, wenn das SDK getrennte X/Y-Skalierung
+  erlaubt (Idee 7, unverifiziert).
+- **The Simpsons Game Recompiled (ReXGlue):** ein „nativer Renderer“ als Standard, der EDRAM-genaue
+  Pfad wählbar; laut einem Leitfaden sank die GPU-Zeit eines Frames auf dem Steam Deck von 14,6 auf
+  8,1 ms ([heldgames](https://heldgames.com/guides/simpsons-game-recompiled-steam-deck); Zweitquelle,
+  nicht mit den Release-Notes abgeglichen). Passt zu Idee 10 und zu Swap Forces Messung (#44: rund
+  25 % der GPU-Zeit ist EDRAM-Emulation).
+- **Unleashed Recompiled:** bikubisch gefilterte Lightmaps, „Enhanced“ Motion Blur und
+  Schattenauflösung bis 8K ([Android Authority](https://www.androidauthority.com/xbox-360-recompiled-sonic-unleashed-3531514/),
+  [RetroRGB](https://retrorgb.com/chriss-thoughts-unleashed-recompiled.html)). Für uns: die
+  Schattenkarten werden mit `resolution_scale` schon mitskaliert; eine eigene, höhere
+  Schattenauflösung bräuchte die Größe der Schattenkarte im Spiel (Swap Force auf der Wii U:
+  512×2048, Cemu-Pack 50-400 %).
+- **ReXGlue-Projekte allgemein:** FIFA 08 läuft nach Optimierung des Xenos-Renderers in 1440p auf
+  einem Handheld ([evoweb](https://evoweb.uk/threads/xbox-360-recompilations.106908/)); keine
+  öffentlichen Angaben zu Readback, Resolve oder Frame-Pacing gefunden.
+
 ## Quellen
 
 Alle Links stehen im Text; Hauptquellen: UnleashedRecomp, MarathonRecomp, skate3recomp, GiantsRecomp

@@ -27,7 +27,9 @@ not inferred.
    kept as fallback): research in docs/ai-recomp.md, measurements in SwapForceRecomp
    docs/native-renderer.md. Its cheap first step, a counting build, can come earlier.
 5. **Decompilation:** an open decision for after that, per game, starting with the smallest
-   (Giants: 23,632 functions; Spyro's Adventure 31,215; Swap Force 81,745).
+   (Giants: 23,632 functions; Spyro's Adventure 31,215; Swap Force 81,745). Research, the
+   approach that fits (step by step on the running recompilation, not byte-matching: the original
+   compiler isn't available) and a rough estimate for Giants: docs/decompilation.md (2026-10-22).
 
 ## The games (2026-10-21, afternoon)
 
