@@ -47,6 +47,9 @@ the owner's disc at start: its bitmap fonts for the menus' titles and text (each
 `src/game/game_fonts.cpp`), its pictures of the figures, and its element symbols and coin where
 the disc has them. The library knows every figure's element up to Imaginators, read from the
 games' own data (Trap Team's character scenes, SuperChargers' and Imaginators' toy data).
+Ultrawide works the same way in every game: a wider field of view (Hor+), the movies (logos,
+cutscene movies) 16:9 with black bars at the sides while they play, and the HUD at the window's
+edges in its own proportions where the game's UI width was found (not yet in Trap Team).
 
 ## Now, next, later
 
