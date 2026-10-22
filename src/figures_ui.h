@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,6 +36,8 @@ class FiguresScreen {
     std::filesystem::path file;
   };
   std::vector<const Figure*> Shown() const;
+  // The figure's picture from the games' picture folders (the newest game that has one), or none.
+  const std::filesystem::path* Picture(const Figure& f);
 
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;
@@ -45,6 +48,8 @@ class FiguresScreen {
   int tab_ = 0;                  // 0 = every game, then the games in release order
   bool all_ = false;             // every Skylander of the game, not only the owner's
   int selected_ = 0;
+  std::filesystem::path pictures_dir_;  // Documents\Skylanders\Pictures, one folder per game
+  std::map<std::pair<uint16_t, uint16_t>, std::filesystem::path> pictures_;  // empty path: none
 };
 
 }  // namespace coreoflight

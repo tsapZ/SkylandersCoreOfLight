@@ -11,6 +11,7 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "launcher_ui.h"
+#include "textures.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -141,6 +142,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   if (!regular) regular = io.Fonts->AddFontDefault();
   if (!bold) bold = regular;
 
+  coreoflight::SetTextureDevice(g_device);
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
   g_ui = &ui;
@@ -197,6 +199,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
   }
 
+  coreoflight::ReleaseTextures();
   ImGui_ImplDX11_Shutdown();
   ImGui_ImplWin32_Shutdown();
   ImGui::DestroyContext();

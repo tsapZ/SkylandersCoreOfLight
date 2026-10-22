@@ -51,8 +51,9 @@ void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_
 // Starts a game's exe in its own folder; false (and `error`) if Windows refused.
 bool StartGame(const Found& game, std::wstring& error, void** process);
 
-// The shared figure folder every game uses (Documents\Skylanders\Figures) and how many figure
-// files are in it.
+// The shared figure folder every game uses (Documents\Skylanders\Figures, or "figures = <folder>"
+// in coreoflight.ini, as a game's portal_figures_dir) and how many figure files are in it. The
+// games' pictures for the figure library are in the folder next to it (Pictures).
 std::filesystem::path FiguresDir();
 int CountFigures();
 

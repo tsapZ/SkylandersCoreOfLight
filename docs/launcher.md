@@ -44,9 +44,13 @@ exe and gets out of the way while the game runs; no game needs it.
   RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built
   without the games' SDK, AES and MD5 from Windows). X switches to every Skylander of a game, the
   owner's marked ("11 von 54 dabei"), each with the progress of the owner's figure. The pictures
-  are still plain element-coloured discs: the portraits come from the discs at run time in the
-  games, which the launcher doesn't read yet. Copies the games keep in a `real` folder before they
-  write to a real figure are left out.
+  are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
+  in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
+  `StartFigurePictureCache`), and the library takes the newest game's picture of each figure; a
+  figure no played game has a picture of gets its element's colour and first letter. Copies the
+  games keep in a `real` folder before they write to a real figure are left out.
+  `figures = <folder>` in coreoflight.ini uses another figure folder (as the games'
+  `portal_figures_dir`); the pictures are then in the `Pictures` folder next to it.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
   by Windows' display language.
 
@@ -54,8 +58,8 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- A folder with an unpacked disc instead of an ISO (#6), the figures' pictures and hats (#8),
-  profiles (#4).
+- A folder with an unpacked disc instead of an ISO (#6), the hats and upgrade pictures in the
+  figure library (#8), profiles (#4).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 

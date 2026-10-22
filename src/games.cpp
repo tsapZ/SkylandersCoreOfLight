@@ -15,6 +15,8 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr char kConfigFile[] = "coreoflight.ini";
+// "figures = <folder>" in coreoflight.ini, as a game's portal_figures_dir: empty for the shared one.
+fs::path g_figures_dir;
 constexpr wchar_t kBuildDir[] = L"out\\build\\win-amd64-release";
 
 // Each repository pins its disc's default.xex in docs/game/default.xex.sha256.
@@ -155,6 +157,7 @@ const std::vector<Game>& AllGames() { return kGames; }
 
 void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   const auto ini = ReadIni(launcher_dir / kConfigFile);
+  if (auto it = ini.find("figures"); it != ini.end()) g_figures_dir = Utf8Path(it->second);
   found = std::vector<Found>(kGames.size());
   for (size_t i = 0; i < kGames.size(); ++i) {
     found[i].exe = FindExe(kGames[i], launcher_dir, ini);
@@ -196,7 +199,9 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
   return true;
 }
 
-fs::path FiguresDir() { return KnownFolder(FOLDERID_Documents) / "Skylanders" / "Figures"; }
+fs::path FiguresDir() {
+  return g_figures_dir.empty() ? KnownFolder(FOLDERID_Documents) / "Skylanders" / "Figures" : g_figures_dir;
+}
 
 int CountFigures() {
   int count = 0;

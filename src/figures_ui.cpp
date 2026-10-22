@@ -11,6 +11,7 @@
 #include "imgui.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
+#include "textures.h"
 
 namespace coreoflight {
 namespace {
@@ -116,6 +117,7 @@ std::string Badge(const std::string& badge, bool german) {
   if (badge.starts_with("Series ")) return "Serie " + badge.substr(7);
   static const std::pair<std::string_view, std::string_view> kDe[] = {
       {"Variant", "Variante"}, {"Chase", "Seltene Variante"}, {"Vehicle", "Fahrzeug"}, {"Trap", "Falle"},
+      {"Trap Master", "Fallen-Meister"},
       {"Mini", "Mini-Skylander"}, {"Creation Crystal", "Kreationskristall"}, {"Villain Sensei", "Schurken-Sensei"},
   };
   for (const auto& [en, de] : kDe) {
@@ -145,6 +147,10 @@ void FiguresScreen::Init(ImFont* regular, ImFont* bold, bool german) {
 void FiguresScreen::Open(const fs::path& figures_dir) {
   open_ = true;
   selected_ = 0;
+  // Each game leaves the pictures it reads from its disc there (skylanders-portal
+  // StartFigurePictureCache): looked for again on every open.
+  pictures_dir_ = figures_dir.parent_path() / "Pictures";
+  pictures_.clear();
   owned_.clear();
   catalog_.clear();
   std::set<std::pair<uint16_t, uint16_t>> have;
@@ -207,6 +213,24 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     }
     catalog_.push_back(std::move(f));
   }
+}
+
+const fs::path* FiguresScreen::Picture(const Figure& f) {
+  const auto key = std::make_pair(f.id, f.variant);
+  auto it = pictures_.find(key);
+  if (it == pictures_.end()) {
+    fs::path found;
+    char name[32];
+    std::snprintf(name, sizeof(name), "%u-%u.png", unsigned(f.id), unsigned(f.variant));
+    std::error_code ec;
+    // The newest game first: it knows the most characters and has the newest pictures.
+    for (size_t i = std::size(kGames); i-- > 0 && found.empty();) {
+      const fs::path p = pictures_dir_ / fs::path(std::u8string(kGames[i].begin(), kGames[i].end())) / name;
+      if (fs::exists(p, ec)) found = p;
+    }
+    it = pictures_.emplace(key, found).first;
+  }
+  return it->second.empty() ? nullptr : &it->second;
 }
 
 std::vector<const FiguresScreen::Figure*> FiguresScreen::Shown() const {
@@ -275,7 +299,7 @@ void FiguresScreen::Draw(float width, float height) {
   const float grid_top = top + 60 * u, bottom = height - 80 * u;
   const float panel_w = std::min(380 * u, width * 0.3f);
   const float grid_w = width - 2 * left - panel_w - 24 * u;
-  const float tile_w = 230 * u, tile_h = 96 * u, gap = 12 * u;
+  const float tile_w = 240 * u, tile_h = 96 * u, gap = 12 * u;
   const int cols = std::max(1, int((grid_w + gap) / (tile_w + gap)));
   const int rows_visible = std::max(1, int((bottom - grid_top + gap) / (tile_h + gap)));
   if (n) {
@@ -316,14 +340,22 @@ void FiguresScreen::Draw(float width, float height) {
     const int alpha = f.owned ? 255 : 110;
     dl->AddRectFilled(a, b, chosen ? Rgba(60, 70, 140, 240) : Rgba(24, 30, 70, f.owned ? 235 : 150), 16 * u);
     if (chosen) dl->AddRect(a, b, kGold, 16 * u, 0, 3 * u);
-    // The element as a coloured disc with the name's first letter (no pictures here yet).
-    const ImVec2 c{a.x + 34 * u, a.y + tile_h * 0.5f};
-    const ImU32 ec = ElementColor(f.element);
-    dl->AddCircleFilled(c, 24 * u, (ec & 0x00FFFFFF) | (ImU32(alpha) << 24), 32);
-    const std::string initial = f.name.substr(0, 1);
-    Text(dl, bold_, 24 * u, {c.x - TextWidth(bold_, 24 * u, initial) * 0.5f, c.y - 15 * u}, Rgba(255, 255, 255, alpha),
-         initial);
-    const float tx0 = a.x + 68 * u, tw = tile_w - 78 * u;
+    // The game's picture of the figure, else the element as a coloured disc with the first letter.
+    const ImVec2 c{a.x + 40 * u, a.y + tile_h * 0.5f};
+    const fs::path* picture = Picture(f);
+    const ImTextureID texture = picture ? LoadTexture(*picture) : ImTextureID{};
+    if (texture) {
+      const float r = 32 * u;
+      dl->AddImageRounded(texture, {c.x - r, c.y - r}, {c.x + r, c.y + r}, {0, 0}, {1, 1},
+                          Rgba(255, 255, 255, alpha), 10 * u);
+    } else {
+      const ImU32 ec = ElementColor(f.element);
+      dl->AddCircleFilled(c, 26 * u, (ec & 0x00FFFFFF) | (ImU32(alpha) << 24), 32);
+      const std::string initial = f.name.substr(0, 1);
+      Text(dl, bold_, 24 * u, {c.x - TextWidth(bold_, 24 * u, initial) * 0.5f, c.y - 15 * u},
+           Rgba(255, 255, 255, alpha), initial);
+    }
+    const float tx0 = a.x + 82 * u, tw = tile_w - 90 * u;
     Text(dl, bold_, 19 * u, {tx0, a.y + 12 * u}, Rgba(255, 255, 255, alpha), Fit(bold_, 19 * u, f.name, tw));
     Text(dl, regular_, 15 * u, {tx0, a.y + 38 * u}, Rgba(180, 190, 215, alpha),
          Fit(regular_, 15 * u, Category(f.category, german_), tw));
@@ -349,7 +381,14 @@ void FiguresScreen::Draw(float width, float height) {
     const Figure& f = *shown[selected_];
     float y = grid_top + 18 * u;
     const float x = px + 20 * u, w = panel_w - 40 * u;
-    Text(dl, bold_, 26 * u, {x, y}, kWhite, f.name, w);
+    if (const fs::path* picture = Picture(f)) {
+      if (const ImTextureID texture = LoadTexture(*picture)) {
+        const float side = 120 * u;
+        dl->AddImageRounded(texture, {px + panel_w - 20 * u - side, y}, {px + panel_w - 20 * u, y + side}, {0, 0},
+                            {1, 1}, Rgba(255, 255, 255, f.owned ? 255 : 120), 16 * u);
+      }
+    }
+    Text(dl, bold_, 26 * u, {x, y}, kWhite, f.name, w - 130 * u);
     y += 38 * u;
     std::string sub = f.game;
     const std::string element = german_ ? std::string(ElementDe(f.element)) : std::string(sp::ElementName(f.element));
