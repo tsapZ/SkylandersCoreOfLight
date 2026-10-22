@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -33,7 +34,8 @@ class FiguresScreen {
     std::string name, game, category, badge;
     skylanders::portal::Element element = skylanders::portal::Element::kNone;
     uint16_t id = 0, variant = 0;
-    bool owned = false;  // a figure file of it is in the folder
+    bool owned = false;   // a figure file of it is in the folder, or the owner marked it
+    bool marked = false;  // owned only by the owner's mark (no file of it in the folder)
     std::optional<skylanders::portal::FigureStats> stats;
     std::filesystem::path file;
   };
@@ -95,6 +97,13 @@ class FiguresScreen {
   int copy_target_ = 0;
   std::filesystem::path figures_dir_;  // the folder the library shows
   Figure copy_figure_;
+
+  // Y on a figure without a file: "I own it" (#8), for figures the owner has on the shelf but
+  // not as a file. Kept per profile next to its figure folder, Skylanders\owned.txt, one
+  // "<id>\t<variant>" a line; the games never read it.
+  std::filesystem::path MarksFile() const;
+  void ToggleMark(const Figure& f);
+  std::set<std::pair<uint16_t, uint16_t>> marked_;
   std::string message_;
   double message_until_ = 0;
 };

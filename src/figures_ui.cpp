@@ -214,6 +214,33 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     have.insert({f.id, f.variant});
     owned_.push_back(std::move(f));
   }
+  // The figures the owner marked as owned without a file of them.
+  marked_.clear();
+  {
+    std::ifstream in(MarksFile(), std::ios::binary);
+    std::string line;
+    while (std::getline(in, line)) {
+      const size_t tab = line.find('\t');
+      if (line.empty() || line[0] == '#' || tab == std::string::npos) continue;
+      const long id = std::strtol(line.c_str(), nullptr, 10), variant = std::strtol(line.c_str() + tab + 1, nullptr, 10);
+      if (id < 0 || id > 0xFFFF || variant < 0 || variant > 0xFFFF) continue;
+      marked_.insert({uint16_t(id), uint16_t(variant)});
+    }
+  }
+  for (const auto& [id, variant] : marked_) {
+    const sp::SkylanderInfo* info = sp::FindSkylander(id, variant);
+    if (!info || have.contains({id, variant})) continue;
+    Figure f;
+    f.id = id;
+    f.variant = variant;
+    f.owned = f.marked = true;
+    f.name = sp::DisplayName(info->name);
+    f.game = std::string(info->game);
+    f.category = std::string(info->category);
+    f.badge = sp::VersionBadge(*info);
+    f.element = sp::FigureElement(*info);
+    owned_.push_back(std::move(f));
+  }
   // In release order, then by kind of figure as the catalog orders them, then by name.
   auto game_index = [](const std::string& g) {
     for (size_t i = 0; i < std::size(kGames); ++i) {
@@ -235,6 +262,8 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.badge = sp::VersionBadge(info);
     f.element = sp::FigureElement(info);
     f.owned = have.contains({info.id, info.variant});
+    f.marked = !f.owned && marked_.contains({info.id, info.variant});
+    f.owned = f.owned || f.marked;
     // The owner's figure of it, the one played furthest if there are several.
     for (const Figure& mine : owned_) {
       if (mine.id != f.id || mine.variant != f.variant) continue;
@@ -244,6 +273,34 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
       }
     }
     catalog_.push_back(std::move(f));
+  }
+}
+
+fs::path FiguresScreen::MarksFile() const { return figures_dir_.parent_path() / "owned.txt"; }
+
+void FiguresScreen::ToggleMark(const Figure& f) {
+  const auto key = std::make_pair(f.id, f.variant);
+  if (!marked_.erase(key)) marked_.insert(key);
+  std::string text = "# Skylanders: Core of Light, the figures marked \"I own it\" (id, variant)\n";
+  for (const auto& [id, variant] : marked_) text += std::to_string(id) + "\t" + std::to_string(variant) + "\n";
+  std::error_code ec;
+  fs::create_directories(MarksFile().parent_path(), ec);
+  const fs::path temp = fs::path(MarksFile()) += ".new";
+  {
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+    out << text;
+    if (!out) return;
+  }
+  fs::rename(temp, MarksFile(), ec);
+  // The lists again (f is one of them: only `key` is used from here), the same figure chosen.
+  const int tab = tab_;
+  const bool all = all_;
+  Open(figures_dir_);
+  tab_ = tab;
+  all_ = all;
+  const std::vector<const Figure*> shown = Shown();
+  for (size_t i = 0; i < shown.size(); ++i) {
+    if (shown[i]->id == key.first && shown[i]->variant == key.second) selected_ = int(i);
   }
 }
 
@@ -566,6 +623,8 @@ void FiguresScreen::Draw(float width, float height) {
       line = text;
     } else if (!f.owned) {
       line = german_ ? "nicht dabei" : "not owned";
+    } else if (f.marked) {
+      line = german_ ? "hab ich (ohne Datei)" : "I own it (no file)";
     } else {
       line = german_ ? "noch nicht gespielt" : "not played yet";
     }
@@ -588,6 +647,14 @@ void FiguresScreen::Draw(float width, float height) {
       copy_target_ = 0;
       copying_ = true;
     }
+  }
+  // Y / C on a figure without a file: "I own it", or not any more. The lists are read again, so
+  // nothing of this frame's is used after it.
+  if (n && shown[selected_]->file.empty() &&
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_C, false))) {
+    ToggleMark(*shown[selected_]);
+    ImGui::End();
+    return;
   }
   // A / Enter (or a click on the chosen tile): the figure's upgrade tree, if a game left one.
   if (n && shown[selected_]->stats &&
@@ -678,9 +745,15 @@ void FiguresScreen::Draw(float width, float height) {
       }
     } else {
       Text(dl, regular_, 18 * u, {x, y}, kDim,
-           f.owned ? (german_ ? "Noch nicht gespielt: die Figur hat noch keinen Spielstand."
-                              : "Not played yet: the figure has no progress saved.")
-                   : (german_ ? "Nicht in deinem Figurenordner." : "Not in your figure folder."),
+           f.marked ? (german_ ? "Als \xE2\x80\x9E" "Hab ich\xE2\x80\x9C markiert; im Figurenordner ist keine Datei von ihm. "
+                                 "Y nimmt die Markierung zur\xC3\xBC" "ck."
+                               : "Marked \"I own it\"; there is no file of it in the figure folder. Y takes the mark "
+                                 "back.")
+           : f.owned ? (german_ ? "Noch nicht gespielt: die Figur hat noch keinen Spielstand."
+                                : "Not played yet: the figure has no progress saved.")
+                     : (german_ ? "Nicht in deinem Figurenordner. Hast du ihn trotzdem? Y markiert ihn als "
+                                  "\xE2\x80\x9E" "Hab ich\xE2\x80\x9C."
+                                : "Not in your figure folder. Do you have it anyway? Y marks it \"I own it\"."),
            w);
     }
     if (!f.file.empty()) {
@@ -695,7 +768,7 @@ void FiguresScreen::Draw(float width, float height) {
     const int have = int(std::count_if(shown.begin(), shown.end(), [](const Figure* f) { return f->owned; }));
     std::snprintf(count, sizeof(count), german_ ? "%d von %d dabei" : "%d of %d owned", have, n);
   } else {
-    std::snprintf(count, sizeof(count), german_ ? "%d Figuren" : "%d figures", n);
+    std::snprintf(count, sizeof(count), n == 1 ? (german_ ? "%d Figur" : "%d figure") : (german_ ? "%d Figuren" : "%d figures"), n);
   }
   Text(dl, regular_, 18 * u, {left, height - 82 * u}, kDim, count);
   if (!message_.empty() && ImGui::GetTime() < message_until_) {
@@ -708,8 +781,13 @@ void FiguresScreen::Draw(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40),
-            german_ ? "In anderes Profil kopieren" : "Copy to another profile");
+  if (n) {
+    const Figure& f = *shown[selected_];
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40),
+              !f.file.empty() ? (german_ ? "In anderes Profil kopieren" : "Copy to another profile")
+              : f.marked      ? (german_ ? "Hab ich nicht" : "I don't own it")
+                              : (german_ ? "Hab ich" : "I own it"));
+  }
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   ImGui::End();
 }

@@ -45,7 +45,11 @@ exe and gets out of the way while the game runs; no game needs it.
   next level, gold, play time, upgrades, nickname and the day it was last played, by game (LB /
   RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built
   without the games' SDK, AES and MD5 from Windows). X switches to every Skylander of a game, the
-  owner's marked ("11 von 54 dabei"), each with the progress of the owner's figure. The pictures
+  owner's marked ("11 von 54 dabei"), each with the progress of the owner's figure. Y on a
+  Skylander without a file marks it **"Hab ich"** (I own it: on the shelf, not as a file); it then
+  counts as owned and shows in "Meine Skylander" as "hab ich (ohne Datei)", and Y takes the mark
+  back. The marks are the profile's, `Skylanders\owned.txt` next to its figure folder (one
+  `<id>\t<variant>` a line); the games never read it. The pictures
   are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
   in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
   `StartFigurePictureCache`), and the library takes the newest game's picture of each figure; a
@@ -81,7 +85,7 @@ exe and gets out of the way while the game runs; no game needs it.
   gamerscore; each card shows "Erfolge 2 / 46". The list comes from the game: while it runs it
   leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
   picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
-  `<game>recompchievements\<title id>.toml`, which the SDK keeps.
+  `<game>recomp\achievements\<title id>.toml`, which the SDK keeps.
 - Each card also says when the active profile last saved the game (the newest file in its save
   folder, `<game>recomp\B13EBABEBABEBABE`).
 - `--documents=<folder>` runs the launcher on a copy: that folder in place of Documents for the
@@ -112,9 +116,13 @@ and needs neither the SDK nor the games' sources.
 ## Checked (2026-10-22)
 
 - Achievements: Trap Team, run once on a copy, left 46 achievements with 46 pictures and their
-  German names; with two of them unlocked in the copy's `trapteamrecompchievementsč60911.toml`
+  German names; with two of them unlocked in the copy's `trapteamrecomp\achievements\41560911.toml`
   the card said "Erfolge 2 / 46" and the screen "2 von 46 Erfolgen · 20 / 1000 G", the two bright
   with their dates.
+
+- "Hab ich", on a copy without figure files: Y on Camo in "Alle Skylander" marked it ("1 von 597
+  dabei", the tile "hab ich (ohne Datei)", the hint then "Hab ich nicht"), "Meine Skylander" showed
+  it, and Y there took the mark back (`owned.txt` empty again).
 
 - Profiles, on a copy (`--documents`): a new profile with its figures made new (29 figure files,
   only their headers left), renamed by keyboard, given a picture; the launcher shows it at the top
