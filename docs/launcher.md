@@ -49,7 +49,9 @@ exe and gets out of the way while the game runs; no game needs it.
   are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
   in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
   `StartFigurePictureCache`), and the library takes the newest game's picture of each figure; a
-  figure no played game has a picture of gets its element's colour and first letter. Copies the
+  figure no played game has a picture of gets its element's colour and first letter. The figure's
+  hat shows by its game name, with its picture and bonuses: the games leave `hats.txt` and
+  `hat-<n>.png` there too. Copies the
   games keep in a `real` folder before they write to a real figure are left out.
   `figures = <folder>` in coreoflight.ini uses another figure folder (as the games'
   `portal_figures_dir`); the pictures are then in the `Pictures` folder next to it.
@@ -60,7 +62,7 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- The hats and upgrade pictures in the figure library (#8), profiles (#4).
+- The upgrade trees in the figure library (#8), profiles (#4).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 
