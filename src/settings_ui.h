@@ -4,6 +4,7 @@
 // (game_settings.h), changed with the controller, keyboard or mouse and saved into the game's
 // settings file.
 
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
@@ -18,7 +19,8 @@ class SettingsScreen {
  public:
   void Init(ImFont* regular, ImFont* bold, bool german);
   // Opens the screen for a game; its pages come from `loader` (maybe still loading).
-  void Open(const std::string& title, SettingsLoader* loader);
+  // `background`: the game's dashboard background (nxe_art.h), or empty.
+  void Open(const std::string& title, SettingsLoader* loader, std::filesystem::path background = {});
   bool is_open() const { return open_; }
   // Draws the screen into the whole window; closes itself on B / Escape.
   void Draw(float width, float height);
@@ -35,6 +37,7 @@ class SettingsScreen {
   bool german_ = false;
   bool open_ = false;
   std::string title_;
+  std::filesystem::path background_;  // the game's dashboard background, or empty
   SettingsLoader* loader_ = nullptr;
   std::shared_ptr<GameSettings> edit_;  // a copy that the changes go into
   int page_ = 0, row_ = 0;

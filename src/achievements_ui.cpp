@@ -6,6 +6,7 @@
 
 #include "games.h"
 #include "imgui.h"
+#include "nxe_art.h"
 #include "profiles.h"
 #include "textures.h"
 
@@ -82,8 +83,7 @@ void AchievementsScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = std::min(width / 1280.0f, height / 720.0f);
-  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
-                              Rgba(3, 7, 22));
+  DrawBackdrop(dl, width, height, GameBackground(game_));
   Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, "SKYLANDERS");
   Text(dl, bold_, 56 * u, {46 * u, 56 * u}, kGold, german_ ? "ERFOLGE" : "ACHIEVEMENTS");
   // Whose they are.

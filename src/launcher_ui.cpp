@@ -100,6 +100,7 @@ void LauncherUi::FindArt() {
     tile_art_[i] = NxeArt(found_[i].rom, cache, "nxeslot.jpg");
     background_art_[i] = NxeArt(found_[i].rom, cache, "nxebg.jpg");
   }
+  SetGameBackgrounds(background_art_);
 }
 
 void LauncherUi::CountAchievements() {
@@ -152,7 +153,7 @@ void LauncherUi::OpenSettings(size_t index) {
   }
   settings_game_ = index;
   const Game& game = AllGames()[index];
-  settings_.Open(german_ ? game.name_de : game.name_en, &loaders_[index]);
+  settings_.Open(german_ ? game.name_de : game.name_en, &loaders_[index], GameBackground(index));
 }
 
 void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool selected) {
@@ -394,19 +395,8 @@ bool LauncherUi::Draw(float width, float height) {
 
   // Background: the chosen game's dashboard picture from its disc (1920x1080, filling the window),
   // darkened; without one deep blue. The Core of Light glows in the middle either way.
-  const ImTextureID backdrop = selected_ < background_art_.size() && !background_art_[selected_].empty()
-                                   ? LoadTexture(background_art_[selected_])
-                                   : ImTextureID{};
-  if (backdrop) {
-    const float scale = std::max(width / 1920.0f, height / 1080.0f);
-    const float bw = 1920.0f * scale, bh = 1080.0f * scale;
-    dl->AddImage(backdrop, {(width - bw) * 0.5f, (height - bh) * 0.5f}, {(width + bw) * 0.5f, (height + bh) * 0.5f});
-    dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60, 170), Rgba(10, 22, 60, 170),
-                                Rgba(3, 7, 22, 225), Rgba(3, 7, 22, 225));
-  } else {
-    dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
-                                Rgba(3, 7, 22));
-  }
+  DrawBackdrop(dl, width, height,
+               selected_ < background_art_.size() ? background_art_[selected_] : std::filesystem::path());
   const ImVec2 core{width * 0.5f, height * 0.56f};
   for (int k = 14; k > 0; --k) dl->AddCircleFilled(core, k * 38 * u, Rgba(90, 160, 255, 5), 64);
 

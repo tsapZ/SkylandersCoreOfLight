@@ -6,7 +6,11 @@
 #include <iterator>
 #include <optional>
 #include <system_error>
+#include <utility>
 #include <vector>
+
+#include "imgui.h"
+#include "textures.h"
 
 namespace coreoflight {
 namespace {
@@ -89,5 +93,27 @@ fs::path NxeArt(const fs::path& rom_dir, const fs::path& cache_dir, const std::s
   fs::rename(temp, cached, ec);
   return ec ? fs::path() : cached;
 }
+
+namespace {
+std::vector<fs::path> g_backgrounds;
+}  // namespace
+
+void DrawBackdrop(ImDrawList* dl, float width, float height, const fs::path& picture) {
+  const ImTextureID texture = picture.empty() ? ImTextureID{} : LoadTexture(picture);
+  if (texture) {
+    const float scale = std::max(width / 1920.0f, height / 1080.0f);
+    const float bw = 1920.0f * scale, bh = 1080.0f * scale;
+    dl->AddImage(texture, {(width - bw) * 0.5f, (height - bh) * 0.5f}, {(width + bw) * 0.5f, (height + bh) * 0.5f});
+    dl->AddRectFilledMultiColor({0, 0}, {width, height}, IM_COL32(10, 22, 60, 170), IM_COL32(10, 22, 60, 170),
+                                IM_COL32(3, 7, 22, 225), IM_COL32(3, 7, 22, 225));
+  } else {
+    dl->AddRectFilledMultiColor({0, 0}, {width, height}, IM_COL32(10, 22, 60, 255), IM_COL32(10, 22, 60, 255),
+                                IM_COL32(3, 7, 22, 255), IM_COL32(3, 7, 22, 255));
+  }
+}
+
+void SetGameBackgrounds(std::vector<fs::path> pictures) { g_backgrounds = std::move(pictures); }
+
+fs::path GameBackground(size_t game) { return game < g_backgrounds.size() ? g_backgrounds[game] : fs::path(); }
 
 }  // namespace coreoflight

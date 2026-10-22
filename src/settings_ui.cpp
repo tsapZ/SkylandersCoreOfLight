@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "nxe_art.h"
 
 namespace coreoflight {
 namespace {
@@ -43,6 +44,17 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
 
 bool IsOn(const std::string& v) { return v == "true" || v == "1"; }
 
+// An option's value and the setting's: the same text, or the same number (a game writes its
+// double settings as "0.000000", the options say "0").
+bool SameValue(const std::string& option, const std::string& value) {
+  if (option == value) return true;
+  char* end_a = nullptr;
+  char* end_b = nullptr;
+  const double a = std::strtod(option.c_str(), &end_a);
+  const double b = std::strtod(value.c_str(), &end_b);
+  return !option.empty() && !value.empty() && *end_a == '\0' && *end_b == '\0' && std::fabs(a - b) < 1e-6;
+}
+
 }  // namespace
 
 void SettingsScreen::Init(ImFont* regular, ImFont* bold, bool german) {
@@ -51,9 +63,10 @@ void SettingsScreen::Init(ImFont* regular, ImFont* bold, bool german) {
   german_ = german;
 }
 
-void SettingsScreen::Open(const std::string& title, SettingsLoader* loader) {
+void SettingsScreen::Open(const std::string& title, SettingsLoader* loader, std::filesystem::path background) {
   open_ = true;
   title_ = title;
+  background_ = std::move(background);
   loader_ = loader;
   edit_.reset();
   page_ = row_ = 0;
@@ -66,7 +79,7 @@ std::map<std::string, std::string> SettingsScreen::TakeSaved() { return std::exc
 
 std::string SettingsScreen::ValueLabel(const GameSetting& s) const {
   for (const SettingChoice& o : s.options) {
-    if (o.value == s.value) return german_ ? o.de : o.en;
+    if (SameValue(o.value, s.value)) return german_ ? o.de : o.en;
   }
   if (s.options.empty() && s.type == "bool") return IsOn(s.value) ? (german_ ? "An" : "On") : (german_ ? "Aus" : "Off");
   if (s.value.empty()) return german_ ? "Eigene Einstellung" : "Custom";
@@ -82,7 +95,7 @@ void SettingsScreen::Step(int step) {
   if (!s.options.empty()) {
     int at = -1;
     for (int i = 0; i < int(s.options.size()); ++i) {
-      if (s.options[i].value == s.value) at = i;
+      if (SameValue(s.options[i].value, s.value)) at = i;
     }
     const int n = int(s.options.size());
     at = at < 0 ? (step > 0 ? 0 : n - 1) : (at + step + n) % n;
@@ -172,8 +185,7 @@ void SettingsScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = std::min(width / 1280.0f, height / 720.0f);
-  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
-                              Rgba(3, 7, 22));
+  DrawBackdrop(dl, width, height, background_);
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim, german_ ? "EINSTELLUNGEN" : "SETTINGS");
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold, title_);
 
