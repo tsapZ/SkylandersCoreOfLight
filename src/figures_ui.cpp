@@ -153,6 +153,8 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   // StartFigurePictureCache): looked for again on every open.
   pictures_dir_ = figures_dir.parent_path() / "Pictures";
   pictures_.clear();
+  trees_.clear();
+  tree_ = false;
   // The hats: each game's hats.txt, read oldest game first so the newest one's names win.
   hats_.clear();
   for (const std::string_view game : kGames) {
