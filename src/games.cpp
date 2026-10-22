@@ -206,8 +206,11 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
 bool StartGame(const Found& game, std::wstring& error, void** process) {
   STARTUPINFOW startup = {sizeof(startup)};
   PROCESS_INFORMATION info = {};
-  // The active profile's own user data (profiles.h); nothing for the main profile.
-  std::wstring command = L"\"" + game.exe.wstring() + L"\"" + ProfileArguments(game.exe);
+  // The active profile's own user data (profiles.h); nothing for the main profile. Started from
+  // here, the game's F4 menu leaves out the graphics and start-up settings: they are on its card
+  // (skylanders-portal settings_menu.h, #10).
+  std::wstring command = L"\"" + game.exe.wstring() + L"\"" + ProfileArguments(game.exe) +
+                         L" --started_by_launcher=true";
   if (!CreateProcessW(game.exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
                       game.workdir.c_str(), &startup, &info)) {
     wchar_t text[256] = L"";

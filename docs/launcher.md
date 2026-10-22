@@ -37,7 +37,11 @@ exe and gets out of the way while the game runs; no game needs it.
   line by line as the game's menu does (comments and the rest stay), B goes back (with unsaved
   changes, a second B throws them away). A preset (Leistung / Qualität / Beste) sets its
   settings together. A game built before the flag existed isn't asked (the launcher looks for the
-  flag's name in the exe first, so it never starts a whole game by mistake).
+  flag's name in the exe first, so it never starts a whole game by mistake). Since these are set
+  here before starting, a game started from the launcher gets `--started_by_launcher=true`: its F4
+  menu then leaves out the Grafik page and every setting that only applies at start-up (#10, the
+  owner's wish: changing them in the middle of a game does nothing). A game started on its own
+  keeps its full menu; an older build just ignores the flag.
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
   itself while it runs and comes back when the game ends.
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
