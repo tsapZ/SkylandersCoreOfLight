@@ -120,3 +120,10 @@ Das private Repository [tsapZ/GiantsDecomp](https://github.com/tsapZ/GiantsDecom
 die CRC-16 der Figurendaten (sub_82201FD8), in lesbarem C++, im laufenden Giants eingesetzt und
 gegen das recompilierte Original auf allen 2^24 Eingaben geprüft („matches the original“).
 GiantsRecomp baut das nur mit `GIANTS_DECOMP_DIR` ein; ohne bleibt das Spiel wie bisher.
+
+**Pilot, Stand 2026-10-22 morgens:** 32 Funktionen des Figuren-Codes in 29 Prüfungen, alle gleich
+mit dem Original: die CRCs, die Block-Bitmaps, Decoder und Encoder der Figuren-Codes mit ihrer
+64-Bit-Zahl, die Abschnitte der Spielstanddaten, der Schlüssel jedes Blocks (MD5) und AES-128. Die
+gemessene Rate für solche Funktionen samt Prüfung: etwa 6-12 pro Stunde, also 50-100 an einem
+Arbeitstag; das liegt im unteren Teil der KI-gestützten Zeile oben. Der Objekt-Code des Spiels, mit
+seinen Strukturen, ist noch nicht gemessen (GiantsDecomp docs/plan.md).
