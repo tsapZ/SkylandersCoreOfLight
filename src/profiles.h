@@ -53,6 +53,12 @@ bool HasSave(const Profile& p, const std::filesystem::path& exe);
 // time; 0 if there is none.
 uint64_t LastSaved(const Profile& p, const std::filesystem::path& exe);
 
+// How long the profile has played the game, in seconds: the games started from the launcher, from
+// start to end (a game started on its own isn't seen). Kept next to the profile's figure folder,
+// Skylanders\playtime.txt, one "<game key>\t<seconds>" a line.
+uint64_t PlaySeconds(const Profile& p, const std::string& game_key);
+void AddPlaySeconds(const Profile& p, const std::string& game_key, uint64_t seconds);
+
 // Copies of `from`'s figures into `to`'s figure folder, the same file names: as they are, or as
 // new figures (the same Skylanders back at the start, new serial numbers). Figures already there
 // stay. The number copied.

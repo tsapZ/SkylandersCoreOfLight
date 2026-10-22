@@ -88,6 +88,10 @@ exe and gets out of the way while the game runs; no game needs it.
   `<game>recomp\achievements\<title id>.toml`, which the SDK keeps.
 - Each card also says when the active profile last saved the game (the newest file in its save
   folder, `<game>recomp\B13EBABEBABEBABE`).
+- **Play time** per game and profile, on the card ("Gespielt 3 Std. 12 Min."): the time from
+  start to end of each game the launcher started, for the profile it was started with, kept in
+  `Skylanders\playtime.txt` next to the profile's figure folder (`<game key>\t<seconds>`). A game
+  started on its own isn't counted.
 - `--documents=<folder>` runs the launcher on a copy: that folder in place of Documents for the
   figures, pictures and profiles, and the games it starts get their user data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
@@ -119,6 +123,9 @@ and needs neither the SDK nor the games' sources.
   German names; with two of them unlocked in the copy's `trapteamrecomp\achievements\41560911.toml`
   the card said "Erfolge 2 / 46" and the screen "2 von 46 Erfolgen · 20 / 1000 G", the two bright
   with their dates.
+
+- Play time, on a copy with `coreoflight.ini` pointing Giants at a stand-in exe that runs 61 s:
+  after it ended, `playtime.txt` had `giants	61` and the card "Gespielt 1 Min.".
 
 - "Hab ich", on a copy without figure files: Y on Camo in "Alle Skylander" marked it ("1 von 597
   dabei", the tile "hab ich (ohne Datei)", the hint then "Hab ich nicht"), "Meine Skylander" showed

@@ -90,11 +90,19 @@ void LauncherUi::Refresh() {
 void LauncherUi::CountAchievements() {
   achievements_.clear();
   last_saved_.clear();
+  play_seconds_.clear();
   for (size_t i = 0; i < AllGames().size(); ++i) {
     achievements_.push_back(LoadAchievements(AllGames()[i], ActiveProfile()));
+    play_seconds_.push_back(PlaySeconds(ActiveProfile(), AllGames()[i].key));
     last_saved_.push_back(i < found_.size() && !found_[i].exe.empty() ? LastSaved(ActiveProfile(), found_[i].exe)
                                                                         : 0);
   }
+}
+
+void LauncherUi::GameEnded() {
+  if (running_key_.empty()) return;
+  AddPlaySeconds(running_profile_, running_key_, (GetTickCount64() - running_since_) / 1000);
+  running_key_.clear();
 }
 
 void LauncherUi::AddDisc(const std::filesystem::path& iso) {
@@ -113,6 +121,9 @@ void LauncherUi::Start(size_t index) {
   std::wstring error;
   if (StartGame(found_[index], error, &process)) {
     started_ = process;
+    running_key_ = AllGames()[index].key;
+    running_profile_ = ActiveProfile();
+    running_since_ = GetTickCount64();
   } else {
     error_ = error;
     error_until_ = ImGui::GetTime() + 6.0;
@@ -196,6 +207,22 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       std::snprintf(text, sizeof(text), german_ ? "Erfolge %d / %zu" : "Achievements %d / %zu",
                     achievements_[index].unlocked, achievements_[index].items.size());
       lines.insert(lines.begin(), text);
+    }
+    // The active profile's time in it, as far as the launcher started it.
+    if (index < play_seconds_.size() && play_seconds_[index]) {
+      const uint64_t minutes = play_seconds_[index] / 60, hours = minutes / 60;
+      char text[64];
+      if (hours) {
+        std::snprintf(text, sizeof(text), german_ ? "Gespielt %llu Std. %llu Min." : "Played %llu h %llu min",
+                      (unsigned long long)hours, (unsigned long long)(minutes % 60));
+      } else if (minutes) {
+        std::snprintf(text, sizeof(text), german_ ? "Gespielt %llu Min." : "Played %llu min", (unsigned long long)minutes);
+      } else {
+        std::snprintf(text, sizeof(text), german_ ? "Gespielt < 1 Min." : "Played < 1 min");
+      }
+      // Below the achievements line, above the settings.
+      const bool achievements_line = index < achievements_.size() && achievements_[index].known;
+      lines.insert(lines.begin() + (achievements_line ? 1 : 0), text);
     }
     const std::string language = get("language");
     if (language == "german") lines.push_back("Deutsch");

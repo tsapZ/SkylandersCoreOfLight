@@ -181,6 +181,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) continue;
       CloseHandle(game);
       game = nullptr;
+      ui.GameEnded();
       ui.Refresh();
       ShowWindow(hwnd, SW_SHOW);
       SetForegroundWindow(hwnd);

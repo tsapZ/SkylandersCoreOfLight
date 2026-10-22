@@ -28,6 +28,8 @@ class LauncherUi {
   void* TakeStartedProcess();
   // After a game ended: look for the games again (one may have been installed meanwhile).
   void Refresh();
+  // The game started last has ended: its time goes to the profile it was started with.
+  void GameEnded();
   // An ISO dropped on the window or given on the command line: set up like one picked with X.
   void AddDisc(const std::filesystem::path& iso);
 
@@ -50,6 +52,11 @@ class LauncherUi {
   std::wstring error_;
   double error_until_ = 0;
   void* started_ = nullptr;
+  // The running game: its key, the profile it was started with and when (GetTickCount64).
+  std::string running_key_;
+  Profile running_profile_;
+  uint64_t running_since_ = 0;
+  std::vector<uint64_t> play_seconds_;  // per game, the active profile's (PlaySeconds)
   // Each game's settings pages, read from the game when first needed (game_settings.h).
   std::vector<SettingsLoader> loaders_;
   SettingsScreen settings_;

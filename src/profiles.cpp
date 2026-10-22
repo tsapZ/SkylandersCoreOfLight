@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 
 #include "games.h"
 #include "portal/figure_file.h"
@@ -224,6 +225,48 @@ uint64_t LastSaved(const Profile& p, const fs::path& exe) {
     newest = std::max(newest, uint64_t(t.dwHighDateTime) << 32 | t.dwLowDateTime);
   }
   return newest;
+}
+
+namespace {
+
+fs::path PlayTimeFile(const Profile& p) { return ProfileFiguresDir(p).parent_path() / "playtime.txt"; }
+
+std::map<std::string, uint64_t> ReadPlayTimes(const Profile& p) {
+  std::map<std::string, uint64_t> times;
+  std::ifstream in(PlayTimeFile(p), std::ios::binary);
+  std::string line;
+  while (std::getline(in, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    const size_t tab = line.find('\t');
+    if (line.empty() || line[0] == '#' || tab == std::string::npos) continue;
+    times[line.substr(0, tab)] = std::strtoull(line.c_str() + tab + 1, nullptr, 10);
+  }
+  return times;
+}
+
+}  // namespace
+
+uint64_t PlaySeconds(const Profile& p, const std::string& game_key) {
+  const auto times = ReadPlayTimes(p);
+  const auto it = times.find(game_key);
+  return it == times.end() ? 0 : it->second;
+}
+
+void AddPlaySeconds(const Profile& p, const std::string& game_key, uint64_t seconds) {
+  if (!seconds) return;
+  auto times = ReadPlayTimes(p);
+  times[game_key] += seconds;
+  std::string text = "# Skylanders: Core of Light, seconds played per game (started from the launcher)\n";
+  for (const auto& [key, value] : times) text += key + "\t" + std::to_string(value) + "\n";
+  std::error_code ec;
+  fs::create_directories(PlayTimeFile(p).parent_path(), ec);
+  const fs::path temp = fs::path(PlayTimeFile(p)) += ".new";
+  {
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+    out << text;
+    if (!out) return;
+  }
+  fs::rename(temp, PlayTimeFile(p), ec);
 }
 
 int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
