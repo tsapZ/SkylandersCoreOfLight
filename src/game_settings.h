@@ -51,6 +51,8 @@ struct GameSettings {
 class SettingsLoader {
  public:
   void Start(const Found& game, const std::string& key);
+  // Pages that are known already (the launcher's own settings, hub_settings.h): ready at once.
+  void SetReady(std::shared_ptr<GameSettings> settings);
   int state() const { return shared_ ? shared_->state.load() : -1; }
   bool started() const { return bool(shared_); }
   std::shared_ptr<GameSettings> settings() const;

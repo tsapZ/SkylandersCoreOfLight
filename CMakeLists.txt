@@ -29,7 +29,10 @@ add_executable(coreoflight WIN32
   src/main.cpp
   src/games.cpp
   src/game_settings.cpp
+  src/hub_settings.cpp
   src/disc_import.cpp
+  src/file_browser.cpp
+  src/music.cpp
   src/figures_ui.cpp
   src/textures.cpp
   src/xiso.cpp
@@ -50,7 +53,7 @@ add_executable(coreoflight WIN32
 )
 target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs)
+target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm)
 if(MSVC)
   target_compile_options(coreoflight PRIVATE /W3 /utf-8)
 endif()

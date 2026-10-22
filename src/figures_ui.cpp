@@ -149,6 +149,11 @@ void FiguresScreen::Init(ImFont* regular, ImFont* bold, bool german) {
   german_ = german;
 }
 
+void FiguresScreen::Configure(bool only_mine, bool marks) {
+  all_ = !only_mine;
+  marks_enabled_ = marks;
+}
+
 void FiguresScreen::Open(const fs::path& figures_dir) {
   open_ = true;
   copying_ = false;
@@ -217,7 +222,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   }
   // The figures the owner marked as owned without a file of them.
   marked_.clear();
-  {
+  if (marks_enabled_) {
     std::ifstream in(MarksFile(), std::ios::binary);
     std::string line;
     while (std::getline(in, line)) {
@@ -478,8 +483,11 @@ void FiguresScreen::DrawTree(float width, float height, float u) {
 std::vector<const FiguresScreen::Figure*> FiguresScreen::Shown() const {
   std::vector<const Figure*> out;
   const auto& list = all_ ? catalog_ : owned_;
+  // The last tab: the magic items (and adventure packs) of every game, by game, as the lists are.
+  const bool items_tab = tab_ == 1 + int(std::size(kGames));
   for (const Figure& f : list) {
-    if (tab_ == 0 || f.game == kGames[tab_ - 1]) out.push_back(&f);
+    const bool item = f.category == "Items";
+    if (items_tab ? item : !item && (tab_ == 0 || f.game == kGames[tab_ - 1])) out.push_back(&f);
   }
   return out;
 }
@@ -496,12 +504,16 @@ void FiguresScreen::Draw(float width, float height) {
   const float u = std::min(width / 1280.0f, height / 720.0f);
   // A game's tab over that game's dashboard background (kGames is AllGames' order); every game's
   // over the plain blue.
-  DrawBackdrop(dl, width, height, tab_ > 0 ? GameBackground(size_t(tab_ - 1)) : fs::path(), true);
+  DrawBackdrop(dl, width, height,
+               tab_ > 0 && tab_ <= int(std::size(kGames)) ? GameBackground(size_t(tab_ - 1)) : fs::path(), true);
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim,
        tree_ ? (german_ ? "UPGRADES" : "UPGRADES") : (german_ ? "FIGUREN" : "FIGURES"));
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold,
        tree_ ? tree_figure_.name
-             : all_ ? (german_ ? "Alle Skylander" : "Every Skylander") : (german_ ? "Meine Skylander" : "My Skylanders"));
+       : tab_ == 1 + int(std::size(kGames))
+           ? (all_ ? (german_ ? "Alle Magischen Objekte" : "Every magic item")
+                   : (german_ ? "Meine Magischen Objekte" : "My magic items"))
+       : all_ ? (german_ ? "Alle Skylander" : "Every Skylander") : (german_ ? "Meine Skylander" : "My Skylanders"));
   // Whose figures they are (profiles.h).
   const std::string whose = (german_ ? "Profil " : "Profile ") + ActiveProfile().name;
   Text(dl, regular_, 20 * u, {width - 48 * u - TextWidth(regular_, 20 * u, whose), 44 * u}, kDim, whose);
@@ -517,7 +529,7 @@ void FiguresScreen::Draw(float width, float height) {
   }
 
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
-  const int tabs = 1 + int(std::size(kGames));
+  const int tabs = 2 + int(std::size(kGames));  // every game, each game, the magic items
   if (pressed(ImGuiKey_GamepadL1) || pressed(ImGuiKey_Q) || pressed(ImGuiKey_PageUp)) {
     tab_ = (tab_ + tabs - 1) % tabs;
     selected_ = 0;
@@ -539,7 +551,9 @@ void FiguresScreen::Draw(float width, float height) {
   float tx = left;
   const float tab_size = 19 * u;
   for (int i = 0; i < tabs; ++i) {
-    const std::string name = i == 0 ? (german_ ? "Alle Spiele" : "Every game") : std::string(kGames[i - 1]);
+    const std::string name = i == 0                          ? (german_ ? "Alle Spiele" : "Every game")
+                             : i == 1 + int(std::size(kGames)) ? (german_ ? "Magische Objekte" : "Magic items")
+                                                               : std::string(kGames[i - 1]);
     const float w = TextWidth(bold_, tab_size, name) + 30 * u;
     const ImVec2 a{tx, top}, b{tx + w, top + 40 * u};
     if (io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y &&
@@ -597,6 +611,16 @@ void FiguresScreen::Draw(float width, float height) {
     const bool chosen = i == selected_;
     const int alpha = f.owned ? 255 : 110;
     dl->AddRectFilled(a, b, chosen ? Rgba(60, 70, 140, 240) : Rgba(24, 30, 70, f.owned ? 235 : 150), 16 * u);
+    // The figure's element, lightly: its colour fading in from the card's left edge.
+    if (f.element != sp::Element::kNone) {
+      const ImU32 ec = ElementColor(f.element);
+      const int ea = f.owned ? (chosen ? 120 : 90) : 45;
+      const ImU32 strong = (ec & 0x00FFFFFF) | (ImU32(ea) << 24), clear = ec & 0x00FFFFFF;
+      dl->AddRectFilledMultiColor({a.x + 8 * u, a.y + 2 * u}, {a.x + tile_w * 0.62f, b.y - 2 * u}, strong, clear, clear,
+                                  strong);
+      dl->AddRectFilled(a, {a.x + 8 * u, b.y}, (ec & 0x00FFFFFF) | (ImU32(f.owned ? 230 : 110) << 24), 16 * u,
+                        ImDrawFlags_RoundCornersLeft);
+    }
     if (chosen) dl->AddRect(a, b, kGold, 16 * u, 0, 3 * u);
     // The game's picture of the figure, else the element as a coloured disc with the first letter.
     const ImVec2 c{a.x + 40 * u, a.y + tile_h * 0.5f};
@@ -652,7 +676,7 @@ void FiguresScreen::Draw(float width, float height) {
   }
   // Y / C on a figure without a file: "I own it", or not any more. The lists are read again, so
   // nothing of this frame's is used after it.
-  if (n && shown[selected_]->file.empty() &&
+  if (n && marks_enabled_ && shown[selected_]->file.empty() &&
       (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_C, false))) {
     ToggleMark(*shown[selected_]);
     ImGui::End();
@@ -768,6 +792,7 @@ void FiguresScreen::Draw(float width, float height) {
                                  "back.")
            : f.owned ? (german_ ? "Noch nicht gespielt: die Figur hat noch keinen Spielstand."
                                 : "Not played yet: the figure has no progress saved.")
+                     : !marks_enabled_ ? (german_ ? "Nicht in deinem Figurenordner." : "Not in your figure folder.")
                      : (german_ ? "Nicht in deinem Figurenordner. Hast du ihn trotzdem? Y markiert ihn als "
                                   "\xE2\x80\x9E" "Hab ich\xE2\x80\x9C."
                                 : "Not in your figure folder. Do you have it anyway? Y marks it \"I own it\"."),
@@ -798,7 +823,7 @@ void FiguresScreen::Draw(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));
-  if (n) {
+  if (n && (marks_enabled_ || !shown[selected_]->file.empty())) {
     const Figure& f = *shown[selected_];
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40),
               !f.file.empty() ? (german_ ? "In anderes Profil kopieren" : "Copy to another profile")

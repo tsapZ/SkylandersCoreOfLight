@@ -8,9 +8,12 @@
 
 #include "achievements_ui.h"
 #include "disc_import.h"
+#include "file_browser.h"
 #include "figures_ui.h"
 #include "game_settings.h"
 #include "games.h"
+#include "hub_settings.h"
+#include "music.h"
 #include "profiles_ui.h"
 #include "settings_ui.h"
 
@@ -41,6 +44,15 @@ class LauncherUi {
   bool DrawProfileBadge(float width, float u);
   // Each game's achievements of the active profile, for its card.
   void CountAchievements();
+  // The launcher's own settings (hub_settings.h) into every screen: the language, the library.
+  void ApplyHubSettings();
+  // Draw without the animation; Draw moves the frame's vertices of the screen drawn.
+  bool DrawScreens(float width, float height);
+  // The screen drawn last frame (its window name) and since when it is shown.
+  std::string shown_window_;
+  double shown_since_ = 0;
+  // How far each card is lifted (0 resting, 1 chosen), eased towards its target each frame.
+  std::vector<float> lift_;
 
   std::filesystem::path launcher_dir_;
   std::vector<Found> found_;
@@ -60,6 +72,10 @@ class LauncherUi {
   // Each game's settings pages, read from the game when first needed (game_settings.h).
   std::vector<SettingsLoader> loaders_;
   SettingsScreen settings_;
+  // The launcher's own settings (LB / Q), in the same screen as a game's.
+  HubSettings hub_;
+  SettingsLoader hub_loader_;
+  SettingsScreen hub_screen_;
   FiguresScreen figures_screen_;
   ProfilesScreen profiles_screen_;
   AchievementsScreen achievements_screen_;
@@ -76,6 +92,17 @@ class LauncherUi {
   void FindArt();
   // Setting up a disc from an ISO (disc_import.h), and its phase at the last frame.
   DiscImport import_;
+  // Choosing the disc inside the launcher, with the pad too (file_browser.h).
+  FileBrowser browser_;
+  // The chosen game's title music (music.h), and a game recording it (its process, which one,
+  // since when).
+  MusicPlayer music_;
+  void* capture_process_ = nullptr;
+  size_t capture_game_ = 0;
+  double capture_since_ = 0;
+  int pending_capture_ = -1;  // a game whose disc was just set up: record its music next
+  void StartCapture(size_t index);
+  void DrawCapture(float width, float height, float u);
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
   double import_shown_until_ = 0;
 };

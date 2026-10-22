@@ -16,17 +16,38 @@ exe and gets out of the way while the game runs; no game needs it.
   to its exe, a developer's build three folders up), so the launcher looks there for
   `rom\default.xex` and compares its SHA-256 with the hash the game's repository pins
   (`docs/game/default.xex.sha256`): "Bereit", "Andere Disc-Version" or "Disc fehlt".
-- **Shows a few of the game's own settings** from its settings file next to its exe
-  (`<game>recomp.toml`): resolution scale, frame rate, native 3D, language. It only reads it.
-- **Sets up a disc** (#6): X (D) picks an ISO of the owner's own disc; dropping one on the window
+- **The card** shows the active profile's play time ("Noch nicht gespielt" before), its
+  achievements and when it last saved the game (the owner's choice, 2026-10-22: not the game's
+  settings, which are on Y), and "Titelmusik holen: M / R3" while the game's title music isn't
+  recorded yet. The chosen card lifts and glows.
+- **Sets up a disc** (#6): X (D) opens the launcher's own file browser (`src/file_browser.cpp`),
+  which the pad drives as well as the keyboard and mouse: folders and .iso files from Downloads on,
+  a folder with an unpacked disc ("Diesen Ordner einlesen"), the drives and the usual folders above
+  a drive. With no game ready yet (the first start) the start screen says "Noch keine Disc
+  eingelesen" with a button for it. Dropping an ISO on the window
   or on coreoflight.exe does the same. The launcher reads the image's file system itself (XDVDFS,
   src/xiso.cpp: a full Xbox 360 dump with the game partition 0xFD90000 into it, or a trimmed image),
   knows the game by its default.xex's SHA-256 (the hash each game pins) and unpacks the disc into
   the rom\ folder that game reads, with a progress bar; default.xex comes last, so a folder left
   half done never counts as a disc, and B doesn't quit meanwhile. A disc that is set up already, a
   game that isn't installed and an unknown disc each get their own message. A folder with an
-  unpacked disc (default.xex in it) works the same way: O picks one, or drop it on the window;
-  its files are copied into the rom folder.
+  unpacked disc (default.xex in it) works the same way: O picks one with the Windows dialog, or
+  drop it on the window; its files are copied into the rom folder. The ISO itself stays where it
+  is.
+- **The title music** (`src/music.cpp`): while a game's card is chosen its title music plays,
+  faded in and looped, through Windows' MCI. The games record it themselves once: M / R3 on the
+  card (and right after a disc is set up) starts the game with `--capture_title_music=<file>`
+  (skylanders-portal `title_music.h`), the logos skipped, muted, minimised and on user data of its
+  own; it records 30 s at its title screen through the SDK's output tap and quits after about a
+  minute. The file is `Documents\Skylanders\Pictures\<game>\title_music.wav`.
+- **The launcher's own settings** (LB / Q, `src/hub_settings.cpp`), in the same screen as a game's,
+  saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
+  English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
+  the title music, the animations.
+- **Animations:** every screen slides in from the left and fades in (0.32 s), the start screen
+  rises when it comes back; off with the setting.
+- **The profile's name in the games:** started from here, a game gets `--user_name=<profile name>`
+  (the SDK's XAM answers it as the gamertag, e.g. Swap Force's corner at the top left).
 - **Each game's own settings** (#7): Y (Tab, a right click) on a card opens the game's settings
   with exactly the pages of its F4 menu (Grafik, Bildrate, Spiel, Portal, Steuerung), their texts,
   options and explanations. The launcher doesn't know them itself: it starts the game's exe with
@@ -50,7 +71,10 @@ exe and gets out of the way while the game runs; no game needs it.
 - **The figure library** (#8, Start / F): every figure in that folder with its level, XP to the
   next level, gold, play time, upgrades, nickname and the day it was last played, by game (LB /
   RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built
-  without the games' SDK, AES and MD5 from Windows). X switches to every Skylander of a game, the
+  without the games' SDK, AES and MD5 from Windows). Every card shows the figure's element lightly
+  (its colour fading in from the left edge); the last tab, **"Magische Objekte"**, has the magic
+  items and adventure packs of every game, by game, and the Skylander tabs leave them out. X
+  switches to every Skylander of a game, the
   owner's marked ("11 von 54 dabei"), each with the progress of the owner's figure. Y on a
   Skylander without a file marks it **"Hab ich"** (I own it: on the shelf, not as a file); it then
   counts as owned and shows in "Meine Skylander" as "hab ich (ohne Datei)", and Y takes the mark
@@ -119,9 +143,7 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- The profile's name in the games (the SDK's XAM always answers "User"); online co-op (#1-#3).
-- Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
-  run time, as in the games' menus (no artwork is shipped).
+- The profile's picture in the games (only the name is passed); online co-op (#1-#3).
 
 ## Build
 

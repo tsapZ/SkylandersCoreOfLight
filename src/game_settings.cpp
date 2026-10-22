@@ -287,6 +287,13 @@ void SettingsLoader::Start(const Found& game, const std::string& key) {
   }).detach();
 }
 
+void SettingsLoader::SetReady(std::shared_ptr<GameSettings> settings) {
+  auto shared = std::make_shared<Shared>();
+  shared->settings = std::move(settings);
+  shared->state = shared->settings ? 1 : -1;
+  shared_ = shared;
+}
+
 std::shared_ptr<GameSettings> SettingsLoader::settings() const {
   if (!shared_) return nullptr;
   std::lock_guard lock(shared_->mutex);

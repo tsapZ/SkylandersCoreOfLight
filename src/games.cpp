@@ -4,6 +4,7 @@
 #include <bcrypt.h>
 #include <shlobj.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cwchar>
 #include <iterator>
@@ -212,12 +213,71 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
   // (skylanders-portal settings_menu.h, #10).
   std::wstring command = L"\"" + game.exe.wstring() + L"\"" + ProfileArguments(game.exe) +
                          L" --started_by_launcher=true";
+  // The profile's name as the player's gamertag, where a game shows one (the SDK's user_name, up to
+  // 15 characters; quotes left out so the command line stays whole).
+  std::string name = ActiveProfile().name;
+  std::erase(name, '"');
+  size_t keep = std::min<size_t>(name.size(), 15);
+  while (keep > 0 && keep < name.size() && (static_cast<unsigned char>(name[keep]) & 0xC0) == 0x80) --keep;
+  name.resize(keep);  // whole UTF-8 characters only
+  if (!name.empty()) command += L" \"--user_name=" + Utf8Path(name).wstring() + L"\"";
   if (!CreateProcessW(game.exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
                       game.workdir.c_str(), &startup, &info)) {
     wchar_t text[256] = L"";
     FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, GetLastError(), 0,
                    text, 255, nullptr);
     error = text;
+    return false;
+  }
+  CloseHandle(info.hThread);
+  *process = info.hProcess;
+  return true;
+}
+
+fs::path TitleMusicFile(size_t game) {
+  if (game >= kGames.size()) return {};
+  return MainFiguresDir().parent_path() / "Pictures" / Utf8Path(kGames[game].name_en) / "title_music.wav";
+}
+
+namespace {
+
+// Whether the exe knows `text` (a flag's name): a build from before it would start the whole game.
+bool ExeMentions(const fs::path& exe, std::string_view text) {
+  std::ifstream in(exe, std::ios::binary);
+  std::string buffer(size_t(4) << 20, '\0');
+  size_t keep = 0;
+  while (in) {
+    in.read(buffer.data() + keep, std::streamsize(buffer.size() - keep));
+    const size_t n = keep + size_t(in.gcount());
+    if (std::string_view(buffer.data(), n).find(text) != std::string_view::npos) return true;
+    keep = std::min(text.size(), n);
+    std::copy(buffer.begin() + ptrdiff_t(n - keep), buffer.begin() + ptrdiff_t(n), buffer.begin());
+  }
+  return false;
+}
+
+}  // namespace
+
+bool StartTitleMusicCapture(size_t game, const Found& found, std::wstring& error, void** process) {
+  if (found.exe.empty() || !ExeMentions(found.exe, "capture_title_music")) {
+    error = L"This game's build can't record its title music yet";
+    return false;
+  }
+  wchar_t temp[MAX_PATH] = L"";
+  GetTempPathW(MAX_PATH, temp);
+  const fs::path data = fs::path(temp) / "CoreOfLight" / "title_music" / Utf8Path(UserDataName(found.exe));
+  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--capture_title_music=" +
+                               TitleMusicFile(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
+                               L"\" --skip_intro=true --audio_mute=true --portal_menu_auto_open=false" +
+                               L" --started_by_launcher=true";
+  STARTUPINFOW startup = {sizeof(startup)};
+  startup.dwFlags = STARTF_USESHOWWINDOW;
+  startup.wShowWindow = SW_SHOWMINNOACTIVE;
+  PROCESS_INFORMATION info = {};
+  std::wstring line = command;
+  if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                      found.workdir.c_str(), &startup, &info)) {
+    error = L"Could not start the game";
     return false;
   }
   CloseHandle(info.hThread);

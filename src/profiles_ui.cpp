@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "achievements.h"
 #include "imgui.h"
@@ -264,9 +265,11 @@ void ProfilesScreen::Draw(float width, float height) {
   const float x0 = (width - (card_w * shown + gap * (shown - 1))) * 0.5f;
   const float y0 = 150 * u + (height - 240 * u - 150 * u - card_h) * 0.5f;
   bool clicked = false;
+  float chosen_x = -1;  // the chosen card's left edge, if it is on screen
   for (size_t k = 0; k < shown; ++k) {
     const size_t i = first + k;
     const float x = x0 + k * (card_w + gap);
+    if (i == selected_) chosen_x = x;
     const bool hovered = io.MousePos.x >= x && io.MousePos.x < x + card_w && io.MousePos.y >= y0 &&
                          io.MousePos.y < y0 + card_h;
     if (mode_ == Mode::kList && hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) selected_ = i;
@@ -288,11 +291,46 @@ void ProfilesScreen::Draw(float width, float height) {
   const float hy = height - 52 * u;
   const bool on_profile = selected_ < profiles_.size();
 
+  // Buttons under the chosen card: what it can do, for the mouse, each with its pad button.
+  bool act_create = false, act_picture = false, act_name = false, act_delete = false;
+  if (mode_ == Mode::kList && chosen_x >= 0) {
+    struct Action {
+      const char* pad;
+      std::string label;
+      ImU32 col;
+      bool* hit;
+    };
+    std::vector<Action> actions;
+    if (on_profile) {
+      actions.push_back({"Y", german_ ? "Bild" : "Picture", Rgba(220, 180, 40), &act_picture});
+      actions.push_back({"X", german_ ? "Name" : "Name", Rgba(50, 120, 220), &act_name});
+      if (selected_ > 0) {
+        actions.push_back({"Back", german_ ? "L\xC3\xB6schen" : "Delete", Rgba(200, 60, 60), &act_delete});
+      }
+    } else {
+      actions.push_back({"A", german_ ? "Erstellen" : "Create", Rgba(70, 170, 70), &act_create});
+    }
+    const float bh = 40 * u, bgap = 8 * u;
+    const float bw = (card_w - bgap * float(actions.size() - 1)) / float(actions.size());
+    const float by = y0 + card_h + 16 * u;
+    for (size_t k = 0; k < actions.size(); ++k) {
+      const ImVec2 a{chosen_x + float(k) * (bw + bgap), by}, b{a.x + bw, by + bh};
+      const bool over = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y;
+      dl->AddRectFilled(a, b, over ? Rgba(70, 80, 150, 245) : Rgba(36, 44, 96, 235), 20 * u);
+      dl->AddRect(a, b, actions[k].col, 20 * u, 0, 2 * u);
+      const float ts = 17 * u;
+      const std::string text = std::string(actions[k].pad) + "  " + actions[k].label;
+      Text(dl, bold_, ts, {a.x + (bw - TextWidth(bold_, ts, text)) * 0.5f, a.y + (bh - ts) * 0.5f - 1 * u}, kWhite,
+           text);
+      if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) *actions[k].hit = true;
+    }
+  }
+
   switch (mode_) {
     case Mode::kList: {
       if (left) selected_ = (selected_ + n - 1) % n;
       if (right) selected_ = (selected_ + 1) % n;
-      if (confirm || clicked) {
+      if (confirm || clicked || act_create) {
         if (!on_profile) {
           char name[32];
           std::snprintf(name, sizeof(name), german_ ? "Profil %zu" : "Profile %zu", profiles_.size() + 1);
@@ -312,13 +350,14 @@ void ProfilesScreen::Draw(float width, float height) {
           changed_ = true;
           open_ = false;
         }
-      } else if (on_profile && (once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Tab))) {
+      } else if (on_profile && (act_picture || once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Tab))) {
         StartPictureChoice();
-      } else if (on_profile && (once(ImGuiKey_GamepadFaceLeft) || once(ImGuiKey_F2))) {
+      } else if (on_profile && (act_name || once(ImGuiKey_GamepadFaceLeft) || once(ImGuiKey_F2))) {
         std::snprintf(name_, sizeof(name_), "%s", profiles_[selected_].name.c_str());
         focus_name_ = true;
         mode_ = Mode::kName;
-      } else if (on_profile && selected_ > 0 && (once(ImGuiKey_GamepadBack) || once(ImGuiKey_Delete))) {
+      } else if (on_profile && selected_ > 0 &&
+                 (act_delete || once(ImGuiKey_GamepadBack) || once(ImGuiKey_Delete))) {
         mode_ = Mode::kDelete;
       } else if (back) {
         open_ = false;
