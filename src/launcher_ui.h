@@ -35,6 +35,14 @@ class LauncherUi {
   void GameEnded();
   // An ISO dropped on the window or given on the command line: set up like one picked with X.
   void AddDisc(const std::filesystem::path& iso);
+  // The started game's window is up (main.cpp hides the launcher then): the launch screen ends.
+  void GameWindowShown() { starting_ = false; }
+  // How the game ended: a message when it wasn't the usual way (exit code 0).
+  void GameExitCode(unsigned long code);
+  // Fullscreen (hub setting, F11 / Alt+Enter): what main.cpp should show, and a switch that
+  // saves the setting.
+  bool fullscreen() const { return hub_.fullscreen; }
+  void ToggleFullscreen();
 
  private:
   void Start(size_t index);
@@ -105,6 +113,11 @@ class LauncherUi {
   // B / Esc on the start screen asks first (a pad user would otherwise quit by mistake): false
   // once A / Enter says quit.
   bool confirm_quit_ = false;
+  // A game was just started: its launch screen, until its window is up (main.cpp).
+  bool starting_ = false;
+  size_t starting_game_ = 0;
+  double starting_since_ = 0;
+  bool DrawStarting(float width, float height);
   bool DrawQuitConfirm(float width, float height);
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
   double import_shown_until_ = 0;

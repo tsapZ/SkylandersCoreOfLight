@@ -26,6 +26,50 @@ ID3D11RenderTargetView* g_target = nullptr;
 UINT g_resize_width = 0, g_resize_height = 0;
 coreoflight::LauncherUi* g_ui = nullptr;  // for a file dropped on the window
 
+// Borderless fullscreen on the window's monitor, or back to the window it was.
+void SetFullscreen(HWND hwnd, bool on) {
+  static WINDOWPLACEMENT windowed = {sizeof(windowed)};
+  const LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+  const bool is_full = !(style & WS_OVERLAPPEDWINDOW);
+  if (on == is_full) return;
+  if (on) {
+    MONITORINFO mi = {sizeof(mi)};
+    if (!GetWindowPlacement(hwnd, &windowed) ||
+        !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+      return;
+    }
+    SetWindowLongW(hwnd, GWL_STYLE, (style & ~WS_OVERLAPPEDWINDOW) | WS_POPUP);
+    SetWindowPos(hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                 mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  } else {
+    SetWindowLongW(hwnd, GWL_STYLE, (style & ~WS_POPUP) | WS_OVERLAPPEDWINDOW);
+    SetWindowPlacement(hwnd, &windowed);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  }
+}
+
+// Whether the process has a visible top-level window (the game's, once it opened).
+bool HasVisibleWindow(DWORD pid) {
+  struct Find {
+    DWORD pid;
+    bool found;
+  } find{pid, false};
+  EnumWindows(
+      [](HWND w, LPARAM p) -> BOOL {
+        auto* f = reinterpret_cast<Find*>(p);
+        DWORD owner = 0;
+        GetWindowThreadProcessId(w, &owner);
+        if (owner == f->pid && IsWindowVisible(w)) {
+          f->found = true;
+          return FALSE;
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&find));
+  return find.found;
+}
+
 void CreateTarget() {
   ID3D11Texture2D* back = nullptr;
   g_swap_chain->GetBuffer(0, IID_PPV_ARGS(&back));
@@ -82,6 +126,16 @@ LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
       return 0;
     case WM_SYSCOMMAND:
       if ((wparam & 0xfff0) == SC_KEYMENU) return 0;  // no ALT menu
+      break;
+    case WM_SYSKEYDOWN:
+      // Alt+Enter: fullscreen on / off, as in Big Picture and many games.
+      if (wparam == VK_RETURN && (HIWORD(lparam) & KF_ALTDOWN) && g_ui) {
+        g_ui->ToggleFullscreen();
+        return 0;
+      }
+      break;
+    case WM_KEYDOWN:
+      if (wparam == VK_F11 && g_ui && !(HIWORD(lparam) & KF_REPEAT)) g_ui->ToggleFullscreen();
       break;
     case WM_DROPFILES: {
       // An ISO dropped on the window: set up like one picked with X.
@@ -172,6 +226,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
   bool running = true;
   HANDLE game = nullptr;
+  bool game_shown = false;  // the game's window is up and the launcher hidden
   while (running) {
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -180,12 +235,28 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       if (msg.message == WM_QUIT) running = false;
     }
     if (!running) break;
-    if (game) {
+    if (game && !game_shown) {
+      // The launch screen until the game's window is up (or 30 s, or the game ended at once).
+      static ULONGLONG since = 0;
+      if (!since) since = GetTickCount64();
+      if (HasVisibleWindow(GetProcessId(game)) || GetTickCount64() - since > 30000 ||
+          WaitForSingleObject(game, 0) == WAIT_OBJECT_0) {
+        since = 0;
+        game_shown = true;
+        ui.GameWindowShown();
+        ShowWindow(hwnd, SW_HIDE);
+      }
+    }
+    if (game && game_shown) {
       // A game is running: the launcher waits hidden and comes back when it ends.
       if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) continue;
+      DWORD code = 0;
+      GetExitCodeProcess(game, &code);
       CloseHandle(game);
       game = nullptr;
+      game_shown = false;
       ui.GameEnded();
+      ui.GameExitCode(code);
       ui.Refresh();
       ShowWindow(hwnd, SW_SHOW);
       SetForegroundWindow(hwnd);
@@ -208,6 +279,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
+    coreoflight::UpdatePads(io);
+    SetFullscreen(hwnd, ui.fullscreen());
     ImGui::NewFrame();
     if (!ui.Draw(io.DisplaySize.x, io.DisplaySize.y)) running = false;
     ImGui::Render();
@@ -217,8 +290,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
     g_swap_chain->Present(1, 0);
     if (void* started = ui.TakeStartedProcess()) {
-      game = static_cast<HANDLE>(started);
-      ShowWindow(hwnd, SW_HIDE);
+      game = static_cast<HANDLE>(started);  // hidden once its window is up (above)
+      game_shown = false;
     }
   }
 

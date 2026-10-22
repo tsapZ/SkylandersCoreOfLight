@@ -57,6 +57,7 @@ HubSettings LoadHubSettings() {
   s.figures_marks = IsOn(get("figures_marks"), s.figures_marks);
   s.title_music = IsOn(get("title_music"), s.title_music);
   s.animations = IsOn(get("animations"), s.animations);
+  s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
   return s;
 }
 
@@ -100,13 +101,18 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
       settings.figures_marks));
   page.settings.push_back(Switch(
       "title_music", "Title music", "Titelmusik",
-      "A game's title music while its card is chosen, once the game has run to its title screen.",
-      "Die Titelmusik eines Spiels, solange seine Karte gew\xC3\xA4hlt ist, sobald das Spiel einmal bis "
-      "zum Titelbild lief.",
+      "A game's title music while its card is chosen, straight from the game's disc.",
+      "Die Titelmusik eines Spiels, solange seine Karte gew\xC3\xA4hlt ist, direkt von der Disc des "
+      "Spiels.",
       settings.title_music));
   page.settings.push_back(Switch("animations", "Animations", "Animationen",
                                  "Screens slide and fade in.", "Bildschirme gleiten und blenden ein.",
                                  settings.animations));
+  page.settings.push_back(Switch("fullscreen", "Fullscreen", "Vollbild",
+                                 "The launcher fills the screen, for the TV. F11 or Alt+Enter switch it too.",
+                                 "Der Hub f\xC3\xBCllt den Bildschirm, f\xC3\xBCr den Fernseher. F11 oder "
+                                 "Alt+Enter schalten auch um.",
+                                 settings.fullscreen));
   out->pages.push_back(std::move(page));
   return out;
 }

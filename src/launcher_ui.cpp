@@ -136,6 +136,23 @@ void LauncherUi::CountAchievements() {
   }
 }
 
+void LauncherUi::GameExitCode(unsigned long code) {
+  starting_ = false;
+  if (code == 0) return;
+  wchar_t text[160];
+  std::swprintf(text, std::size(text),
+                german_ ? L"Das Spiel wurde unerwartet beendet (Code 0x%08lX); sein Log liegt im Ordner logs des Spiels"
+                        : L"The game ended unexpectedly (code 0x%08lX); its log is in the game's logs folder",
+                code);
+  error_ = text;
+  error_until_ = ImGui::GetTime() + 12.0;
+}
+
+void LauncherUi::ToggleFullscreen() {
+  hub_.fullscreen = !hub_.fullscreen;
+  WriteGameSetting(HubSettingsFile(), "Hub", "fullscreen", "bool", hub_.fullscreen ? "true" : "false");
+}
+
 void LauncherUi::GameEnded() {
   if (running_key_.empty()) return;
   AddPlaySeconds(running_profile_, running_key_, (GetTickCount64() - running_since_) / 1000);
@@ -153,12 +170,40 @@ void* LauncherUi::TakeStartedProcess() {
 }
 
 void LauncherUi::Start(size_t index) {
+  if (index >= found_.size()) return;
+  // A does what the card needs: a game without its disc opens the disc browser, one that isn't
+  // installed or has another disc version says so (nothing could run).
+  auto say = [&](const wchar_t* de, const wchar_t* en) {
+    error_ = german_ ? de : en;
+    error_until_ = ImGui::GetTime() + 6.0;
+  };
+  if (found_[index].exe.empty()) {
+    say(L"Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
+        L"This game isn't installed (its installer from its project)");
+    return;
+  }
+  switch (found_[index].disc.load()) {
+    case DiscState::kMatches:
+      break;
+    case DiscState::kMissing:
+      if (!import_.running()) browser_.Open();
+      return;
+    case DiscState::kOther:
+      say(L"Diese Disc-Version unterst\x00FCtzt das Spiel nicht (X: eine andere Disc einlesen)",
+          L"The game doesn't support this disc version (X: set up another disc)");
+      return;
+    default:
+      say(L"Die Disc wird noch gepr\x00FCft", L"The disc is still being checked");
+      return;
+  }
   music_.Stop();
-  if (index >= found_.size() || found_[index].exe.empty()) return;
   void* process = nullptr;
   std::wstring error;
   if (StartGame(found_[index], error, &process)) {
     started_ = process;
+    starting_ = true;
+    starting_game_ = index;
+    starting_since_ = ImGui::GetTime();
     running_key_ = AllGames()[index].key;
     running_profile_ = ActiveProfile();
     running_since_ = GetTickCount64();
@@ -315,8 +360,10 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
         (german_ ? "Zuletzt gespeichert " : "Last saved ") + FileTimeDate(last_saved_[index], german_);
     Text(dl, regular_, 16 * s, {x + 18 * s, y + h - 38 * s}, kDim, when.c_str(), w - 36 * s);
   }
-  if (installed && selected) {
-    const char* go = german_ ? "Starten" : "Play";
+  const DiscState disc_state = f.disc.load();
+  if (installed && selected && (disc_state == DiscState::kMatches || disc_state == DiscState::kMissing)) {
+    const char* go = disc_state == DiscState::kMissing ? (german_ ? "Disc einlesen" : "Add the disc")
+                                                       : (german_ ? "Starten" : "Play");
     const float go_size = 24 * s;
     const float gw = TextWidth(bold_, go_size, go) + 60 * s;
     const ImVec2 a{x + (w - gw) * 0.5f, y + h - 112 * s};
@@ -368,7 +415,8 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
 
 bool LauncherUi::Draw(float width, float height) {
   // The screen this frame will draw, in DrawScreens' order.
-  const char* window = confirm_quit_                   ? "quit"
+  const char* window = starting_                       ? "starting"
+                       : confirm_quit_                 ? "quit"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
                        : achievements_screen_.is_open() ? "achievements"
@@ -438,6 +486,36 @@ void LauncherUi::UpdateTitleMusicExport() {
   }
 }
 
+// While a game starts: its background and name, until its window is up (main.cpp hides the
+// launcher then), so the desktop doesn't show for the seconds before.
+bool LauncherUi::DrawStarting(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("starting", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height,
+               starting_game_ < background_art_.size() ? background_art_[starting_game_] : std::filesystem::path());
+  const Game& game = AllGames()[std::min(starting_game_, AllGames().size() - 1)];
+  const std::string title = german_ ? std::string(game.name_de) + " startet ..." : std::string(game.name_en) + " is starting ...";
+  Text(dl, bold_, 44 * u, {(width - TextWidth(bold_, 44 * u, title.c_str())) * 0.5f, height * 0.42f}, kGold,
+       title.c_str());
+  // A ring of dots turning, so it doesn't look stuck.
+  const ImVec2 c{width * 0.5f, height * 0.42f + 110 * u};
+  const double t = ImGui::GetTime() - starting_since_;
+  for (int i = 0; i < 12; ++i) {
+    const float a = float(i) / 12.0f * 6.2832f;
+    const float lit = float(std::fmod(t * 1.5 - i / 12.0, 1.0));
+    dl->AddCircleFilled({c.x + std::cos(a) * 26 * u, c.y + std::sin(a) * 26 * u}, 5 * u,
+                        Rgba(255, 210, 90, int(60 + 195 * (1.0f - lit))));
+  }
+  ImGui::End();
+  return true;
+}
+
 // "Beenden?": A / Enter quits, B / Esc goes back to the start screen; the mouse can click either.
 bool LauncherUi::DrawQuitConfirm(float width, float height) {
   const float u = std::min(width / 1280.0f, height / 720.0f);
@@ -480,6 +558,7 @@ bool LauncherUi::DrawQuitConfirm(float width, float height) {
 
 bool LauncherUi::DrawScreens(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
+  if (starting_) return DrawStarting(width, height);
   if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (browser_.is_open()) {
     browser_.Draw(width, height);
