@@ -7,8 +7,8 @@ and online co-op with each player's own portal.
 **Status: the launcher's first version** (2026-10-22, [docs/launcher.md](docs/launcher.md)): one
 screen that finds the six games, checks their discs, opens each game's own settings pages (the
 same as its F4 menu), sets up a disc from the owner's ISO, shows the owner's figures with their
-progress, pictures, hats and upgrade trees, keeps profiles with their own saves and figures, and
-starts each game's own exe. Online co-op is still planned. Each game stays complete on its own.
+progress, pictures, hats and upgrade trees, keeps profiles with their own saves and figures, shows
+each profile's achievements, and starts each game's own exe. Online co-op is still planned. Each game stays complete on its own.
 
 ## Principles
 

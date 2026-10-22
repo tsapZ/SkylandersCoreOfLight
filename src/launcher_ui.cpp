@@ -67,6 +67,7 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   settings_.Init(regular, bold, german_);
   figures_screen_.Init(regular, bold, german_);
   profiles_screen_.Init(regular, bold, german_);
+  achievements_screen_.Init(regular, bold, german_);
   Refresh();
 }
 
@@ -74,6 +75,7 @@ void LauncherUi::Refresh() {
   FindGames(found_, launcher_dir_);
   LoadProfiles(german_);
   figures_ = CountFigures();
+  CountAchievements();
   // A game may have been rebuilt or set up meanwhile: its settings are read again when needed.
   loaders_.assign(found_.size(), SettingsLoader());
   // Start on the newest installed game.
@@ -83,6 +85,11 @@ void LauncherUi::Refresh() {
       break;
     }
   }
+}
+
+void LauncherUi::CountAchievements() {
+  achievements_.clear();
+  for (const Game& game : AllGames()) achievements_.push_back(LoadAchievements(game, ActiveProfile()));
 }
 
 void LauncherUi::AddDisc(const std::filesystem::path& iso) {
@@ -178,6 +185,13 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       lines.push_back(fps + " FPS");
     }
     if (!get("scene_size").empty()) lines.push_back(german_ ? "Natives 3D-Bild" : "Native 3D picture");
+    // The active profile's achievements, once the game left its list.
+    if (index < achievements_.size() && achievements_[index].known) {
+      char text[64];
+      std::snprintf(text, sizeof(text), german_ ? "Erfolge %d / %zu" : "Achievements %d / %zu",
+                    achievements_[index].unlocked, achievements_[index].items.size());
+      lines.insert(lines.begin(), text);
+    }
     const std::string language = get("language");
     if (language == "german") lines.push_back("Deutsch");
     else if (language == "english") lines.push_back("English");
@@ -274,8 +288,13 @@ bool LauncherUi::Draw(float width, float height) {
     if (profiles_screen_.TakeChanged()) {
       // Another profile: its figures and pictures.
       figures_ = CountFigures();
+      CountAchievements();
       hero_checked_ = -100.0;
     }
+    return true;
+  }
+  if (achievements_screen_.is_open()) {
+    achievements_screen_.Draw(width, height);
     return true;
   }
   if (figures_screen_.is_open()) {
@@ -361,6 +380,10 @@ bool LauncherUi::Draw(float width, float height) {
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false) || ImGui::IsKeyPressed(ImGuiKey_F, false)) {
     figures_screen_.Open(FiguresDir());
   }
+  // RB / E: the chosen game's achievements (achievements_ui.h).
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+    achievements_screen_.Open(selected_);
+  }
   // Back / P: the profiles (profiles_ui.h).
   if (profile_clicked || ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_P, false)) {
     profiles_screen_.Open(&found_);
@@ -409,6 +432,7 @@ bool LauncherUi::Draw(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Beenden" : "Quit");
   // The disc being set up: what happens, and how far the unpacking is.

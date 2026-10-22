@@ -74,6 +74,12 @@ exe and gets out of the way while the game runs; no game needs it.
   copies of them as they are, or with none. X renames it (keyboard), Back deletes it into the
   recycle bin. `Profiles\profiles.ini` remembers the active profile and the main profile's name
   and picture. The games themselves still call their player "User".
+- **Achievements** (RB / E, for the chosen game; LB / RB switch the game): the game's own list
+  with its pictures, the active profile's unlocked ones bright with their date, how many and the
+  gamerscore; each card shows "Erfolge 2 / 46". The list comes from the game: while it runs it
+  leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
+  picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
+  `<game>recompchievements\<title id>.toml`, which the SDK keeps.
 - `--documents=<folder>` runs the launcher on a copy: that folder in place of Documents for the
   figures, pictures and profiles, and the games it starts get their user data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
@@ -100,6 +106,11 @@ Dear ImGui (thirdparty/imgui, 1.92.5, the version the games' SDK uses), so it bu
 and needs neither the SDK nor the games' sources.
 
 ## Checked (2026-10-22)
+
+- Achievements: Trap Team, run once on a copy, left 46 achievements with 46 pictures and their
+  German names; with two of them unlocked in the copy's `trapteamrecompchievementsč60911.toml`
+  the card said "Erfolge 2 / 46" and the screen "2 von 46 Erfolgen · 20 / 1000 G", the two bright
+  with their dates.
 
 - Profiles, on a copy (`--documents`): a new profile with its figures made new (29 figure files,
   only their headers left), renamed by keyboard, given a picture; the launcher shows it at the top

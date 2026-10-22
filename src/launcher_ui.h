@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "achievements_ui.h"
 #include "disc_import.h"
 #include "figures_ui.h"
 #include "game_settings.h"
@@ -36,6 +37,8 @@ class LauncherUi {
   void DrawCard(size_t index, float x, float y, float w, float h, bool selected);
   // The active profile at the top right; true when clicked.
   bool DrawProfileBadge(float width, float u);
+  // Each game's achievements of the active profile, for its card.
+  void CountAchievements();
 
   std::filesystem::path launcher_dir_;
   std::vector<Found> found_;
@@ -52,6 +55,8 @@ class LauncherUi {
   SettingsScreen settings_;
   FiguresScreen figures_screen_;
   ProfilesScreen profiles_screen_;
+  AchievementsScreen achievements_screen_;
+  std::vector<GameAchievements> achievements_;
   size_t settings_game_ = 0;
   // Each game's hero picture (FigurePicture), looked for again every ten seconds.
   std::vector<std::filesystem::path> hero_pictures_;
