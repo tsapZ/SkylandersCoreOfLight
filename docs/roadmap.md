@@ -51,7 +51,10 @@ the disc has them. The library knows every figure's element up to Imaginators, r
 games' own data (Trap Team's character scenes, SuperChargers' and Imaginators' toy data).
 Ultrawide works the same way in every game: a wider field of view (Hor+), the movies (logos,
 cutscene movies) 16:9 with black bars at the sides while they play, and the HUD at the window's
-edges in its own proportions where the game's UI width was found (not yet in Trap Team).
+edges in its own proportions where the game's UI width was found. The graphics options are the
+same too where a game has the effect: bloom and motion blur strength (Spyro's Adventure has no
+adjustable bloom, Giants and Spyro's Adventure no motion blur), the game's FXAA at the internal
+resolution, the native 3D picture.
 
 ## Now, next, later
 
