@@ -1,6 +1,7 @@
 #include "launcher_ui.h"
 
 #include <windows.h>
+#include <shlobj.h>
 
 #include <algorithm>
 #include <cmath>
@@ -328,10 +329,23 @@ bool LauncherUi::Draw(float width, float height) {
                                            ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false));
 
   // The figure folder and the hints at the bottom.
-  char figures[160];
-  std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren im Ordner Dokumente\\Skylanders\\Figures"
-                                                  : "%d figures in Documents\\Skylanders\\Figures",
-                figures_);
+  // The folder as Windows names it when it is the usual one, else its path (coreoflight.ini).
+  std::string folder = german_ ? "Dokumente\\Skylanders\\Figures" : "Documents\\Skylanders\\Figures";
+  {
+    wchar_t* documents = nullptr;
+    std::filesystem::path usual;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &documents))) {
+      usual = std::filesystem::path(documents) / "Skylanders" / "Figures";
+    }
+    CoTaskMemFree(documents);
+    if (FiguresDir() != usual) {
+      const std::u8string u8 = FiguresDir().u8string();
+      folder = std::string(u8.begin(), u8.end());
+    }
+  }
+  char figures[600];
+  std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren im Ordner %s" : "%d figures in %s", figures_,
+                folder.c_str());
   Text(dl, regular_, 20 * u, {48 * u, height - 92 * u}, kDim, figures);
   float hx = 48 * u;
   const float hy = height - 52 * u;
