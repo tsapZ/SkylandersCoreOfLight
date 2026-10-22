@@ -10,7 +10,7 @@ not inferred.
 | 0 Repository | ✅ | – | this repo; the online co-op proposal and the profiles idea moved here from SwapForceRecomp (its #28, #29, #30, #51) |
 | 1 Launcher | 🟡 first version | #5, #6, #7 | one menu that finds and starts every game (done: finding, disc check, starting; docs/launcher.md), settings per game (done 2026-10-22: the game's own F4 pages) |
 | 2 Figure library | 🟡 first version | #8 | the owner's Skylanders without a game running (done 2026-10-22: stats, the games' pictures, hats, upgrade trees) |
-| 3 Profiles | 🟡 first version | #4 | name, picture, own saves and figures per profile (done 2026-10-22: each profile its own user data folder; the games unchanged) |
+| 3 Profiles | 🟡 first version | #4 | name, picture, own saves and figures per profile (done 2026-10-22: each profile its own user data folder; the games unchanged; each profile's achievements with the games' pictures, and when it last saved each game) |
 | 4 Online co-op (stretch) | 🟡 proposal written | #1, #2, #3 | building it is a separate decision |
 
 ## The overall plan (the owner's call, 2026-10-20)
