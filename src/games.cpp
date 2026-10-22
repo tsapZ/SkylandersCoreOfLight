@@ -5,6 +5,8 @@
 #include <shlobj.h>
 
 #include <cstdio>
+#include <cwchar>
+#include <iterator>
 #include <fstream>
 #include <thread>
 #include <unordered_map>
@@ -22,19 +24,19 @@ constexpr wchar_t kBuildDir[] = L"out\\build\\win-amd64-release";
 // Each repository pins its disc's default.xex in docs/game/default.xex.sha256.
 const std::vector<Game> kGames = {
     {"ssa", "Spyro's Adventure", "Spyro's Adventure", 2011, "ssarecompiled.exe", "SSARecomp",
-     "Spyro's Adventure Recompiled", "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b"},
+     "Spyro's Adventure Recompiled", "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b", 16, 0},
     {"giants", "Giants", "Giants", 2012, "giantsrecompiled.exe", "GiantsRecomp", "Giants Recompiled",
-     "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e"},
+     "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e", 112, 4614},
     {"swapforce", "Swap Force", "Swap Force", 2013, "swapforcerecompiled.exe", "SwapForceRecomp",
-     "Swap Force Recompiled", "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7"},
+     "Swap Force Recompiled", "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7", 2015, 8192},
     {"trapteam", "Trap Team", "Trap Team", 2014, "trapteamrecompiled.exe", "TrapTeamRecomp",
-     "Trap Team Recompiled", "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35"},
+     "Trap Team Recompiled", "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35", 462, 12288},
     {"superchargers", "SuperChargers", "SuperChargers", 2015, "superchargersrecompiled.exe",
      "SuperChargersRecomp", "SuperChargers Recompiled",
-     "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc"},
+     "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc", 3412, 16640},
     {"imaginators", "Imaginators", "Imaginators", 2016, "imaginatorsrecompiled.exe",
      "ImaginatorsRecomp", "Imaginators Recompiled",
-     "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029"},
+     "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029", 601, 20480},
 };
 
 std::string Trim(std::string s) {
@@ -201,6 +203,18 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
 
 fs::path FiguresDir() {
   return g_figures_dir.empty() ? KnownFolder(FOLDERID_Documents) / "Skylanders" / "Figures" : g_figures_dir;
+}
+
+fs::path FigurePicture(uint16_t id, uint16_t variant) {
+  const fs::path root = FiguresDir().parent_path() / "Pictures";
+  wchar_t name[32];
+  std::swprintf(name, std::size(name), L"%u-%u.png", unsigned(id), unsigned(variant));
+  for (size_t i = kGames.size(); i-- > 0;) {
+    const std::string game = kGames[i].name_en;
+    const fs::path p = root / Utf8Path(game) / name;
+    if (IsFile(p)) return p;
+  }
+  return {};
 }
 
 int CountFigures() {

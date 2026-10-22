@@ -4,6 +4,7 @@
 // (games.cpp).
 
 #include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -20,6 +21,7 @@ struct Game {
   const char* repo;       // "SSARecomp", the folder of its repository
   const char* app_name;   // "Spyro's Adventure Recompiled", its installer's folder
   const char* xex_sha256; // the disc's default.xex, as its repository pins it
+  uint16_t hero_id, hero_variant;  // the game's hero, whose picture is on its card
 };
 
 // The six games, in release order.
@@ -56,5 +58,9 @@ bool StartGame(const Found& game, std::wstring& error, void** process);
 // games' pictures for the figure library are in the folder next to it (Pictures).
 std::filesystem::path FiguresDir();
 int CountFigures();
+
+// A figure's picture as one of the games left it (Pictures\<game>\<id>-<variant>.png next to the
+// figure folder), the newest game's first; empty if no game has left one yet.
+std::filesystem::path FigurePicture(uint16_t id, uint16_t variant);
 
 }  // namespace coreoflight

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "textures.h"
 
 namespace coreoflight {
 namespace {
@@ -137,6 +138,24 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   std::snprintf(year, sizeof(year), "%d", game.year);
   const float year_size = 40 * s;
   Text(dl, bold_, year_size, {x + (w - TextWidth(bold_, year_size, year)) * 0.5f, y + 14 * s}, kWhite, year);
+  // The game's hero, once a game has left its picture (figures_ui.h), in the band's corners.
+  if (hero_pictures_.size() <= index) hero_pictures_.resize(AllGames().size());
+  if (hero_pictures_[index].empty() || ImGui::GetTime() > hero_checked_ + 10.0) {
+    if (ImGui::GetTime() > hero_checked_ + 10.0) {
+      hero_checked_ = ImGui::GetTime();
+      for (size_t i = 0; i < AllGames().size(); ++i) {
+        hero_pictures_[i] = FigurePicture(AllGames()[i].hero_id, AllGames()[i].hero_variant);
+      }
+    }
+  }
+  if (!hero_pictures_[index].empty()) {
+    if (const ImTextureID texture = LoadTexture(hero_pictures_[index])) {
+      const float side = 72 * s;
+      const ImVec2 a{x + (w - side) * 0.5f, y + 144 * s};
+      dl->AddImageRounded(texture, a, {a.x + side, a.y + side}, {0, 0}, {1, 1},
+                          installed ? kWhite : Rgba(255, 255, 255, 90), 14 * s);
+    }
+  }
   const char* name = german_ ? game.name_de : game.name_en;
   float name_size = 34 * s;
   while (TextWidth(bold_, name_size, name) > w - 28 * s && name_size > 12) name_size -= 1;
@@ -160,10 +179,12 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     if (language == "german") lines.push_back("Deutsch");
     else if (language == "english") lines.push_back("English");
     else if (!language.empty() && language != "auto") lines.push_back(language);
-    float ly = y + 170 * s;
+    // Below the hero's picture there is room for three.
+    if (!hero_pictures_[index].empty() && lines.size() > 3) lines.resize(3);
+    float ly = y + (hero_pictures_[index].empty() ? 170 : 226) * s;
     for (const std::string& line : lines) {
       Text(dl, regular_, 21 * s, {x + 22 * s, ly}, kDim, line.c_str(), w - 44 * s);
-      ly += 30 * s;
+      ly += 24 * s;
     }
   }
   // The disc's state.
@@ -196,7 +217,7 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     const char* go = german_ ? "Starten" : "Play";
     const float go_size = 24 * s;
     const float gw = TextWidth(bold_, go_size, go) + 60 * s;
-    const ImVec2 a{x + (w - gw) * 0.5f, y + h - 128 * s};
+    const ImVec2 a{x + (w - gw) * 0.5f, y + h - 112 * s};
     dl->AddRectFilled(a, {a.x + gw, a.y + 44 * s}, kGoldDark, 22 * s);
     dl->AddRectFilled({a.x + 3 * s, a.y + 3 * s}, {a.x + gw - 3 * s, a.y + 41 * s}, kGold, 19 * s);
     Text(dl, bold_, go_size, {a.x + 30 * s, a.y + 8 * s}, Rgba(60, 35, 0), go);

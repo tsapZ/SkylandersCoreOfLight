@@ -49,6 +49,9 @@ class LauncherUi {
   SettingsScreen settings_;
   FiguresScreen figures_screen_;
   size_t settings_game_ = 0;
+  // Each game's hero picture (FigurePicture), looked for again every ten seconds.
+  std::vector<std::filesystem::path> hero_pictures_;
+  double hero_checked_ = -100.0;
   // Setting up a disc from an ISO (disc_import.h), and its phase at the last frame.
   DiscImport import_;
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
