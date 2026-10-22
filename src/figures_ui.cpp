@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "games.h"
+#include "profiles.h"
 #include "imgui.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
@@ -440,6 +441,9 @@ void FiguresScreen::Draw(float width, float height) {
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold,
        tree_ ? tree_figure_.name
              : all_ ? (german_ ? "Alle Skylander" : "Every Skylander") : (german_ ? "Meine Skylander" : "My Skylanders"));
+  // Whose figures they are (profiles.h).
+  const std::string whose = (german_ ? "Profil " : "Profile ") + ActiveProfile().name;
+  Text(dl, regular_, 20 * u, {width - 48 * u - TextWidth(regular_, 20 * u, whose), 44 * u}, kDim, whose);
   if (tree_) {
     DrawTree(width, height, u);
     ImGui::End();
