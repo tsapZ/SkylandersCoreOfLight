@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "disc_import.h"
+#include "figures_ui.h"
 #include "game_settings.h"
 #include "games.h"
 #include "settings_ui.h"
@@ -46,6 +47,7 @@ class LauncherUi {
   // Each game's settings pages, read from the game when first needed (game_settings.h).
   std::vector<SettingsLoader> loaders_;
   SettingsScreen settings_;
+  FiguresScreen figures_screen_;
   size_t settings_game_ = 0;
   // Setting up a disc from an ISO (disc_import.h), and its phase at the last frame.
   DiscImport import_;

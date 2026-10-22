@@ -63,6 +63,7 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   bold_ = bold;
   german_ = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_GERMAN;
   settings_.Init(regular, bold, german_);
+  figures_screen_.Init(regular, bold, german_);
   Refresh();
 }
 
@@ -204,6 +205,10 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
 
 bool LauncherUi::Draw(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
+  if (figures_screen_.is_open()) {
+    figures_screen_.Draw(width, height);
+    return true;
+  }
   if (settings_.is_open()) {
     settings_.Draw(width, height);
     // What was saved shows on the card at once.
@@ -278,6 +283,10 @@ bool LauncherUi::Draw(float width, float height) {
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
     OpenSettings(selected_);
   }
+  // Start / F: the figure library (figures_ui.h).
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false) || ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+    figures_screen_.Open(FiguresDir());
+  }
   // X / D: the owner's own disc (ISO) for a game, recognised and unpacked into its rom folder.
   if (!import_.running() &&
       (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_D, false))) {
@@ -303,6 +312,7 @@ bool LauncherUi::Draw(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Starten" : "Play");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Beenden" : "Quit");
   // The disc being set up: what happens, and how far the unpacking is.
   const DiscImport::Phase phase = import_.phase();

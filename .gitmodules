@@ -1,3 +1,7 @@
 [submodule "thirdparty/imgui"]
 	path = thirdparty/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "thirdparty/skylanders-portal"]
+	path = thirdparty/skylanders-portal
+	url = https://github.com/tsapZ/skylanders-portal.git
+	branch = feature/portal-menu

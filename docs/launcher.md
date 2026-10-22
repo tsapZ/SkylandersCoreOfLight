@@ -39,6 +39,14 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
   itself while it runs and comes back when the game ends.
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
+- **The figure library** (#8, Start / F): every figure in that folder with its level, XP to the
+  next level, gold, play time, upgrades, nickname and the day it was last played, by game (LB /
+  RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built
+  without the games' SDK, AES and MD5 from Windows). X switches to every Skylander of a game, the
+  owner's marked ("11 von 54 dabei"), each with the progress of the owner's figure. The pictures
+  are still plain element-coloured discs: the portraits come from the discs at run time in the
+  games, which the launcher doesn't read yet. Copies the games keep in a `real` folder before they
+  write to a real figure are left out.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
   by Windows' display language.
 
@@ -46,7 +54,8 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- A folder with an unpacked disc instead of an ISO (#6), the figure library (#8), profiles (#4).
+- A folder with an unpacked disc instead of an ISO (#6), the figures' pictures and hats (#8),
+  profiles (#4).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 

@@ -6,8 +6,8 @@ and online co-op with each player's own portal.
 
 **Status: the launcher's first version** (2026-10-22, [docs/launcher.md](docs/launcher.md)): one
 screen that finds the six games, checks their discs, opens each game's own settings pages (the
-same as its F4 menu) and starts each game's own exe. The figure library, profiles and online co-op
-are still
+same as its F4 menu), sets up a disc from the owner's ISO, shows the owner's figures with their
+progress and starts each game's own exe. The figures' pictures, profiles and online co-op are still
 planned. Each game stays complete on its own.
 
 ## Principles

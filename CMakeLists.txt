@@ -17,11 +17,20 @@ if(NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
   message(FATAL_ERROR "thirdparty/imgui is missing: git submodule update --init")
 endif()
 
+# The figure files (names, elements, stats) from skylanders-portal, without the games' SDK: its
+# skylanders_portal_figures target, with Windows' own AES and MD5.
+set(PORTAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/skylanders-portal)
+if(NOT EXISTS ${PORTAL_DIR}/CMakeLists.txt)
+  message(FATAL_ERROR "thirdparty/skylanders-portal is missing: git submodule update --init")
+endif()
+add_subdirectory(${PORTAL_DIR} skylanders-portal EXCLUDE_FROM_ALL)
+
 add_executable(coreoflight WIN32
   src/main.cpp
   src/games.cpp
   src/game_settings.cpp
   src/disc_import.cpp
+  src/figures_ui.cpp
   src/xiso.cpp
   src/settings_ui.cpp
   src/launcher_ui.cpp
@@ -34,7 +43,7 @@ add_executable(coreoflight WIN32
 )
 target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(coreoflight PRIVATE d3d11 dxgi d3dcompiler bcrypt shell32 ole32)
+target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32)
 if(MSVC)
   target_compile_options(coreoflight PRIVATE /W3 /utf-8)
 endif()

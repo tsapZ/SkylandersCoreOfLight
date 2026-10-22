@@ -59,5 +59,6 @@ edges in its own proportions where the game's UI width was found (not yet in Tra
 |---|---|---|
 | Now | Step 1, the three games; then step 2 | me, play tests by the owner |
 | Now | Keep the parts the hub needs shared: menus, figure decoding and the figure folder stay in `skylanders-portal` | me |
-| Now | Phase 1, the launcher: first version built 2026-10-22 (finds, checks and starts the games); the settings pages (#7) and setting up a disc from an ISO (#6) followed the same night | me, a try by the owner |
+| Now | Phase 1, the launcher: first version built 2026-10-22 (finds, checks and starts the games); the settings pages (#7), setting up a disc from an ISO (#6) and a first figure library (#8,
+without pictures yet) followed the same night | me, a try by the owner |
 | Later | Figure library, profiles; online co-op only after the owner agrees to the proposal | both |
