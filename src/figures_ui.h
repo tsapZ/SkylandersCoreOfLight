@@ -49,7 +49,9 @@ class FiguresScreen {
   int tab_ = 0;                  // 0 = every game, then the games in release order
   bool all_ = false;             // every Skylander of the game, not only the owner's
   int selected_ = 0;
-  std::filesystem::path pictures_dir_;  // Documents\Skylanders\Pictures, one folder per game
+  // Documents\Skylanders\Pictures, one folder per game: the profile's (next to its figure folder),
+  // then the main profile's (the discs' pictures are the same for every profile).
+  std::vector<std::filesystem::path> pictures_dirs_;
   std::map<std::pair<uint16_t, uint16_t>, std::filesystem::path> pictures_;  // empty path: none
   // The hats the games left (Pictures\<game>\hats.txt and hat-<n>.png), the newest game's.
   struct Hat {

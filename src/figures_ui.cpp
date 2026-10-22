@@ -10,6 +10,7 @@
 #include <system_error>
 #include <utility>
 
+#include "games.h"
 #include "imgui.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
@@ -151,26 +152,32 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   selected_ = 0;
   // Each game leaves the pictures it reads from its disc there (skylanders-portal
   // StartFigurePictureCache): looked for again on every open.
-  pictures_dir_ = figures_dir.parent_path() / "Pictures";
+  pictures_dirs_ = {figures_dir.parent_path() / "Pictures"};
+  if (MainFiguresDir().parent_path() / "Pictures" != pictures_dirs_[0]) {
+    pictures_dirs_.push_back(MainFiguresDir().parent_path() / "Pictures");
+  }
   pictures_.clear();
   trees_.clear();
   tree_ = false;
-  // The hats: each game's hats.txt, read oldest game first so the newest one's names win.
+  // The hats: each game's hats.txt, read oldest game first so the newest one's names win (and
+  // the profile's after the main profile's).
   hats_.clear();
   for (const std::string_view game : kGames) {
-    const fs::path dir = pictures_dir_ / fs::path(std::u8string(game.begin(), game.end()));
-    std::ifstream in(dir / "hats.txt", std::ios::binary);
-    std::string line;
-    while (std::getline(in, line)) {
-      const size_t tab1 = line.find('\t'), tab2 = line.find('\t', tab1 + 1);
-      if (tab1 == std::string::npos || tab2 == std::string::npos) continue;
-      const int number = std::atoi(line.substr(0, tab1).c_str());
-      if (number <= 0 || number > 0xFFFF) continue;
-      Hat hat{line.substr(tab1 + 1, tab2 - tab1 - 1), line.substr(tab2 + 1), {}};
-      const fs::path picture = dir / ("hat-" + std::to_string(number) + ".png");
-      std::error_code exists_ec;
-      if (fs::exists(picture, exists_ec)) hat.picture = picture;
-      hats_[uint16_t(number)] = std::move(hat);
+    for (size_t root = pictures_dirs_.size(); root-- > 0;) {
+      const fs::path dir = pictures_dirs_[root] / fs::path(std::u8string(game.begin(), game.end()));
+      std::ifstream in(dir / "hats.txt", std::ios::binary);
+      std::string line;
+      while (std::getline(in, line)) {
+        const size_t tab1 = line.find('\t'), tab2 = line.find('\t', tab1 + 1);
+        if (tab1 == std::string::npos || tab2 == std::string::npos) continue;
+        const int number = std::atoi(line.substr(0, tab1).c_str());
+        if (number <= 0 || number > 0xFFFF) continue;
+        Hat hat{line.substr(tab1 + 1, tab2 - tab1 - 1), line.substr(tab2 + 1), {}};
+        const fs::path picture = dir / ("hat-" + std::to_string(number) + ".png");
+        std::error_code exists_ec;
+        if (fs::exists(picture, exists_ec)) hat.picture = picture;
+        hats_[uint16_t(number)] = std::move(hat);
+      }
     }
   }
   owned_.clear();
@@ -246,9 +253,11 @@ const fs::path* FiguresScreen::Picture(const Figure& f) {
     std::snprintf(name, sizeof(name), "%u-%u.png", unsigned(f.id), unsigned(f.variant));
     std::error_code ec;
     // The newest game first: it knows the most characters and has the newest pictures.
-    for (size_t i = std::size(kGames); i-- > 0 && found.empty();) {
-      const fs::path p = pictures_dir_ / fs::path(std::u8string(kGames[i].begin(), kGames[i].end())) / name;
-      if (fs::exists(p, ec)) found = p;
+    for (const fs::path& root : pictures_dirs_) {
+      for (size_t i = std::size(kGames); i-- > 0 && found.empty();) {
+        const fs::path p = root / fs::path(std::u8string(kGames[i].begin(), kGames[i].end())) / name;
+        if (fs::exists(p, ec)) found = p;
+      }
     }
     it = pictures_.emplace(key, found).first;
   }
@@ -262,8 +271,10 @@ const FiguresScreen::UpgradeTree* FiguresScreen::TreeOf(const Figure& f) {
   std::shared_ptr<UpgradeTree> tree;
   char name[48];
   std::snprintf(name, sizeof(name), "upgrades-%u-%u.txt", unsigned(f.id), unsigned(f.variant));
-  for (size_t i = std::size(kGames); i-- > 0 && !tree;) {
-    const fs::path dir = pictures_dir_ / fs::path(std::u8string(kGames[i].begin(), kGames[i].end()));
+  for (size_t at = 0; at < pictures_dirs_.size() * std::size(kGames) && !tree; ++at) {
+    const size_t i = std::size(kGames) - 1 - at % std::size(kGames);
+    const fs::path dir =
+        pictures_dirs_[at / std::size(kGames)] / fs::path(std::u8string(kGames[i].begin(), kGames[i].end()));
     std::ifstream in(dir / name, std::ios::binary);
     if (!in) continue;
     auto read = std::make_shared<UpgradeTree>();

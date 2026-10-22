@@ -11,6 +11,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include "profiles.h"
+
 namespace coreoflight {
 namespace {
 
@@ -49,7 +51,16 @@ fs::path Utf8Path(const std::string& s) {
   return fs::path(std::u8string(reinterpret_cast<const char8_t*>(s.data()), s.size()));
 }
 
-// "key = value" lines, ";" and "#" start a comment.
+fs::path KnownFolder(REFKNOWNFOLDERID id) {
+  PWSTR path = nullptr;
+  fs::path out;
+  if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &path))) out = path;
+  CoTaskMemFree(path);
+  return out;
+}
+
+}  // namespace
+
 std::unordered_map<std::string, std::string> ReadIni(const fs::path& path) {
   std::unordered_map<std::string, std::string> out;
   std::ifstream in(path);
@@ -68,13 +79,23 @@ std::unordered_map<std::string, std::string> ReadIni(const fs::path& path) {
   return out;
 }
 
-fs::path KnownFolder(REFKNOWNFOLDERID id) {
-  PWSTR path = nullptr;
-  fs::path out;
-  if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &path))) out = path;
-  CoTaskMemFree(path);
-  return out;
+namespace {
+fs::path g_documents_dir;  // --documents=<folder>
+}  // namespace
+
+fs::path DocumentsDir() { return g_documents_dir.empty() ? KnownFolder(FOLDERID_Documents) : g_documents_dir; }
+
+void SetDocumentsDir(const fs::path& dir) { g_documents_dir = dir; }
+
+bool DocumentsMoved() { return !g_documents_dir.empty(); }
+
+std::string UserDataName(const fs::path& exe) {
+  std::string stem = exe.stem().string();
+  if (stem.ends_with("recompiled")) stem.resize(stem.size() - 4);
+  return stem;
 }
+
+namespace {
 
 bool IsFile(const fs::path& p) {
   std::error_code ec;
@@ -166,9 +187,7 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
     if (found[i].exe.empty()) continue;
     FindRom(found[i].exe, found[i].workdir, found[i].rom);
     // ssarecompiled.exe reads ssarecomp.toml next to it.
-    std::string stem = found[i].exe.stem().string();
-    if (stem.ends_with("recompiled")) stem.resize(stem.size() - 4);
-    found[i].settings = ReadIni(found[i].exe.parent_path() / (stem + ".toml"));
+    found[i].settings = ReadIni(found[i].exe.parent_path() / (UserDataName(found[i].exe) + ".toml"));
   }
   for (size_t i = 0; i < kGames.size(); ++i) {
     if (found[i].exe.empty()) continue;
@@ -187,7 +206,8 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
 bool StartGame(const Found& game, std::wstring& error, void** process) {
   STARTUPINFOW startup = {sizeof(startup)};
   PROCESS_INFORMATION info = {};
-  std::wstring command = L"\"" + game.exe.wstring() + L"\"";
+  // The active profile's own user data (profiles.h); nothing for the main profile.
+  std::wstring command = L"\"" + game.exe.wstring() + L"\"" + ProfileArguments(game.exe);
   if (!CreateProcessW(game.exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
                       game.workdir.c_str(), &startup, &info)) {
     wchar_t text[256] = L"";
@@ -201,18 +221,22 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
   return true;
 }
 
-fs::path FiguresDir() {
-  return g_figures_dir.empty() ? KnownFolder(FOLDERID_Documents) / "Skylanders" / "Figures" : g_figures_dir;
+fs::path MainFiguresDir() {
+  return g_figures_dir.empty() ? DocumentsDir() / "Skylanders" / "Figures" : g_figures_dir;
 }
 
+fs::path FiguresDir() { return ProfileFiguresDir(ActiveProfile()); }
+
 fs::path FigurePicture(uint16_t id, uint16_t variant) {
-  const fs::path root = FiguresDir().parent_path() / "Pictures";
   wchar_t name[32];
   std::swprintf(name, std::size(name), L"%u-%u.png", unsigned(id), unsigned(variant));
-  for (size_t i = kGames.size(); i-- > 0;) {
-    const std::string game = kGames[i].name_en;
-    const fs::path p = root / Utf8Path(game) / name;
-    if (IsFile(p)) return p;
+  // The pictures are the discs', the same for every profile: the main profile's too.
+  for (const fs::path& root : {ProfilePicturesDir(ActiveProfile()), MainFiguresDir().parent_path() / "Pictures"}) {
+    for (size_t i = kGames.size(); i-- > 0;) {
+      const std::string game = kGames[i].name_en;
+      const fs::path p = root / Utf8Path(game) / name;
+      if (IsFile(p)) return p;
+    }
   }
   return {};
 }

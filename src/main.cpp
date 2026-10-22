@@ -6,6 +6,7 @@
 #include <shellapi.h>
 
 #include <filesystem>
+#include <string>
 
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
@@ -143,15 +144,26 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   if (!bold) bold = regular;
 
   coreoflight::SetTextureDevice(g_device);
+  // --documents=<folder>: that folder in place of Documents (figures, pictures, profiles, the
+  // games' user data), to try the launcher on a copy. An ISO dragged onto coreoflight.exe (or
+  // named on its command line) is set up at once.
+  std::wstring iso;
+  int argc = 0;
+  if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
+    for (int i = 1; i < argc; ++i) {
+      const std::wstring arg = argv[i];
+      if (arg.starts_with(L"--documents=")) {
+        coreoflight::SetDocumentsDir(arg.substr(12));
+      } else if (iso.empty()) {
+        iso = arg;
+      }
+    }
+    LocalFree(argv);
+  }
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
   g_ui = &ui;
-  // An ISO dragged onto coreoflight.exe (or named on its command line) is set up at once.
-  int argc = 0;
-  if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
-    if (argc > 1) ui.AddDisc(argv[1]);
-    LocalFree(argv);
-  }
+  if (!iso.empty()) ui.AddDisc(iso);
   DragAcceptFiles(hwnd, TRUE);
 
   bool running = true;

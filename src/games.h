@@ -53,14 +53,26 @@ void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_
 // Starts a game's exe in its own folder; false (and `error`) if Windows refused.
 bool StartGame(const Found& game, std::wstring& error, void** process);
 
-// The shared figure folder every game uses (Documents\Skylanders\Figures, or "figures = <folder>"
-// in coreoflight.ini, as a game's portal_figures_dir) and how many figure files are in it. The
-// games' pictures for the figure library are in the folder next to it (Pictures).
+// The active profile's figure folder (profiles.h): for the main profile the shared one every game
+// uses (Documents\Skylanders\Figures, or "figures = <folder>" in coreoflight.ini, as a game's
+// portal_figures_dir: MainFiguresDir). And how many figure files are in it. The games' pictures for
+// the figure library are in the folder next to it (Pictures).
 std::filesystem::path FiguresDir();
+std::filesystem::path MainFiguresDir();
 int CountFigures();
 
 // A figure's picture as one of the games left it (Pictures\<game>\<id>-<variant>.png next to the
-// figure folder), the newest game's first; empty if no game has left one yet.
+// figure folder; the active profile's, then the main profile's), the newest game's first; empty if
+// no game has left one yet.
 std::filesystem::path FigurePicture(uint16_t id, uint16_t variant);
+
+// "key = value" lines of an ini file (";" and "#" start a comment, a byte order mark is skipped).
+std::unordered_map<std::string, std::string> ReadIni(const std::filesystem::path& path);
+std::filesystem::path DocumentsDir();
+void SetDocumentsDir(const std::filesystem::path& dir);  // --documents=<folder>, to try on a copy
+bool DocumentsMoved();  // --documents was given
+// The folder name of a game's user data in Documents: ssarecompiled.exe keeps it in ssarecomp
+// (the SDK's app name, the same as its settings file's).
+std::string UserDataName(const std::filesystem::path& exe);
 
 }  // namespace coreoflight

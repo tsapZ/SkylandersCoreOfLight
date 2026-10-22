@@ -59,6 +59,23 @@ exe and gets out of the way while the game runs; no game needs it.
   games keep in a `real` folder before they write to a real figure are left out.
   `figures = <folder>` in coreoflight.ini uses another figure folder (as the games'
   `portal_figures_dir`); the pictures are then in the `Pictures` folder next to it.
+- **Profiles** (#4, Back / P / a click on the profile at the top right), like an Xbox account:
+  a name, a Skylander's picture (Y: the profile's own figures and each game's hero, those a game
+  has left a picture of), their own saves, achievements and figures. The main profile is the data
+  as the games keep it without the launcher (`Documents\<game>recomp`,
+  `Documents\Skylanders\Figures`), so nothing changes for it. Every other profile is a folder
+  `Documents\Skylanders\Profiles\<id>` (its `profile.ini` has the name and picture) that stands
+  in for Documents: the launcher starts a game with `--user_data_root=<folder>\<game>recomp`, the
+  game then keeps the profile's figures in `<folder>\Skylanders\Figures` and its pictures in
+  `<folder>\Skylanders\Pictures` by itself (the games put both next to their user data's
+  folder), and `--cache_root=Documents\<game>recomp\cache` keeps the main profile's shader
+  cache, so a new profile doesn't build it again. A new profile can start with the current
+  profile's figures made new (the same Skylanders back at the start, new serial numbers), with
+  copies of them as they are, or with none. X renames it (keyboard), Back deletes it into the
+  recycle bin. `Profiles\profiles.ini` remembers the active profile and the main profile's name
+  and picture. The games themselves still call their player "User".
+- `--documents=<folder>` runs the launcher on a copy: that folder in place of Documents for the
+  figures, pictures and profiles, and the games it starts get their user data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
   by Windows' display language.
 
@@ -66,7 +83,7 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- Profiles (#4), online co-op (#1-#3).
+- The profile's name in the games (the SDK's XAM always answers "User"); online co-op (#1-#3).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 
@@ -83,6 +100,13 @@ Dear ImGui (thirdparty/imgui, 1.92.5, the version the games' SDK uses), so it bu
 and needs neither the SDK nor the games' sources.
 
 ## Checked (2026-10-22)
+
+- Profiles, on a copy (`--documents`): a new profile with its figures made new (29 figure files,
+  only their headers left), renamed by keyboard, given a picture; the launcher shows it at the top
+  right and counts its figures. Started from the launcher (a stand-in exe that writes its command
+  line), the game got `--user_data_root=<copy>\Skylanders\Profiles\p2\giantsrecomp` and
+  `--cache_root=<copy>\giantsrecomp\cache`; Giants itself, started that way, put its pictures in
+  the profile's `Skylanders\Pictures\Giants` and its shader cache in the main one.
 
 - Disc set-up: the Trap Team ISO on the developer layout said "die Disc ist schon eingerichtet" and
   chose Trap Team. In a test folder (coreoflight.ini pointing Spyro's Adventure at a stand-in exe)

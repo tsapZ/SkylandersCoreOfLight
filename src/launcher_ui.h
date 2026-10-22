@@ -10,6 +10,7 @@
 #include "figures_ui.h"
 #include "game_settings.h"
 #include "games.h"
+#include "profiles_ui.h"
 #include "settings_ui.h"
 
 struct ImFont;
@@ -33,6 +34,8 @@ class LauncherUi {
   void Start(size_t index);
   void OpenSettings(size_t index);
   void DrawCard(size_t index, float x, float y, float w, float h, bool selected);
+  // The active profile at the top right; true when clicked.
+  bool DrawProfileBadge(float width, float u);
 
   std::filesystem::path launcher_dir_;
   std::vector<Found> found_;
@@ -48,6 +51,7 @@ class LauncherUi {
   std::vector<SettingsLoader> loaders_;
   SettingsScreen settings_;
   FiguresScreen figures_screen_;
+  ProfilesScreen profiles_screen_;
   size_t settings_game_ = 0;
   // Each game's hero picture (FigurePicture), looked for again every ten seconds.
   std::vector<std::filesystem::path> hero_pictures_;

@@ -66,11 +66,13 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   german_ = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_GERMAN;
   settings_.Init(regular, bold, german_);
   figures_screen_.Init(regular, bold, german_);
+  profiles_screen_.Init(regular, bold, german_);
   Refresh();
 }
 
 void LauncherUi::Refresh() {
   FindGames(found_, launcher_dir_);
+  LoadProfiles(german_);
   figures_ = CountFigures();
   // A game may have been rebuilt or set up meanwhile: its settings are read again when needed.
   loaders_.assign(found_.size(), SettingsLoader());
@@ -225,8 +227,57 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
 }
 
+bool LauncherUi::DrawProfileBadge(float width, float u) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImGuiIO& io = ImGui::GetIO();
+  const Profile& p = ActiveProfile();
+  const float radius = 30 * u;
+  const std::string label = german_ ? "Profil" : "Profile";
+  const float name_w = std::max(TextWidth(bold_, 24 * u, p.name.c_str()), TextWidth(regular_, 17 * u, label.c_str()));
+  const float right = width - 48 * u;
+  const ImVec2 c{right - radius, 70 * u};
+  const float left = c.x - radius - 14 * u - name_w;
+  const bool hovered = io.MousePos.x >= left && io.MousePos.x < right && io.MousePos.y >= c.y - radius &&
+                       io.MousePos.y < c.y + radius;
+  if (hovered) {
+    dl->AddRectFilled({left - 14 * u, c.y - radius - 8 * u}, {right + 8 * u, c.y + radius + 8 * u},
+                      Rgba(255, 210, 90, 30), radius);
+  }
+  Text(dl, regular_, 17 * u, {c.x - radius - 14 * u - TextWidth(regular_, 17 * u, label.c_str()), c.y - 28 * u}, kDim,
+       label.c_str());
+  Text(dl, bold_, 24 * u, {c.x - radius - 14 * u - TextWidth(bold_, 24 * u, p.name.c_str()), c.y - 6 * u}, kWhite,
+       p.name.c_str());
+  bool drawn = false;
+  if (p.has_picture) {
+    const std::filesystem::path picture = FigurePicture(p.picture_id, p.picture_variant);
+    if (const ImTextureID texture = picture.empty() ? ImTextureID{} : LoadTexture(picture)) {
+      dl->AddCircleFilled(c, radius, Rgba(40, 50, 100));
+      dl->AddImageRounded(texture, {c.x - radius, c.y - radius}, {c.x + radius, c.y + radius}, {0, 0}, {1, 1},
+                          kWhite, radius);
+      drawn = true;
+    }
+  }
+  if (!drawn) {
+    dl->AddCircleFilled(c, radius, Rgba(60, 70, 140));
+    const std::string initial = p.name.empty() ? std::string("?") : p.name.substr(0, 1);
+    Text(dl, bold_, 30 * u, {c.x - TextWidth(bold_, 30 * u, initial.c_str()) * 0.5f, c.y - 17 * u}, kWhite,
+         initial.c_str());
+  }
+  dl->AddCircle(c, radius, kGold, 48, 2.5f * u);
+  return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+}
+
 bool LauncherUi::Draw(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
+  if (profiles_screen_.is_open()) {
+    profiles_screen_.Draw(width, height);
+    if (profiles_screen_.TakeChanged()) {
+      // Another profile: its figures and pictures.
+      figures_ = CountFigures();
+      hero_checked_ = -100.0;
+    }
+    return true;
+  }
   if (figures_screen_.is_open()) {
     figures_screen_.Draw(width, height);
     return true;
@@ -252,9 +303,10 @@ bool LauncherUi::Draw(float width, float height) {
   const ImVec2 core{width * 0.5f, height * 0.56f};
   for (int k = 14; k > 0; --k) dl->AddCircleFilled(core, k * 38 * u, Rgba(90, 160, 255, 5), 64);
 
-  // Title.
+  // Title, and the profile the games start with.
   Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, "SKYLANDERS");
   Text(dl, bold_, 56 * u, {46 * u, 56 * u}, kGold, "CORE OF LIGHT");
+  const bool profile_clicked = DrawProfileBadge(width, u);
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();
@@ -309,6 +361,10 @@ bool LauncherUi::Draw(float width, float height) {
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false) || ImGui::IsKeyPressed(ImGuiKey_F, false)) {
     figures_screen_.Open(FiguresDir());
   }
+  // Back / P: the profiles (profiles_ui.h).
+  if (profile_clicked || ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_P, false)) {
+    profiles_screen_.Open(&found_);
+  }
   // X / D: the owner's own disc (ISO) for a game, recognised and unpacked into its rom folder.
   if (!import_.running() &&
       (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_D, false))) {
@@ -332,20 +388,20 @@ bool LauncherUi::Draw(float width, float height) {
   // The folder as Windows names it when it is the usual one, else its path (coreoflight.ini).
   std::string folder = german_ ? "Dokumente\\Skylanders\\Figures" : "Documents\\Skylanders\\Figures";
   {
-    wchar_t* documents = nullptr;
-    std::filesystem::path usual;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &documents))) {
-      usual = std::filesystem::path(documents) / "Skylanders" / "Figures";
-    }
-    CoTaskMemFree(documents);
+    const std::filesystem::path usual = DocumentsDir() / "Skylanders" / "Figures";
     if (FiguresDir() != usual) {
       const std::u8string u8 = FiguresDir().u8string();
       folder = std::string(u8.begin(), u8.end());
     }
   }
   char figures[600];
-  std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren im Ordner %s" : "%d figures in %s", figures_,
-                folder.c_str());
+  if (IsMainProfile(ActiveProfile())) {
+    std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren im Ordner %s" : "%d figures in %s", figures_,
+                  folder.c_str());
+  } else {
+    std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren im Profil %s" : "%d figures in the profile %s",
+                  figures_, ActiveProfile().name.c_str());
+  }
   Text(dl, regular_, 20 * u, {48 * u, height - 92 * u}, kDim, figures);
   float hx = 48 * u;
   const float hy = height - 52 * u;
@@ -353,6 +409,7 @@ bool LauncherUi::Draw(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Beenden" : "Quit");
   // The disc being set up: what happens, and how far the unpacking is.
   const DiscImport::Phase phase = import_.phase();

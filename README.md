@@ -7,8 +7,8 @@ and online co-op with each player's own portal.
 **Status: the launcher's first version** (2026-10-22, [docs/launcher.md](docs/launcher.md)): one
 screen that finds the six games, checks their discs, opens each game's own settings pages (the
 same as its F4 menu), sets up a disc from the owner's ISO, shows the owner's figures with their
-progress and starts each game's own exe. The figures' pictures, profiles and online co-op are still
-planned. Each game stays complete on its own.
+progress, pictures, hats and upgrade trees, keeps profiles with their own saves and figures, and
+starts each game's own exe. Online co-op is still planned. Each game stays complete on its own.
 
 ## Principles
 
@@ -46,7 +46,7 @@ element symbols and coin.
 |---|---|
 | Launcher: start every game, find the discs, settings per game | #5, #6, #7 (first version: [docs/launcher.md](docs/launcher.md)) |
 | Figure library: every Skylander's stats without a game running | #8 |
-| Profiles like an Xbox account, each with its own saves and figures | #4 |
+| Profiles like an Xbox account, each with its own saves and figures | #4 (first version 2026-10-22) |
 | Online co-op with each player's own real portal (proposal) | #1, #2, #3, [docs/online-coop.md](docs/online-coop.md) |
 
 The order and what is next: [docs/roadmap.md](docs/roadmap.md).
