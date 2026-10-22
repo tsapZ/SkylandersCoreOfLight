@@ -24,7 +24,9 @@ exe and gets out of the way while the game runs; no game needs it.
   knows the game by its default.xex's SHA-256 (the hash each game pins) and unpacks the disc into
   the rom\ folder that game reads, with a progress bar; default.xex comes last, so a folder left
   half done never counts as a disc, and B doesn't quit meanwhile. A disc that is set up already, a
-  game that isn't installed and an unknown disc each get their own message.
+  game that isn't installed and an unknown disc each get their own message. A folder with an
+  unpacked disc (default.xex in it) works the same way: O picks one, or drop it on the window;
+  its files are copied into the rom folder.
 - **Each game's own settings** (#7): Y (Tab, a right click) on a card opens the game's settings
   with exactly the pages of its F4 menu (Grafik, Bildrate, Spiel, Portal, Steuerung), their texts,
   options and explanations. The launcher doesn't know them itself: it starts the game's exe with
@@ -58,8 +60,7 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- A folder with an unpacked disc instead of an ISO (#6), the hats and upgrade pictures in the
-  figure library (#8), profiles (#4).
+- The hats and upgrade pictures in the figure library (#8), profiles (#4).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 

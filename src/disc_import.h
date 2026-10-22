@@ -22,9 +22,11 @@ class DiscImport {
 
   // Asks for an ISO with the Windows file dialog; false if none was chosen.
   static bool PickIso(std::filesystem::path& iso, bool german);
+  // Asks for a folder with an unpacked disc (default.xex in it); false if none was chosen.
+  static bool PickFolder(std::filesystem::path& folder, bool german);
 
-  // Starts reading `iso` on a thread of its own; `found` are the launcher's games (where each
-  // reads its disc). Not while one is running.
+  // Starts reading `source` (an ISO, or a folder with an unpacked disc) on a thread of its own;
+  // `found` are the launcher's games (where each reads its disc). Not while one is running.
   void Start(const std::filesystem::path& iso, const std::vector<Found>& found, bool german);
   bool running() const;
 

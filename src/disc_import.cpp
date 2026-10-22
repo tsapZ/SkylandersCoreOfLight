@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <shobjidl.h>
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <thread>
@@ -31,6 +32,32 @@ bool DiscImport::PickIso(fs::path& iso, bool german) {
       PWSTR path = nullptr;
       if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
         iso = path;
+        picked = true;
+        CoTaskMemFree(path);
+      }
+      item->Release();
+    }
+    dialog->Release();
+  }
+  if (SUCCEEDED(init)) CoUninitialize();
+  return picked;
+}
+
+bool DiscImport::PickFolder(fs::path& folder, bool german) {
+  const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+  bool picked = false;
+  IFileOpenDialog* dialog = nullptr;
+  if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+    FILEOPENDIALOGOPTIONS options = 0;
+    dialog->GetOptions(&options);
+    dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+    dialog->SetTitle(german ? L"Ordner mit der entpackten Disc (mit default.xex) w\u00e4hlen"
+                            : L"Choose the folder with the unpacked disc (with default.xex)");
+    IShellItem* item = nullptr;
+    if (SUCCEEDED(dialog->Show(GetActiveWindow())) && SUCCEEDED(dialog->GetResult(&item))) {
+      PWSTR path = nullptr;
+      if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+        folder = path;
         picked = true;
         CoTaskMemFree(path);
       }
@@ -78,16 +105,31 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       }
       shared->phase = phase;
     };
-    auto image = XisoImage::Open(iso);
-    if (!image) {
-      say(german ? "Das ist keine Xbox-360-Disc (ISO)." : "That isn't an Xbox 360 disc (ISO).", Phase::kFailed);
-      return;
-    }
+    // A folder with an unpacked disc, or an ISO.
+    std::error_code ec;
+    const bool folder = fs::is_directory(iso, ec);
+    std::unique_ptr<XisoImage> image;
     std::vector<uint8_t> xex;
-    const XisoImage::Entry* entry = image->Find("default.xex");
-    if (!entry || !image->Read(*entry, xex)) {
-      say(german ? "Auf der Disc ist kein default.xex." : "The disc has no default.xex.", Phase::kFailed);
-      return;
+    if (folder) {
+      std::ifstream in(iso / "default.xex", std::ios::binary);
+      xex.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+      if (xex.empty()) {
+        say(german ? "In dem Ordner ist kein default.xex (die entpackte Disc fehlt)."
+                   : "That folder has no default.xex (the unpacked disc is missing).",
+            Phase::kFailed);
+        return;
+      }
+    } else {
+      image = XisoImage::Open(iso);
+      if (!image) {
+        say(german ? "Das ist keine Xbox-360-Disc (ISO)." : "That isn't an Xbox 360 disc (ISO).", Phase::kFailed);
+        return;
+      }
+      const XisoImage::Entry* entry = image->Find("default.xex");
+      if (!entry || !image->Read(*entry, xex)) {
+        say(german ? "Auf der Disc ist kein default.xex." : "The disc has no default.xex.", Phase::kFailed);
+        return;
+      }
     }
     const std::string hash = Sha256Hex(xex.data(), xex.size());
     const auto& games = AllGames();
@@ -119,15 +161,46 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
         return;
       }
     }
-    shared->total = image->total_size();
-    say(name + (german ? ": die Disc wird in den rom-Ordner des Spiels entpackt ..."
-                       : ": unpacking the disc into the game's rom folder ..."),
-        Phase::kUnpacking);
     std::string error;
-    const bool ok = image->Extract(rom, [&](uint64_t done, uint64_t) {
-      shared->done = done;
-      return true;
-    }, error);
+    bool ok = false;
+    if (folder) {
+      // The files copied, default.xex last (as when unpacking an ISO).
+      std::vector<std::pair<fs::path, uintmax_t>> files;
+      uintmax_t total = 0;
+      for (fs::recursive_directory_iterator it(iso, ec), end; it != end; it.increment(ec)) {
+        if (ec) break;
+        if (!it->is_regular_file(ec)) continue;
+        const uintmax_t size = it->file_size(ec);
+        files.emplace_back(fs::relative(it->path(), iso, ec), size);
+        total += size;
+      }
+      std::stable_partition(files.begin(), files.end(), [](const auto& f) { return f.first != "default.xex"; });
+      shared->total = total;
+      say(name + (german ? ": die Disc wird in den rom-Ordner des Spiels kopiert ..."
+                         : ": copying the disc into the game's rom folder ..."),
+          Phase::kUnpacking);
+      uintmax_t done = 0;
+      ok = true;
+      for (const auto& [relative, size] : files) {
+        fs::create_directories((rom / relative).parent_path(), ec);
+        if (!fs::copy_file(iso / relative, rom / relative, fs::copy_options::overwrite_existing, ec)) {
+          error = (german ? "kann nicht kopieren: " : "cannot copy: ") + relative.string();
+          ok = false;
+          break;
+        }
+        done += size;
+        shared->done = done;
+      }
+    } else {
+      shared->total = image->total_size();
+      say(name + (german ? ": die Disc wird in den rom-Ordner des Spiels entpackt ..."
+                         : ": unpacking the disc into the game's rom folder ..."),
+          Phase::kUnpacking);
+      ok = image->Extract(rom, [&](uint64_t done, uint64_t) {
+        shared->done = done;
+        return true;
+      }, error);
+    }
     if (!ok) {
       say(name + (german ? ": Entpacken fehlgeschlagen (" : ": unpacking failed (") + error + ")", Phase::kFailed);
       return;

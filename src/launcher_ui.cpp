@@ -314,6 +314,11 @@ bool LauncherUi::Draw(float width, float height) {
     std::filesystem::path iso;
     if (DiscImport::PickIso(iso, german_)) import_.Start(iso, found_, german_);
   }
+  // O: a folder with an unpacked disc instead (dropping one on the window works too).
+  if (!import_.running() && ImGui::IsKeyPressed(ImGuiKey_O, false)) {
+    std::filesystem::path folder;
+    if (DiscImport::PickFolder(folder, german_)) import_.Start(folder, found_, german_);
+  }
   // The chosen game's settings are read ahead (the game takes a few seconds to name them).
   if (selected_ < loaders_.size() && !found_[selected_].exe.empty() && !loaders_[selected_].started()) {
     loaders_[selected_].Start(found_[selected_], AllGames()[selected_].key);
