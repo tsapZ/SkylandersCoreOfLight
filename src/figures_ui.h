@@ -50,6 +50,12 @@ class FiguresScreen {
   int selected_ = 0;
   std::filesystem::path pictures_dir_;  // Documents\Skylanders\Pictures, one folder per game
   std::map<std::pair<uint16_t, uint16_t>, std::filesystem::path> pictures_;  // empty path: none
+  // The hats the games left (Pictures\<game>\hats.txt and hat-<n>.png), the newest game's.
+  struct Hat {
+    std::string name, bonuses;
+    std::filesystem::path picture;
+  };
+  std::map<uint16_t, Hat> hats_;
 };
 
 }  // namespace coreoflight

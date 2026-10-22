@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <set>
 #include <string_view>
 #include <system_error>
@@ -151,6 +153,24 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   // StartFigurePictureCache): looked for again on every open.
   pictures_dir_ = figures_dir.parent_path() / "Pictures";
   pictures_.clear();
+  // The hats: each game's hats.txt, read oldest game first so the newest one's names win.
+  hats_.clear();
+  for (const std::string_view game : kGames) {
+    const fs::path dir = pictures_dir_ / fs::path(std::u8string(game.begin(), game.end()));
+    std::ifstream in(dir / "hats.txt", std::ios::binary);
+    std::string line;
+    while (std::getline(in, line)) {
+      const size_t tab1 = line.find('\t'), tab2 = line.find('\t', tab1 + 1);
+      if (tab1 == std::string::npos || tab2 == std::string::npos) continue;
+      const int number = std::atoi(line.substr(0, tab1).c_str());
+      if (number <= 0 || number > 0xFFFF) continue;
+      Hat hat{line.substr(tab1 + 1, tab2 - tab1 - 1), line.substr(tab2 + 1), {}};
+      const fs::path picture = dir / ("hat-" + std::to_string(number) + ".png");
+      std::error_code exists_ec;
+      if (fs::exists(picture, exists_ec)) hat.picture = picture;
+      hats_[uint16_t(number)] = std::move(hat);
+    }
+  }
   owned_.clear();
   catalog_.clear();
   std::set<std::pair<uint16_t, uint16_t>> have;
@@ -425,6 +445,26 @@ void FiguresScreen::Draw(float width, float height) {
         row(german_ ? "Pfad" : "Path", path == 1 ? (german_ ? "erster" : "first") : (german_ ? "zweiter" : "second"));
       }
       if (!s.nickname.empty()) row(german_ ? "Spitzname" : "Nickname", s.nickname);
+      if (s.hat) {
+        // The hat, as the games name it, with its picture and bonuses.
+        auto hat = hats_.find(s.hat);
+        const std::string name = hat != hats_.end() ? hat->second.name
+                                                    : (german_ ? "Nr. " : "No. ") + std::to_string(s.hat);
+        row(german_ ? "Hut" : "Hat", name);
+        if (hat != hats_.end()) {
+          float bx = x;
+          if (!hat->second.picture.empty()) {
+            if (const ImTextureID texture = LoadTexture(hat->second.picture)) {
+              dl->AddImageRounded(texture, {x, y}, {x + 44 * u, y + 44 * u}, {0, 0}, {1, 1}, kWhite, 8 * u);
+              bx = x + 54 * u;
+            }
+          }
+          if (!hat->second.bonuses.empty()) {
+            Text(dl, regular_, 16 * u, {bx, y + 12 * u}, kGold, hat->second.bonuses, x + w - bx);
+          }
+          y += 52 * u;
+        }
+      }
       if (s.last_played) {
         std::snprintf(text, sizeof(text), "%02u.%02u.%04u", unsigned(s.last_played->day), unsigned(s.last_played->month),
                       unsigned(s.last_played->year));
