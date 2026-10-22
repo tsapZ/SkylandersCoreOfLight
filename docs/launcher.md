@@ -51,7 +51,11 @@ exe and gets out of the way while the game runs; no game needs it.
   `StartFigurePictureCache`), and the library takes the newest game's picture of each figure; a
   figure no played game has a picture of gets its element's colour and first letter. The figure's
   hat shows by its game name, with its picture and bonuses: the games leave `hats.txt` and
-  `hat-<n>.png` there too. Copies the
+  `hat-<n>.png` there too. A (Enter) on one of the owner's figures opens its **upgrade tree** as
+  the games' details view has it: the attacks, basic upgrades, soul gem and Wow Pow, the two paths
+  side by side, the bought ones bright, the chosen one's picture, price and text in the panel; the
+  games leave the trees of the owner's figures (`upgrades-<id>-<variant>.txt` and their pictures).
+  Copies the
   games keep in a `real` folder before they write to a real figure are left out.
   `figures = <folder>` in coreoflight.ini uses another figure folder (as the games'
   `portal_figures_dir`); the pictures are then in the `Pictures` folder next to it.
@@ -62,7 +66,7 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- The upgrade trees in the figure library (#8), profiles (#4).
+- Profiles (#4), online co-op (#1-#3).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 
