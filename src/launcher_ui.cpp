@@ -80,13 +80,25 @@ void LauncherUi::Refresh() {
   // A game may have been rebuilt or set up meanwhile: its settings are read again when needed.
   loaders_.assign(found_.size(), SettingsLoader());
   FindArt();
-  // Start on the newest installed game.
-  for (size_t i = found_.size(); i-- > 0;) {
-    if (!found_[i].exe.empty()) {
+  // Start on the game the active profile saved last, else on the newest installed one. Later
+  // refreshes (a game ended, a disc set up) keep the card the owner is on.
+  if (selection_made_ && selected_ < found_.size() && !found_[selected_].exe.empty()) return;
+  bool chosen = false;
+  uint64_t newest_save = 0;
+  for (size_t i = 0; i < found_.size() && i < last_saved_.size(); ++i) {
+    if (!found_[i].exe.empty() && last_saved_[i] > newest_save) {
+      newest_save = last_saved_[i];
       selected_ = i;
-      break;
+      chosen = true;
     }
   }
+  for (size_t i = found_.size(); !chosen && i-- > 0;) {
+    if (!found_[i].exe.empty()) {
+      selected_ = i;
+      chosen = true;
+    }
+  }
+  selection_made_ = chosen;
 }
 
 void LauncherUi::FindArt() {

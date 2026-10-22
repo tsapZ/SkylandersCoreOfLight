@@ -42,6 +42,8 @@ exe and gets out of the way while the game runs; no game needs it.
   menu then leaves out the Grafik page and every setting that only applies at start-up (#10, the
   owner's wish: changing them in the middle of a game does nothing). A game started on its own
   keeps its full menu; an older build just ignores the flag.
+- **Starts on the game the active profile saved last** (else the newest installed one); after a
+  game ends or a disc is set up the chosen card stays.
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
   itself while it runs and comes back when the game ends.
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
