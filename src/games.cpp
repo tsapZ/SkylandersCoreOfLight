@@ -37,6 +37,8 @@ const std::vector<Game> kGames = {
      "Trap Team Recompiled", "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35", 462, 12288},
     {"superchargers", "SuperChargers", "SuperChargers", 2015, "superchargersrecompiled.exe",
      "SuperChargersRecomp", "SuperChargers Recompiled",
+     // The European English / German disc and the Spanish / Italian one (the same build).
+     "02ff6672d460c9aaa54e69d584af67a7138c6c93cde5e04b0da4284207be7c61,"
      "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc", 3412, 16640},
     {"imaginators", "Imaginators", "Imaginators", 2016, "imaginatorsrecompiled.exe",
      "ImaginatorsRecomp", "Imaginators Recompiled",
@@ -180,6 +182,17 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
 
 const std::vector<Game>& AllGames() { return kGames; }
 
+bool IsGameDisc(const Game& game, const std::string& sha256) {
+  const std::string_view list = game.xex_sha256;
+  for (size_t start = 0;;) {
+    const size_t comma = list.find(',', start);
+    if (list.substr(start, comma == std::string_view::npos ? std::string_view::npos : comma - start) == sha256)
+      return true;
+    if (comma == std::string_view::npos) return false;
+    start = comma + 1;
+  }
+}
+
 void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   const auto ini = ReadIni(launcher_dir / kConfigFile);
   if (auto it = ini.find("figures"); it != ini.end()) g_figures_dir = Utf8Path(it->second);
@@ -200,7 +213,7 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
         found[i].disc = DiscState::kMissing;
         return;
       }
-      found[i].disc = Sha256(xex) == kGames[i].xex_sha256 ? DiscState::kMatches : DiscState::kOther;
+      found[i].disc = IsGameDisc(kGames[i], Sha256(xex)) ? DiscState::kMatches : DiscState::kOther;
     }).detach();
   }
 }

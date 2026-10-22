@@ -20,12 +20,16 @@ struct Game {
   const char* exe;        // "ssarecompiled.exe"
   const char* repo;       // "SSARecomp", the folder of its repository
   const char* app_name;   // "Spyro's Adventure Recompiled", its installer's folder
-  const char* xex_sha256; // the disc's default.xex, as its repository pins it
+  // The discs' default.xex, as its repository pins them: one SHA-256, or several comma separated
+  // (SuperChargers runs two European discs).
+  const char* xex_sha256;
   uint16_t hero_id, hero_variant;  // the game's hero, whose picture is on its card
 };
 
 // The six games, in release order.
 const std::vector<Game>& AllGames();
+// Whether `sha256` (lower-case hex) is one of the game's discs.
+bool IsGameDisc(const Game& game, const std::string& sha256);
 
 enum class DiscState {
   kUnknown,    // not checked yet

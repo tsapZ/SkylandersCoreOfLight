@@ -135,7 +135,7 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
     const auto& games = AllGames();
     int game = -1;
     for (size_t i = 0; i < games.size(); ++i) {
-      if (hash == games[i].xex_sha256) game = int(i);
+      if (IsGameDisc(games[i], hash)) game = int(i);
     }
     if (game < 0) {
       say(german ? "Diese Disc kennt Core of Light nicht (ein anderes Spiel oder eine andere Version)."
