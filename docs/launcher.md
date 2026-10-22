@@ -96,6 +96,9 @@ exe and gets out of the way while the game runs; no game needs it.
   figures, pictures and profiles, and the games it starts get their user data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
   by Windows' display language.
+- Its icon (#11), in Explorer, on shortcuts, the window and the taskbar, is our own drawing of the
+  Core of Light (`src/coreoflight.ico`, drawn by `tools/make_icon.ps1`; no art from the discs). The
+  games get their own logos from their discs (skylanders-portal `skylanders_game_icon`).
 
 ## What it doesn't do yet
 
@@ -125,7 +128,7 @@ and needs neither the SDK nor the games' sources.
   with their dates.
 
 - Play time, on a copy with `coreoflight.ini` pointing Giants at a stand-in exe that runs 61 s:
-  after it ended, `playtime.txt` had `giants	61` and the card "Gespielt 1 Min.".
+  after it ended, `playtime.txt` had the line "giants, a tab, 61" and the card "Gespielt 1 Min.".
 
 - "Hab ich", on a copy without figure files: Y on Camo in "Alle Skylander" marked it ("1 von 597
   dabei", the tile "hab ich (ohne Datei)", the hint then "Hab ich nicht"), "Meine Skylander" showed

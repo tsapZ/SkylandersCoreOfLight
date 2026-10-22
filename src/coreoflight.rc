@@ -1,0 +1,3 @@
+// The launcher's icon (#11): our own drawing of the Core of Light, made by tools/make_icon.ps1.
+// The first icon is what Explorer and shortcuts show; main.cpp gives it to the window too.
+1 ICON "coreoflight.ico"

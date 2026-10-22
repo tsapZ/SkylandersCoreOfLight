@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(coreoflight LANGUAGES CXX)
+project(coreoflight LANGUAGES CXX RC)
 
 # Skylanders: Core of Light, the launcher for the recompiled games (docs/roadmap.md, phase 1).
 # A small Win32 / Direct3D 11 program with Dear ImGui; it starts each game's own exe, so no game
@@ -39,6 +39,7 @@ add_executable(coreoflight WIN32
   src/profiles_ui.cpp
   src/achievements.cpp
   src/achievements_ui.cpp
+  src/coreoflight.rc
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
   ${IMGUI_DIR}/imgui_tables.cpp

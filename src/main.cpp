@@ -118,7 +118,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   ImGui_ImplWin32_EnableDpiAwareness();
   WNDCLASSEXW wc = {sizeof(wc), CS_CLASSDC, WndProc, 0, 0, instance, nullptr, nullptr, nullptr, nullptr,
                     L"CoreOfLight", nullptr};
-  wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+  // The launcher's own icon (coreoflight.rc), in the window's title and the taskbar.
+  wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1));
+  wc.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                                             GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
   RegisterClassExW(&wc);
   const float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
   HWND hwnd = CreateWindowW(wc.lpszClassName, L"Skylanders: Core of Light", WS_OVERLAPPEDWINDOW, 100, 100,
