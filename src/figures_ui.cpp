@@ -253,6 +253,154 @@ const fs::path* FiguresScreen::Picture(const Figure& f) {
   return it->second.empty() ? nullptr : &it->second;
 }
 
+const FiguresScreen::UpgradeTree* FiguresScreen::TreeOf(const Figure& f) {
+  const auto key = std::make_pair(f.id, f.variant);
+  auto it = trees_.find(key);
+  if (it != trees_.end()) return it->second.get();
+  std::shared_ptr<UpgradeTree> tree;
+  char name[48];
+  std::snprintf(name, sizeof(name), "upgrades-%u-%u.txt", unsigned(f.id), unsigned(f.variant));
+  for (size_t i = std::size(kGames); i-- > 0 && !tree;) {
+    const fs::path dir = pictures_dir_ / fs::path(std::u8string(kGames[i].begin(), kGames[i].end()));
+    std::ifstream in(dir / name, std::ios::binary);
+    if (!in) continue;
+    auto read = std::make_shared<UpgradeTree>();
+    std::string line;
+    while (std::getline(in, line)) {
+      std::vector<std::string> fields;
+      for (size_t at = 0;;) {
+        const size_t tab = line.find('\t', at);
+        fields.push_back(line.substr(at, tab == std::string::npos ? std::string::npos : tab - at));
+        if (tab == std::string::npos) break;
+        at = tab + 1;
+      }
+      if (fields[0] == "P" && fields.size() >= 5) {
+        read->paths.push_back({std::atoi(fields[1].c_str()), std::atoi(fields[2].c_str()), fields[3], fields[4], {}});
+      } else if (fields[0] == "U" && fields.size() >= 7 && !read->paths.empty()) {
+        Upgrade up{fields[1], fields[6], uint32_t(std::strtoul(fields[2].c_str(), nullptr, 10)),
+                   std::atoi(fields[3].c_str()), std::atoi(fields[4].c_str()), {}};
+        if (!fields[5].empty()) up.picture = dir / fields[5];
+        read->paths.back().upgrades.push_back(std::move(up));
+      }
+    }
+    if (!read->paths.empty()) tree = read;
+  }
+  return (trees_[key] = tree).get();
+}
+
+// As the games' details view (skylanders-portal UpgradeOwned): the two paths share their bits,
+// which count for the chosen path; the other one's are its alternate bits.
+bool FiguresScreen::Owned(const Figure& f, const UpgradePath& path, const Upgrade& up) const {
+  if (up.bit < 0) return true;
+  if (!f.stats) return false;
+  if (path.kind != 2) return (f.stats->upgrades >> up.bit) & 1;
+  const int chosen = sp::UpgradePath(*f.stats);
+  if (chosen == 0) return false;
+  const int bit = chosen == path.number + 1 ? up.bit : up.alternate_bit;
+  return bit >= 0 && ((f.stats->upgrades >> bit) & 1);
+}
+
+void FiguresScreen::DrawTree(float width, float height, float u) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImGuiIO& io = ImGui::GetIO();
+  const UpgradeTree* tree = TreeOf(tree_figure_);
+  if (!tree || ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)) {
+    tree_ = false;
+    return;
+  }
+  // Every upgrade in order, for the choice.
+  std::vector<std::pair<const UpgradePath*, const Upgrade*>> all;
+  for (const auto& path : tree->paths) {
+    for (const auto& up : path.upgrades) all.emplace_back(&path, &up);
+  }
+  if (all.empty()) {
+    tree_ = false;
+    return;
+  }
+  auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
+  if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft) ||
+      pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
+    tree_index_ = std::max(0, tree_index_ - 1);
+  }
+  if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight) ||
+      pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
+    tree_index_ = std::min(int(all.size()) - 1, tree_index_ + 1);
+  }
+  const float left = 48 * u, top = 124 * u, bottom = height - 80 * u;
+  const float panel_w = std::min(380 * u, width * 0.3f);
+  const float area_w = width - 2 * left - panel_w - 24 * u;
+  const float col_w = area_w * 0.5f;
+  const float icon = 48 * u, step = std::min(col_w / 4.0f, 110 * u), row_h = 104 * u;
+  // The two paths side by side on the right, the rest on the left, as the games draw the tree.
+  float y_left = top, y_right = top;
+  int index = 0;
+  for (const auto& path : tree->paths) {
+    const bool right = path.kind == 2;
+    const float x0 = left + (right ? col_w : 0.0f);
+    float& y = right ? y_right : y_left;
+    if (y + row_h > bottom) {  // no room: skip the rest of this column
+      index += int(path.upgrades.size());
+      continue;
+    }
+    std::string label = path.name;
+    if (label.empty()) {
+      switch (path.kind) {
+        case 0: label = german_ ? "Angriffe" : "Attacks"; break;
+        case 1: label = german_ ? "Grund-Upgrades" : "Basic upgrades"; break;
+        case 3: label = german_ ? "Seelenstein" : "Soul Gem"; break;
+        case 4: label = "Wow Pow"; break;
+        default: label = german_ ? "Pfad" : "Path"; break;
+      }
+    }
+    Text(dl, bold_, 18 * u, {x0, y}, kDim, Fit(bold_, 18 * u, label, col_w - 16 * u));
+    for (size_t k = 0; k < path.upgrades.size(); ++k, ++index) {
+      const Upgrade& up = path.upgrades[k];
+      const float ix = x0 + float(k) * step;
+      const ImVec2 a{ix, y + 26 * u}, b{ix + icon, y + 26 * u + icon};
+      const bool owned = Owned(tree_figure_, path, up);
+      const bool chosen = index == tree_index_;
+      if (io.MousePos.x >= a.x && io.MousePos.x < a.x + step && io.MousePos.y >= a.y && io.MousePos.y < b.y + 30 * u &&
+          (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) {
+        tree_index_ = index;
+      }
+      dl->AddRectFilled(a, b, owned ? Rgba(60, 70, 140) : Rgba(30, 34, 60), 10 * u);
+      const ImTextureID texture = up.picture.empty() ? ImTextureID{} : LoadTexture(up.picture);
+      if (texture) {
+        dl->AddImageRounded(texture, a, b, {0, 0}, {1, 1}, owned ? kWhite : Rgba(255, 255, 255, 80), 10 * u);
+      }
+      dl->AddRect(a, b, chosen ? kGold : owned ? Rgba(110, 220, 110) : kEdge, 10 * u, 0, (chosen ? 3.0f : 1.5f) * u);
+      Text(dl, regular_, 13 * u, {ix, b.y + 4 * u}, owned ? kWhite : Rgba(150, 160, 190),
+           Fit(regular_, 13 * u, up.name, step - 8 * u));
+    }
+    y += row_h;
+  }
+  // The chosen upgrade: its picture, name, price, whether it is bought, what it does.
+  const auto& [path, up] = all[size_t(std::clamp(tree_index_, 0, int(all.size()) - 1))];
+  const float px = width - left - panel_w, x = px + 20 * u, w = panel_w - 40 * u;
+  dl->AddRectFilled({px, top}, {px + panel_w, bottom}, kPanel, 18 * u);
+  dl->AddRect({px, top}, {px + panel_w, bottom}, kEdge, 18 * u, 0, 2 * u);
+  float y = top + 18 * u;
+  if (!up->picture.empty()) {
+    if (const ImTextureID texture = LoadTexture(up->picture)) {
+      const float side = 120 * u;
+      dl->AddImageRounded(texture, {px + (panel_w - side) * 0.5f, y}, {px + (panel_w + side) * 0.5f, y + side}, {0, 0},
+                          {1, 1}, kWhite, 14 * u);
+      y += side + 14 * u;
+    }
+  }
+  Text(dl, bold_, 22 * u, {x, y}, kWhite, up->name, w);
+  y += 32 * u;
+  const bool owned = Owned(tree_figure_, *path, *up);
+  std::string status = owned ? (german_ ? "Gekauft" : "Bought") : (german_ ? "Noch nicht gekauft" : "Not bought yet");
+  if (up->cost) status += "  \xC2\xB7  " + std::to_string(up->cost) + " Gold";
+  Text(dl, regular_, 17 * u, {x, y}, owned ? Rgba(110, 220, 110) : kGold, status, w);
+  y += 30 * u;
+  Text(dl, regular_, 17 * u, {x, y}, kDim, up->description, w);
+  float hx = left;
+  const float hy = height - 52 * u;
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+}
+
 std::vector<const FiguresScreen::Figure*> FiguresScreen::Shown() const {
   std::vector<const Figure*> out;
   const auto& list = all_ ? catalog_ : owned_;
@@ -274,9 +422,16 @@ void FiguresScreen::Draw(float width, float height) {
   const float u = std::min(width / 1280.0f, height / 720.0f);
   dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
                               Rgba(3, 7, 22));
-  Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim, german_ ? "FIGUREN" : "FIGURES");
+  Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim,
+       tree_ ? (german_ ? "UPGRADES" : "UPGRADES") : (german_ ? "FIGUREN" : "FIGURES"));
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold,
-       all_ ? (german_ ? "Alle Skylander" : "Every Skylander") : (german_ ? "Meine Skylander" : "My Skylanders"));
+       tree_ ? tree_figure_.name
+             : all_ ? (german_ ? "Alle Skylander" : "Every Skylander") : (german_ ? "Meine Skylander" : "My Skylanders"));
+  if (tree_) {
+    DrawTree(width, height, u);
+    ImGui::End();
+    return;
+  }
 
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
   const int tabs = 1 + int(std::size(kGames));
@@ -393,6 +548,16 @@ void FiguresScreen::Draw(float width, float height) {
     Text(dl, regular_, 15 * u, {tx0, a.y + 62 * u}, f.stats ? kGold : Rgba(150, 160, 190, alpha), line);
   }
 
+  // A / Enter (or a click on the chosen tile): the figure's upgrade tree, if a game left one.
+  if (n && shown[selected_]->stats &&
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+       (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)))) {
+    if (TreeOf(*shown[selected_])) {
+      tree_ = true;
+      tree_figure_ = *shown[selected_];
+      tree_index_ = 0;
+    }
+  }
   // The chosen figure's details.
   const float px = width - left - panel_w;
   dl->AddRectFilled({px, grid_top}, {px + panel_w, bottom}, kPanel, 18 * u);
@@ -495,6 +660,7 @@ void FiguresScreen::Draw(float width, float height) {
   float hx = left;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Spiel" : "Game");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");

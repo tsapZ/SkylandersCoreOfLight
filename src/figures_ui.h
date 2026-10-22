@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -56,6 +57,32 @@ class FiguresScreen {
     std::filesystem::path picture;
   };
   std::map<uint16_t, Hat> hats_;
+
+  // A figure's upgrade tree as a game left it (Pictures\<game>\upgrades-<id>-<variant>.txt and its
+  // pictures, skylanders-portal StartFigurePictureCache).
+  struct Upgrade {
+    std::string name, description;
+    uint32_t cost = 0;
+    int bit = -1, alternate_bit = -1;
+    std::filesystem::path picture;
+  };
+  struct UpgradePath {
+    int kind = 1;     // 0 start, 1 basic, 2 path, 3 soul gem, 4 wow pow (FigureUpgradePath::Kind)
+    int number = -1;  // which of the two paths
+    std::string name, description;
+    std::vector<Upgrade> upgrades;
+  };
+  struct UpgradeTree {
+    std::vector<UpgradePath> paths;
+  };
+  // nullptr if no game has left one for the figure.
+  const UpgradeTree* TreeOf(const Figure& f);
+  bool Owned(const Figure& f, const UpgradePath& path, const Upgrade& u) const;
+  void DrawTree(float width, float height, float u);
+  std::map<std::pair<uint16_t, uint16_t>, std::shared_ptr<UpgradeTree>> trees_;
+  bool tree_ = false;  // the tree of tree_figure_ is open
+  Figure tree_figure_;
+  int tree_index_ = 0;  // the chosen upgrade, counted over all paths
 };
 
 }  // namespace coreoflight
