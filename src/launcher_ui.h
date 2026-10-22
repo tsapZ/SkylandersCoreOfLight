@@ -6,7 +6,9 @@
 #include <string>
 #include <vector>
 
+#include "game_settings.h"
 #include "games.h"
+#include "settings_ui.h"
 
 struct ImFont;
 
@@ -25,6 +27,7 @@ class LauncherUi {
 
  private:
   void Start(size_t index);
+  void OpenSettings(size_t index);
   void DrawCard(size_t index, float x, float y, float w, float h, bool selected);
 
   std::filesystem::path launcher_dir_;
@@ -37,6 +40,10 @@ class LauncherUi {
   std::wstring error_;
   double error_until_ = 0;
   void* started_ = nullptr;
+  // Each game's settings pages, read from the game when first needed (game_settings.h).
+  std::vector<SettingsLoader> loaders_;
+  SettingsScreen settings_;
+  size_t settings_game_ = 0;
 };
 
 }  // namespace coreoflight

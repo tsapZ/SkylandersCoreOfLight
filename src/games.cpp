@@ -75,7 +75,7 @@ bool IsFile(const fs::path& p) {
 
 // The folder a game runs in and its rom folder. The games look for rom\ in their working folder
 // (game_data_root, default "rom"): an installed game has it next to its exe, a developer's build
-// in the repository three folders up (<repo>\outuild\win-amd64-release\<exe>).
+// in the repository three folders up (<repo>\out\build\win-amd64-release\<exe>).
 void FindRom(const fs::path& exe, fs::path& workdir, fs::path& rom) {
   fs::path dir = exe.parent_path();
   for (int up = 0; up < 4 && !dir.empty(); ++up, dir = dir.parent_path()) {

@@ -18,6 +18,17 @@ exe and gets out of the way while the game runs; no game needs it.
   (`docs/game/default.xex.sha256`): "Bereit", "Andere Disc-Version" or "Disc fehlt".
 - **Shows a few of the game's own settings** from its settings file next to its exe
   (`<game>recomp.toml`): resolution scale, frame rate, native 3D, language. It only reads it.
+- **Each game's own settings** (#7): Y (Tab, a right click) on a card opens the game's settings
+  with exactly the pages of its F4 menu (Grafik, Bildrate, Spiel, Portal, Steuerung), their texts,
+  options and explanations. The launcher doesn't know them itself: it starts the game's exe with
+  `--settings_schema=<file>` (skylanders-portal `settings_schema.h`), and the game writes its pages
+  with the values it would start with and quits after about 2.5 s, before it opens a window or
+  checks its disc. The chosen card's settings are read ahead. Left / right (A, a click) changes a
+  setting, LB / RB (Q / E) switches the page, Y saves the changes into the game's settings file
+  line by line as the game's menu does (comments and the rest stay), B goes back (with unsaved
+  changes, a second B throws them away). A preset (Leistung / Qualität / Beste) sets its
+  settings together. A game built before the flag existed isn't asked (the launcher looks for the
+  flag's name in the exe first, so it never starts a whole game by mistake).
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
   itself while it runs and comes back when the game ends.
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
@@ -26,8 +37,8 @@ exe and gets out of the way while the game runs; no game needs it.
 
 ## What it doesn't do yet
 
-- Per-game settings pages (#7): the plan is the same pages as the games' F4 menu, from
-  `skylanders-portal`, writing the game's own settings file.
+- Settings that take a free value (no list of options) are shown but not changed here; the
+  game's own menu (F10) has them.
 - Extracting an ISO into a game's `rom\` (#6), the figure library (#8), profiles (#4).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).

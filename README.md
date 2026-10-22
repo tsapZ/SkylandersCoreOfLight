@@ -5,8 +5,9 @@ together; here it ties the games together: one launcher, a library of your Skyla
 and online co-op with each player's own portal.
 
 **Status: the launcher's first version** (2026-10-22, [docs/launcher.md](docs/launcher.md)): one
-screen that finds the six games, checks their discs, shows a few of their settings and starts
-each game's own exe. Settings pages, the figure library, profiles and online co-op are still
+screen that finds the six games, checks their discs, opens each game's own settings pages (the
+same as its F4 menu) and starts each game's own exe. The figure library, profiles and online co-op
+are still
 planned. Each game stays complete on its own.
 
 ## Principles

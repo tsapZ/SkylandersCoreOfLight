@@ -62,12 +62,15 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   regular_ = regular;
   bold_ = bold;
   german_ = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_GERMAN;
+  settings_.Init(regular, bold, german_);
   Refresh();
 }
 
 void LauncherUi::Refresh() {
   FindGames(found_, launcher_dir_);
   figures_ = CountFigures();
+  // A game may have been rebuilt or set up meanwhile: its settings are read again when needed.
+  loaders_.assign(found_.size(), SettingsLoader());
   // Start on the newest installed game.
   for (size_t i = found_.size(); i-- > 0;) {
     if (!found_[i].exe.empty()) {
@@ -93,6 +96,16 @@ void LauncherUi::Start(size_t index) {
     error_ = error;
     error_until_ = ImGui::GetTime() + 6.0;
   }
+}
+
+void LauncherUi::OpenSettings(size_t index) {
+  if (index >= found_.size() || found_[index].exe.empty()) return;
+  if (!loaders_[index].started() || loaders_[index].state() < 0) {
+    loaders_[index].Start(found_[index], AllGames()[index].key);
+  }
+  settings_game_ = index;
+  const Game& game = AllGames()[index];
+  settings_.Open(german_ ? game.name_de : game.name_en, &loaders_[index]);
 }
 
 void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool selected) {
@@ -187,6 +200,12 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
 
 bool LauncherUi::Draw(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
+  if (settings_.is_open()) {
+    settings_.Draw(width, height);
+    // What was saved shows on the card at once.
+    for (const auto& [cvar, value] : settings_.TakeSaved()) found_[settings_game_].settings[cvar] = value;
+    return true;
+  }
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("launcher", nullptr,
@@ -242,11 +261,22 @@ bool LauncherUi::Draw(float width, float height) {
       if (selected_ == i) Start(i);
       selected_ = i;
     }
+    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+      selected_ = i;
+      OpenSettings(i);
+    }
     DrawCard(i, x, y, card_w, card_h, i == selected_);
   }
   if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
       ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
     Start(selected_);
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
+    OpenSettings(selected_);
+  }
+  // The chosen game's settings are read ahead (the game takes a few seconds to name them).
+  if (selected_ < loaders_.size() && !found_[selected_].exe.empty() && !loaders_[selected_].started()) {
+    loaders_[selected_].Start(found_[selected_], AllGames()[selected_].key);
   }
   const bool quit = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
 
@@ -259,6 +289,7 @@ bool LauncherUi::Draw(float width, float height) {
   float hx = 48 * u;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Starten" : "Play");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Beenden" : "Quit");
   if (!error_.empty() && ImGui::GetTime() < error_until_) {
     const std::string text = (german_ ? "Konnte nicht starten: " : "Could not start: ") + Utf8(error_);
