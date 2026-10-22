@@ -121,12 +121,15 @@ die CRC-16 der Figurendaten (sub_82201FD8), in lesbarem C++, im laufenden Giants
 gegen das recompilierte Original auf allen 2^24 Eingaben geprüft („matches the original“).
 GiantsRecomp baut das nur mit `GIANTS_DECOMP_DIR` ein; ohne bleibt das Spiel wie bisher.
 
-**Pilot, Stand 2026-10-22 nachmittags:** 37 Funktionen des Figuren-Codes in 34 Prüfungen, alle gleich
+**Pilot, Stand 2026-10-22 nachmittags:** 50 Funktionen des Figuren-Codes in 46 Prüfungen, alle gleich
 mit dem Original: die CRCs (auch die des Kopfblocks), die Block-Bitmaps, Decoder und Encoder der
 Figuren-Codes mit ihrer 64-Bit-Zahl, die Abschnitte der Spielstanddaten (welche geschrieben werden
-müssen, das Markieren, das Herauskopieren der Blöcke), der Schlüssel jedes Blocks (MD5) und AES-128.
+müssen, das Markieren, das Herauskopieren der Blöcke), der Schlüssel jedes Blocks (MD5) und AES-128,
+die Prüfsummen der Bereiche (passend zum bekannten Figurenformat), der Block-Cache mit seinen
+Lese- und Schreibaufträgen und die Schritte, die fehlende Blöcke lesen und geänderte schreiben.
 Eine Prüfung hat dabei einen Fehler in einer früheren Funktion gefunden (eine Adresse ohne den
 32-Bit-Überlauf des Spiels), der behoben ist. Die
-gemessene Rate für solche Funktionen samt Prüfung: etwa 6-12 pro Stunde, also 50-100 an einem
-Arbeitstag; das liegt im unteren Teil der KI-gestützten Zeile oben. Der Objekt-Code des Spiels, mit
+gemessene Rate für solche Funktionen samt Prüfung: anfangs etwa 6-12 pro Stunde, bei den letzten 13
+(Funktionen, deren Aufrufe schon fertig waren) etwa 20 pro Stunde, alle im ersten Anlauf gleich;
+das liegt im KI-gestützten Bereich oben. Der Objekt-Code des Spiels, mit
 seinen Strukturen, ist noch nicht gemessen (GiantsDecomp docs/plan.md).
