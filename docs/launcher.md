@@ -98,6 +98,13 @@ exe and gets out of the way while the game runs; no game needs it.
   figures, pictures and profiles, and the games it starts get their user data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
   by Windows' display language.
+- **The games' own dashboard art** from the owner's discs (`src/nxe_art.cpp`): each disc's
+  `rom\nxeart` is an STFS package with the Xbox 360 dashboard's pictures of the game. Its
+  `nxeslot.jpg` (the logo tile, 420x320) is at the top of the game's card in place of the colour
+  band and the name, and its `nxebg.jpg` (1920x1080) fills the window, darkened, while the game is
+  chosen. They are read once and kept next to the games' pictures
+  (`Documents\Skylanders\Pictures\<game>`), so nothing of them is in the repository; a game without
+  a disc keeps the plain card.
 - Its icon (#11), in Explorer, on shortcuts, the window and the taskbar, is our own drawing of the
   Core of Light (`src/coreoflight.ico`, drawn by `tools/make_icon.ps1`; no art from the discs). The
   games get their own logos from their discs (skylanders-portal `skylanders_game_icon`).

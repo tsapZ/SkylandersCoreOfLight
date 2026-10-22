@@ -35,6 +35,7 @@ add_executable(coreoflight WIN32
   src/xiso.cpp
   src/settings_ui.cpp
   src/launcher_ui.cpp
+  src/nxe_art.cpp
   src/profiles.cpp
   src/profiles_ui.cpp
   src/achievements.cpp

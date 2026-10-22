@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "nxe_art.h"
 #include "textures.h"
 
 namespace coreoflight {
@@ -78,12 +79,26 @@ void LauncherUi::Refresh() {
   CountAchievements();
   // A game may have been rebuilt or set up meanwhile: its settings are read again when needed.
   loaders_.assign(found_.size(), SettingsLoader());
+  FindArt();
   // Start on the newest installed game.
   for (size_t i = found_.size(); i-- > 0;) {
     if (!found_[i].exe.empty()) {
       selected_ = i;
       break;
     }
+  }
+}
+
+void LauncherUi::FindArt() {
+  tile_art_.assign(found_.size(), {});
+  background_art_.assign(found_.size(), {});
+  for (size_t i = 0; i < found_.size() && i < AllGames().size(); ++i) {
+    if (found_[i].exe.empty() || found_[i].rom.empty()) continue;
+    // Next to the pictures the game itself leaves (Documents\Skylanders\Pictures\<game>).
+    const std::filesystem::path cache = MainFiguresDir().parent_path() / "Pictures" /
+                                        std::filesystem::path(reinterpret_cast<const char8_t*>(AllGames()[i].name_en));
+    tile_art_[i] = NxeArt(found_[i].rom, cache, "nxeslot.jpg");
+    background_art_[i] = NxeArt(found_[i].rom, cache, "nxebg.jpg");
   }
 }
 
@@ -156,14 +171,29 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
   dl->AddRectFilled({x, y}, {x + w, y + h}, Rgba(24, 30, 70, 235), r);
   dl->AddRect({x, y}, {x + w, y + h}, selected ? kGold : Rgba(90, 100, 150), r, 0, selected ? 5 * s : 2 * s);
-  // The game's colour as a band at the top.
-  const ImU32 accent = kAccents[index % 6];
-  dl->AddRectFilled({x + 6 * s, y + 6 * s}, {x + w - 6 * s, y + 70 * s}, installed ? accent : Rgba(70, 75, 100),
-                    r - 4 * s, ImDrawFlags_RoundCornersTop);
   char year[8];
   std::snprintf(year, sizeof(year), "%d", game.year);
-  const float year_size = 40 * s;
-  Text(dl, bold_, year_size, {x + (w - TextWidth(bold_, year_size, year)) * 0.5f, y + 14 * s}, kWhite, year);
+  // The disc's dashboard tile (its logo, 420x320) at the top, once the game is set up (nxe_art.h);
+  // else the game's colour as a band with the year, and its name below.
+  const ImTextureID tile =
+      index < tile_art_.size() && !tile_art_[index].empty() ? LoadTexture(tile_art_[index]) : ImTextureID{};
+  float content_y = 0;  // where the hero's picture goes; 0: the layout without a tile
+  if (tile) {
+    const float tw = w - 12 * s, th = tw * 320.0f / 420.0f;
+    dl->AddImageRounded(tile, {x + 6 * s, y + 6 * s}, {x + 6 * s + tw, y + 6 * s + th}, {0, 0}, {1, 1}, kWhite,
+                        r - 4 * s, ImDrawFlags_RoundCornersTop);
+    // The year small in the tile's corner.
+    const float ys = 18 * s, yw = TextWidth(bold_, ys, year);
+    dl->AddRectFilled({x + 12 * s, y + 12 * s}, {x + 24 * s + yw, y + 16 * s + ys}, Rgba(10, 14, 40, 190), 8 * s);
+    Text(dl, bold_, ys, {x + 18 * s, y + 14 * s}, kWhite, year);
+    content_y = y + 6 * s + th + 10 * s;
+  } else {
+    const ImU32 accent = kAccents[index % 6];
+    dl->AddRectFilled({x + 6 * s, y + 6 * s}, {x + w - 6 * s, y + 70 * s}, installed ? accent : Rgba(70, 75, 100),
+                      r - 4 * s, ImDrawFlags_RoundCornersTop);
+    const float year_size = 40 * s;
+    Text(dl, bold_, year_size, {x + (w - TextWidth(bold_, year_size, year)) * 0.5f, y + 14 * s}, kWhite, year);
+  }
   // The game's hero, once a game has left its picture (figures_ui.h), in the band's corners.
   if (hero_pictures_.size() <= index) hero_pictures_.resize(AllGames().size());
   if (hero_pictures_[index].empty() || ImGui::GetTime() > hero_checked_ + 10.0) {
@@ -174,19 +204,23 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       }
     }
   }
+  const float hero_side = 72 * s;
+  const float hero_y = tile ? content_y : y + 144 * s;
   if (!hero_pictures_[index].empty()) {
     if (const ImTextureID texture = LoadTexture(hero_pictures_[index])) {
-      const float side = 72 * s;
-      const ImVec2 a{x + (w - side) * 0.5f, y + 144 * s};
-      dl->AddImageRounded(texture, a, {a.x + side, a.y + side}, {0, 0}, {1, 1},
+      const ImVec2 a{x + (w - hero_side) * 0.5f, hero_y};
+      dl->AddImageRounded(texture, a, {a.x + hero_side, a.y + hero_side}, {0, 0}, {1, 1},
                           installed ? kWhite : Rgba(255, 255, 255, 90), 14 * s);
     }
   }
-  const char* name = german_ ? game.name_de : game.name_en;
-  float name_size = 34 * s;
-  while (TextWidth(bold_, name_size, name) > w - 28 * s && name_size > 12) name_size -= 1;
-  Text(dl, bold_, name_size, {x + (w - TextWidth(bold_, name_size, name)) * 0.5f, y + 110 * s},
-       installed ? kWhite : kDim, name);
+  if (!tile) {
+    // (the tile's logo already names the game)
+    const char* name = german_ ? game.name_de : game.name_en;
+    float name_size = 34 * s;
+    while (TextWidth(bold_, name_size, name) > w - 28 * s && name_size > 12) name_size -= 1;
+    Text(dl, bold_, name_size, {x + (w - TextWidth(bold_, name_size, name)) * 0.5f, y + 110 * s},
+         installed ? kWhite : kDim, name);
+  }
   // A few of the game's own settings (its settings file next to its exe), as its F4 menu calls them.
   if (installed) {
     std::vector<std::string> lines;
@@ -228,9 +262,13 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     if (language == "german") lines.push_back("Deutsch");
     else if (language == "english") lines.push_back("English");
     else if (!language.empty() && language != "auto") lines.push_back(language);
-    // Below the hero's picture there is room for three.
-    if (!hero_pictures_[index].empty() && lines.size() > 3) lines.resize(3);
-    float ly = y + (hero_pictures_[index].empty() ? 170 : 226) * s;
+    // As many as fit between the hero's picture (or the name) and the disc's state at the bottom,
+    // or the chosen card's play button (at h - 112).
+    float ly = tile ? hero_y + (hero_pictures_[index].empty() ? 0 : hero_side + 10 * s)
+                    : y + (hero_pictures_[index].empty() ? 170 : 226) * s;
+    const float lines_end = y + h - (selected ? 116 : 70) * s;
+    const size_t fit = size_t(std::max(0.0f, (lines_end - ly) / (24 * s)));
+    if (lines.size() > fit) lines.resize(fit);
     for (const std::string& line : lines) {
       Text(dl, regular_, 21 * s, {x + 22 * s, ly}, kDim, line.c_str(), w - 44 * s);
       ly += 24 * s;
@@ -354,9 +392,21 @@ bool LauncherUi::Draw(float width, float height) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = std::min(width / 1280.0f, height / 720.0f);
 
-  // Background: deep blue with the Core of Light glowing in the middle.
-  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
-                              Rgba(3, 7, 22));
+  // Background: the chosen game's dashboard picture from its disc (1920x1080, filling the window),
+  // darkened; without one deep blue. The Core of Light glows in the middle either way.
+  const ImTextureID backdrop = selected_ < background_art_.size() && !background_art_[selected_].empty()
+                                   ? LoadTexture(background_art_[selected_])
+                                   : ImTextureID{};
+  if (backdrop) {
+    const float scale = std::max(width / 1920.0f, height / 1080.0f);
+    const float bw = 1920.0f * scale, bh = 1080.0f * scale;
+    dl->AddImage(backdrop, {(width - bw) * 0.5f, (height - bh) * 0.5f}, {(width + bw) * 0.5f, (height + bh) * 0.5f});
+    dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60, 170), Rgba(10, 22, 60, 170),
+                                Rgba(3, 7, 22, 225), Rgba(3, 7, 22, 225));
+  } else {
+    dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
+                                Rgba(3, 7, 22));
+  }
   const ImVec2 core{width * 0.5f, height * 0.56f};
   for (int k = 14; k > 0; --k) dl->AddCircleFilled(core, k * 38 * u, Rgba(90, 160, 255, 5), 64);
 

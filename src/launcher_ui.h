@@ -69,6 +69,10 @@ class LauncherUi {
   // Each game's hero picture (FigurePicture), looked for again every ten seconds.
   std::vector<std::filesystem::path> hero_pictures_;
   double hero_checked_ = -100.0;
+  // Each game's dashboard art from its disc (nxe_art.h): the logo tile on its card, the background
+  // behind the cards while it is chosen. Empty paths: none (no disc, or not installed).
+  std::vector<std::filesystem::path> tile_art_, background_art_;
+  void FindArt();
   // Setting up a disc from an ISO (disc_import.h), and its phase at the last frame.
   DiscImport import_;
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
