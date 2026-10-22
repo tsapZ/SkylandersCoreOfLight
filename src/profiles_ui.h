@@ -43,6 +43,7 @@ class ProfilesScreen {
   // Per profile: its figure count and the games it has saves of.
   std::vector<int> figure_counts_;
   std::vector<std::string> saves_;
+  std::vector<uint32_t> gamerscores_;  // over every game whose list is known
   size_t selected_ = 0;  // profiles_.size() is the "new profile" card
   Mode mode_ = Mode::kList;
   char name_[64] = {};

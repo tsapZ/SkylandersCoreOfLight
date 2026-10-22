@@ -7,6 +7,7 @@
 #include <set>
 #include <string>
 
+#include "achievements.h"
 #include "imgui.h"
 #include "portal/figure_file.h"
 #include "textures.h"
@@ -128,7 +129,11 @@ void ProfilesScreen::Load() {
   profiles_ = LoadProfiles(german_);
   figure_counts_.clear();
   saves_.clear();
+  gamerscores_.clear();
   for (const Profile& p : profiles_) {
+    uint32_t score = 0;
+    for (const Game& game : AllGames()) score += LoadAchievements(game, p).gamerscore;
+    gamerscores_.push_back(score);
     figure_counts_.push_back(int(FigureFiles(p).size()));
     std::string saves;
     for (size_t i = 0; found_ && i < found_->size() && i < AllGames().size(); ++i) {
@@ -208,7 +213,8 @@ void ProfilesScreen::DrawCard(size_t index, float x, float y, float w, float h, 
              german_ ? "Deine Daten wie die Spiele sie kennen" : "Your data as the games keep it");
   }
   char figures[64];
-  std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren" : "%d figures", figure_counts_[index]);
+  std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren  \xC2\xB7  %u G" : "%d figures  \xC2\xB7  %u G",
+                figure_counts_[index], gamerscores_[index]);
   Text(dl, regular_, 20 * s, {x + 22 * s, y + 280 * s}, kDim, figures);
   const std::string saves =
       saves_[index].empty() ? (german_ ? "Noch keine Spielst\xC3\xA4nde" : "No saves yet")
