@@ -717,7 +717,22 @@ void FiguresScreen::Draw(float width, float height) {
       if (const int path = sp::UpgradePath(s)) {
         row(german_ ? "Pfad" : "Path", path == 1 ? (german_ ? "erster" : "first") : (german_ ? "zweiter" : "second"));
       }
-      if (!s.nickname.empty()) row(german_ ? "Spitzname" : "Nickname", s.nickname);
+      if (!s.nickname.empty()) {
+        row(f.category == "Creation Crystals" ? (german_ ? "Imaginator" : "Imaginator")
+                                              : (german_ ? "Spitzname" : "Nickname"),
+            s.nickname);
+      }
+      // A creation crystal's battle class, chosen when its Imaginator was made (the game's number,
+      // skylanders-portal FigureStats::creation_class; the names as Imaginators' German text).
+      if (f.category == "Creation Crystals" && s.creation_class) {
+        static constexpr const char* kClassNames[12][2] = {
+            {"Ritter", "Knight"},       {"S\xC3\xA4" "belrassler", "Swashbuckler"}, {"Boxer", "Brawler"},
+            {"W\xC3\xA4" "chter", "Sentinel"}, {nullptr, nullptr}, {"Schnellsch\xC3\xBC" "tze", "Quickshot"},
+            {"Bogenk\xC3\xA4" "mpfer", "Bowslinger"}, {"Panzerbrecher", "Bazooker"}, {"Zauberer", "Sorcerer"},
+            {nullptr, nullptr},         {"Schmetterer", "Smasher"},                 {"Ninja", "Ninja"}};
+        const uint8_t c = *s.creation_class;
+        if (c < 12 && kClassNames[c][0]) row(german_ ? "Klasse" : "Class", kClassNames[c][german_ ? 0 : 1]);
+      }
       if (s.hat) {
         // The hat, as the games name it, with its picture and bonuses.
         auto hat = hats_.find(s.hat);

@@ -49,7 +49,9 @@ exe and gets out of the way while the game runs; no game needs it.
   Skylander without a file marks it **"Hab ich"** (I own it: on the shelf, not as a file); it then
   counts as owned and shows in "Meine Skylander" as "hab ich (ohne Datei)", and Y takes the mark
   back. The marks are the profile's, `Skylanders\owned.txt` next to its figure folder (one
-  `<id>\t<variant>` a line); the games never read it. The pictures
+  `<id>\t<variant>` a line); the games never read it. An Imaginators creation crystal shows its
+  Imaginator's name and battle class (kept on the figure, skylanders-portal
+  `FigureStats::creation_class`). The pictures
   are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
   in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
   `StartFigurePictureCache`), and the library takes the newest game's picture of each figure; a
