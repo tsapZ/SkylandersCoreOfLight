@@ -271,26 +271,21 @@ bool ExeMentions(const fs::path& exe, std::string_view text) {
 
 }  // namespace
 
-bool StartTitleMusicCapture(size_t game, const Found& found, std::wstring& error, void** process) {
-  if (found.exe.empty() || !ExeMentions(found.exe, "capture_title_music")) {
-    error = L"This game's build can't record its title music yet";
-    return false;
-  }
+bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
+  if (found.exe.empty() || !ExeMentions(found.exe, "export_title_music")) return false;
   wchar_t temp[MAX_PATH] = L"";
   GetTempPathW(MAX_PATH, temp);
   const fs::path data = fs::path(temp) / "CoreOfLight" / "title_music" / Utf8Path(UserDataName(found.exe));
-  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--capture_title_music=" +
+  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_title_music=" +
                                TitleMusicFile(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
-                               L"\" --skip_intro=true --audio_mute=true --portal_menu_auto_open=false" +
-                               L" --started_by_launcher=true";
+                               L"\" --started_by_launcher=true";
   STARTUPINFOW startup = {sizeof(startup)};
   startup.dwFlags = STARTF_USESHOWWINDOW;
-  startup.wShowWindow = SW_SHOWMINNOACTIVE;
+  startup.wShowWindow = SW_HIDE;
   PROCESS_INFORMATION info = {};
   std::wstring line = command;
   if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
                       found.workdir.c_str(), &startup, &info)) {
-    error = L"Could not start the game";
     return false;
   }
   CloseHandle(info.hThread);

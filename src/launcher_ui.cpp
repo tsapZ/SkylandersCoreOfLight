@@ -163,7 +163,7 @@ void LauncherUi::Start(size_t index) {
     running_profile_ = ActiveProfile();
     running_since_ = GetTickCount64();
   } else {
-    error_ = error;
+    error_ = (german_ ? L"Konnte nicht starten: " : L"Could not start: ") + error;
     error_until_ = ImGui::GetTime() + 6.0;
   }
 }
@@ -248,12 +248,6 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   // game's settings, which are on Y).
   if (installed) {
     std::vector<std::string> lines;
-    // The title music (music.h): a hint while it isn't recorded yet.
-    std::error_code music_ec;
-    if (hub_.title_music && f.disc.load() == DiscState::kMatches &&
-        !std::filesystem::is_regular_file(TitleMusicFile(index), music_ec)) {
-      lines.push_back(german_ ? "Titelmusik holen: M / R3" : "Get the title music: M / R3");
-    }
     // The active profile's achievements, once the game left its list.
     if (index < achievements_.size() && achievements_[index].known) {
       char text[64];
@@ -374,7 +368,7 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
 
 bool LauncherUi::Draw(float width, float height) {
   // The screen this frame will draw, in DrawScreens' order.
-  const char* window = capture_process_                ? "capture"
+  const char* window = confirm_quit_                   ? "quit"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
                        : achievements_screen_.is_open() ? "achievements"
@@ -387,10 +381,11 @@ bool LauncherUi::Draw(float width, float height) {
     shown_since_ = now;
   }
   const bool keep = DrawScreens(width, height);
-  // The chosen game's title music, once it recorded it (and while no recording runs).
+  // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
+  UpdateTitleMusicExport();
   {
     std::filesystem::path wanted;
-    if (hub_.title_music && !capture_process_ && selected_ < found_.size() && !found_[selected_].exe.empty()) {
+    if (hub_.title_music && selected_ < found_.size() && !found_[selected_].exe.empty()) {
       wanted = TitleMusicFile(selected_);
     }
     music_.Play(wanted);
@@ -417,74 +412,75 @@ bool LauncherUi::Draw(float width, float height) {
   return keep;
 }
 
-void LauncherUi::StartCapture(size_t index) {
-  if (capture_process_ || index >= found_.size()) return;
-  const Found& f = found_[index];
-  if (f.exe.empty() || f.disc.load() != DiscState::kMatches) {
-    error_ = german_ ? L"Erst die Disc des Spiels einlesen (X)" : L"Set up the game's disc first (X)";
-    error_until_ = ImGui::GetTime() + 4.0;
-    return;
+// The chosen game's title music, written from its disc by the game when it has none yet: once per
+// launch and game, hidden, a second or two (games.h StartTitleMusicExport). A build from before
+// the export can't (it plays none then until it ran once).
+void LauncherUi::UpdateTitleMusicExport() {
+  if (export_tried_.size() != found_.size()) export_tried_.assign(found_.size(), false);
+  if (export_process_) {
+    const DWORD wait = WaitForSingleObject(export_process_, 0);
+    if (wait != WAIT_OBJECT_0 && ImGui::GetTime() - export_since_ < 30.0) return;
+    if (wait != WAIT_OBJECT_0) TerminateProcess(export_process_, 3);
+    CloseHandle(export_process_);
+    export_process_ = nullptr;
   }
-  std::wstring error;
-  music_.Stop();
-  if (!StartTitleMusicCapture(index, f, error, &capture_process_)) {
-    error_ = german_ ? L"Dieser Build des Spiels kann seine Titelmusik noch nicht aufnehmen" : error;
-    error_until_ = ImGui::GetTime() + 5.0;
-    capture_process_ = nullptr;
-    return;
+  if (!hub_.title_music || selected_ >= found_.size() || export_tried_[selected_]) return;
+  const Found& f = found_[selected_];
+  if (f.exe.empty() || f.disc.load() != DiscState::kMatches) return;
+  std::error_code ec;
+  if (std::filesystem::is_regular_file(TitleMusicFile(selected_), ec)) return;
+  export_tried_[selected_] = true;
+  if (StartTitleMusicExport(selected_, f, &export_process_)) {
+    export_game_ = selected_;
+    export_since_ = ImGui::GetTime();
+  } else {
+    export_process_ = nullptr;
   }
-  capture_game_ = index;
-  capture_since_ = ImGui::GetTime();
 }
 
-// While a game records its title music: what happens, how far, and its end.
-void LauncherUi::DrawCapture(float width, float height, float u) {
-  const DWORD wait = WaitForSingleObject(capture_process_, 0);
-  const double elapsed = ImGui::GetTime() - capture_since_;
-  if (wait == WAIT_OBJECT_0 || elapsed > 150.0) {
-    if (wait != WAIT_OBJECT_0) TerminateProcess(capture_process_, 3);
-    CloseHandle(capture_process_);
-    capture_process_ = nullptr;
-    std::error_code ec;
-    const bool ok = std::filesystem::is_regular_file(TitleMusicFile(capture_game_), ec);
-    error_ = ok ? (german_ ? L"Titelmusik aufgenommen" : L"Title music recorded")
-                : (german_ ? L"Keine Titelmusik aufgenommen (das Spiel war still)" : L"No title music recorded");
-    error_until_ = ImGui::GetTime() + 4.0;
-    return;
-  }
+// "Beenden?": A / Enter quits, B / Esc goes back to the start screen; the mouse can click either.
+bool LauncherUi::DrawQuitConfirm(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
-  ImGui::Begin("capture", nullptr,
+  ImGui::Begin("quit", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   DrawBackdrop(dl, width, height,
-               capture_game_ < background_art_.size() ? background_art_[capture_game_] : std::filesystem::path());
-  const Game& game = AllGames()[capture_game_];
-  const std::string title = std::string(german_ ? "Titelmusik: " : "Title music: ") + (german_ ? game.name_de : game.name_en);
-  Text(dl, bold_, 44 * u, {(width - TextWidth(bold_, 44 * u, title.c_str())) * 0.5f, height * 0.36f}, kGold, title.c_str());
-  const char* line = german_ ? "Das Spiel l\xC3\xA4uft kurz stumm bis zu seinem Titelbild und nimmt die Musik auf."
-                             : "The game runs briefly, muted, to its title screen and records the music.";
-  Text(dl, regular_, 22 * u, {(width - TextWidth(regular_, 22 * u, line)) * 0.5f, height * 0.36f + 64 * u}, kDim, line);
-  const float bw = 520 * u, bh = 16 * u;
-  const ImVec2 a{(width - bw) * 0.5f, height * 0.36f + 116 * u};
-  const float progress = float(std::min(1.0, elapsed / 60.0));
-  dl->AddRectFilled(a, {a.x + bw, a.y + bh}, Rgba(30, 40, 90, 230), bh * 0.5f);
-  dl->AddRectFilled(a, {a.x + bw * progress, a.y + bh}, kGold, bh * 0.5f);
-  char seconds[64];
-  std::snprintf(seconds, sizeof(seconds), german_ ? "noch etwa %d s" : "about %d s left",
-                std::max(0, 60 - int(elapsed)));
-  Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, seconds)) * 0.5f, a.y + 28 * u}, kDim, seconds);
+               selected_ < background_art_.size() ? background_art_[selected_] : std::filesystem::path());
+  const float bw = 560 * u, bh = 210 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Core of Light beenden?" : "Quit Core of Light?";
+  Text(dl, bold_, 34 * u, {(width - TextWidth(bold_, 34 * u, title)) * 0.5f, a.y + 40 * u}, kGold, title);
+  // The two answers as buttons with their pad button.
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, a.y + 120 * u}, q{x + 220 * u, a.y + 172 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    Hint(dl, bold_, 24 * u, {p.x + (220 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Beenden" : "Quit");
+  const bool no = button(b.x - 270 * u, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   ImGui::End();
+  if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    return false;
+  }
+  if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    confirm_quit_ = false;
+  }
+  return true;
 }
 
 bool LauncherUi::DrawScreens(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
-  if (capture_process_) {
-    DrawCapture(width, height, std::min(width / 1280.0f, height / 720.0f));
-    return true;
-  }
+  if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (browser_.is_open()) {
     browser_.Draw(width, height);
     // The chosen disc is recognised by its default.xex and unpacked into its game's rom folder.
@@ -605,17 +601,6 @@ bool LauncherUi::DrawScreens(float width, float height) {
     figures_screen_.Configure(hub_.figures_only_mine, hub_.figures_marks);
     figures_screen_.Open(FiguresDir());
   }
-  // A disc just set up: its title music, once the disc check says it is ready.
-  if (pending_capture_ >= 0 && size_t(pending_capture_) < found_.size() &&
-      found_[size_t(pending_capture_)].disc.load() != DiscState::kChecking) {
-    const size_t game = size_t(pending_capture_);
-    pending_capture_ = -1;
-    if (found_[game].disc.load() == DiscState::kMatches) StartCapture(game);
-  }
-  // M / R3 (the right stick pressed): the chosen game records its title music (music.h).
-  if (!capture_process_ && (ImGui::IsKeyPressed(ImGuiKey_M, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadR3, false))) {
-    StartCapture(selected_);
-  }
   // LB / Q: the launcher's own settings (hub_settings.h).
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) || ImGui::IsKeyPressed(ImGuiKey_Q, false)) {
     hub_loader_.SetReady(HubSettingsPages(hub_));
@@ -704,10 +689,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
       const int game = import_.game();
       Refresh();  // the disc check again
       if (game >= 0) selected_ = size_t(game);
-      std::error_code music_ec;
-      if (game >= 0 && hub_.title_music && !std::filesystem::is_regular_file(TitleMusicFile(size_t(game)), music_ec)) {
-        pending_capture_ = game;
-      }
+      // Its title music again, now that the disc is there.
+      if (game >= 0 && size_t(game) < export_tried_.size()) export_tried_[size_t(game)] = false;
     }
     if (phase == DiscImport::Phase::kDone || phase == DiscImport::Phase::kFailed) {
       import_shown_until_ = ImGui::GetTime() + 10.0;
@@ -730,12 +713,15 @@ bool LauncherUi::DrawScreens(float width, float height) {
       Text(dl, bold_, 18 * u, {bx + bw - TextWidth(bold_, 18 * u, percent), by + 64 * u}, kDim, percent);
     }
   }
+  // A message (a game that didn't start, a disc that isn't set up): above the hints, where the
+  // figure line is (the hints fill the row's width).
   if (!error_.empty() && ImGui::GetTime() < error_until_) {
-    const std::string text = (german_ ? "Konnte nicht starten: " : "Could not start: ") + Utf8(error_);
-    Text(dl, regular_, 20 * u, {hx + 20 * u, hy}, Rgba(240, 110, 110), text.c_str());
+    const std::string text = Utf8(error_);
+    Text(dl, regular_, 20 * u, {48 * u, height - 124 * u}, Rgba(240, 110, 110), text.c_str(), width - 96 * u);
   }
   ImGui::End();
-  return !quit;
+  if (quit) confirm_quit_ = true;
+  return true;
 }
 
 }  // namespace coreoflight

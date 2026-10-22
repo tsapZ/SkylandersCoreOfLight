@@ -18,8 +18,7 @@ exe and gets out of the way while the game runs; no game needs it.
   (`docs/game/default.xex.sha256`): "Bereit", "Andere Disc-Version" or "Disc fehlt".
 - **The card** shows the active profile's play time ("Noch nicht gespielt" before), its
   achievements and when it last saved the game (the owner's choice, 2026-10-22: not the game's
-  settings, which are on Y), and "Titelmusik holen: M / R3" while the game's title music isn't
-  recorded yet. The chosen card lifts and glows.
+  settings, which are on Y). The chosen card lifts and glows.
 - **Sets up a disc** (#6): X (D) opens the launcher's own file browser (`src/file_browser.cpp`),
   which the pad drives as well as the keyboard and mouse: folders and .iso files from Downloads on,
   a folder with an unpacked disc ("Diesen Ordner einlesen"), the drives and the usual folders above
@@ -35,11 +34,12 @@ exe and gets out of the way while the game runs; no game needs it.
   drop it on the window; its files are copied into the rom folder. The ISO itself stays where it
   is.
 - **The title music** (`src/music.cpp`): while a game's card is chosen its title music plays,
-  faded in and looped, through Windows' MCI. The games record it themselves once: M / R3 on the
-  card (and right after a disc is set up) starts the game with `--capture_title_music=<file>`
-  (skylanders-portal `title_music.h`), the logos skipped, muted, minimised and on user data of its
-  own; it records 30 s at its title screen through the SDK's output tap and quits after about a
-  minute. The file is `Documents\Skylanders\Pictures\<game>\title_music.wav`.
+  faded in and looped, through Windows' MCI. It comes straight from the game's disc: the track its
+  title screen streams, decoded by the game itself (skylanders-portal `title_music.h`). Each game
+  leaves it on its first start; for a game that hasn't run yet, choosing its card (or setting up
+  its disc) starts the game hidden with `--export_title_music=<file>`, which writes it in about a
+  second and quits before a window opens (the owner found the earlier minute-long recording of the
+  title screen too much, 2026-10-22). The file is `Documents\Skylanders\Pictures\<game>\title_music.wav`.
 - **The launcher's own settings** (LB / Q, `src/hub_settings.cpp`), in the same screen as a game's,
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,

@@ -94,15 +94,18 @@ class LauncherUi {
   DiscImport import_;
   // Choosing the disc inside the launcher, with the pad too (file_browser.h).
   FileBrowser browser_;
-  // The chosen game's title music (music.h), and a game recording it (its process, which one,
-  // since when).
+  // The chosen game's title music (music.h), and a game writing it from its disc (its process,
+  // which one, since when; each game tried once per launch).
   MusicPlayer music_;
-  void* capture_process_ = nullptr;
-  size_t capture_game_ = 0;
-  double capture_since_ = 0;
-  int pending_capture_ = -1;  // a game whose disc was just set up: record its music next
-  void StartCapture(size_t index);
-  void DrawCapture(float width, float height, float u);
+  void* export_process_ = nullptr;
+  size_t export_game_ = 0;
+  double export_since_ = 0;
+  std::vector<bool> export_tried_;
+  void UpdateTitleMusicExport();
+  // B / Esc on the start screen asks first (a pad user would otherwise quit by mistake): false
+  // once A / Enter says quit.
+  bool confirm_quit_ = false;
+  bool DrawQuitConfirm(float width, float height);
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
   double import_shown_until_ = 0;
 };

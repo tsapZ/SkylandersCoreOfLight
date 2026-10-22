@@ -12,6 +12,7 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "launcher_ui.h"
+#include "pad_state.h"
 #include "textures.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -188,6 +189,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       ui.Refresh();
       ShowWindow(hwnd, SW_SHOW);
       SetForegroundWindow(hwnd);
+      // A button still held from the game (the press that left it) must not count as a press here
+      // (A would start the game again, B ask to quit): wait until the pads' buttons and Enter,
+      // Space and Esc are up (at most 3 s), and forget the keys' states from before the game (their
+      // releases went to the game's window).
+      for (int i = 0; i < 120 && coreoflight::InputHeld(); ++i) Sleep(25);
+      ImGui::GetIO().ClearInputKeys();
     }
     if (IsIconic(hwnd)) {
       Sleep(50);

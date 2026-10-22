@@ -35,8 +35,8 @@ pictures of every figure.
   drop an ISO on the window. It recognises the game, unpacks the disc into that game's folder and
   leaves the ISO where it is.
 - **A card per game** with the active profile's play time, achievements and last save; the game's
-  title music plays while its card is chosen (each game records it once from its own title
-  screen).
+  title music plays while its card is chosen (straight from the game's disc, which each game
+  decodes in about a second).
 - **Each game's settings** before starting, the same pages as the game's own F4 menu.
 - **The figure library**: every figure in `Documents\Skylanders\Figures` with its level, gold,
   play time, hat, upgrade tree and nickname, by game, each card in its element's colour; a tab

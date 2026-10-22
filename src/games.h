@@ -57,11 +57,12 @@ void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_
 // Starts a game's exe in its own folder; false (and `error`) if Windows refused.
 bool StartGame(const Found& game, std::wstring& error, void** process);
 // Where a game's title music is kept (Pictures\<game>\title_music.wav, next to the pictures the
-// games leave), and a recording run for it: the game with --capture_title_music (skylanders-portal
-// title_music.h), the logos skipped, muted, on user data of its own in the temp folder, minimised;
-// it quits by itself after about a minute. False if the game's build can't do it.
+// games leave; each game also leaves it there on its first start), and a run that writes it: the
+// game with --export_title_music (skylanders-portal title_music.h) decodes it from its disc and
+// quits before a window opens, in about a second, hidden, on user data of its own in the temp
+// folder. False if the game's build can't do it.
 std::filesystem::path TitleMusicFile(size_t game);
-bool StartTitleMusicCapture(size_t game, const Found& found, std::wstring& error, void** process);
+bool StartTitleMusicExport(size_t game, const Found& found, void** process);
 
 // The active profile's figure folder (profiles.h): for the main profile the shared one every game
 // uses (Documents\Skylanders\Figures, or "figures = <folder>" in coreoflight.ini, as a game's
