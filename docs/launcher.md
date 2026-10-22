@@ -71,7 +71,9 @@ exe and gets out of the way while the game runs; no game needs it.
   folder), and `--cache_root=Documents\<game>recomp\cache` keeps the main profile's shader
   cache, so a new profile doesn't build it again. A new profile can start with the current
   profile's figures made new (the same Skylanders back at the start, new serial numbers), with
-  copies of them as they are, or with none. X renames it (keyboard), Back deletes it into the
+  copies of them as they are, or with none. In the figure library, Y (C) copies the chosen figure's
+  file, as it is, into another profile's figure folder (the same sub-folder, "Name (2).dump" if the
+  name is taken). X renames it (keyboard), Back deletes it into the
   recycle bin. `Profiles\profiles.ini` remembers the active profile and the main profile's name
   and picture. The games themselves still call their player "User".
 - **Achievements** (RB / E, for the chosen game; LB / RB switch the game): the game's own list

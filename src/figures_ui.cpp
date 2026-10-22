@@ -150,6 +150,8 @@ void FiguresScreen::Init(ImFont* regular, ImFont* bold, bool german) {
 
 void FiguresScreen::Open(const fs::path& figures_dir) {
   open_ = true;
+  copying_ = false;
+  figures_dir_ = figures_dir;
   selected_ = 0;
   // Each game leaves the pictures it reads from its disc there (skylanders-portal
   // StartFigurePictureCache): looked for again on every open.
@@ -449,6 +451,11 @@ void FiguresScreen::Draw(float width, float height) {
     ImGui::End();
     return;
   }
+  if (copying_) {
+    DrawCopy(width, height, u);
+    ImGui::End();
+    return;
+  }
 
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
   const int tabs = 1 + int(std::size(kGames));
@@ -565,6 +572,23 @@ void FiguresScreen::Draw(float width, float height) {
     Text(dl, regular_, 15 * u, {tx0, a.y + 62 * u}, f.stats ? kGold : Rgba(150, 160, 190, alpha), line);
   }
 
+  // Y / C: the chosen figure of the owner's into another profile.
+  if (n && !shown[selected_]->file.empty() &&
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_C, false))) {
+    copy_targets_.clear();
+    for (const Profile& p : LoadProfiles(german_)) {
+      if (p.id != ActiveProfile().id) copy_targets_.push_back(p);
+    }
+    if (copy_targets_.empty()) {
+      message_ = german_ ? "Es gibt kein anderes Profil (Profile: Back im Startbildschirm)."
+                         : "There is no other profile (Profiles: Back on the start screen).";
+      message_until_ = ImGui::GetTime() + 5.0;
+    } else {
+      copy_figure_ = *shown[selected_];
+      copy_target_ = 0;
+      copying_ = true;
+    }
+  }
   // A / Enter (or a click on the chosen tile): the figure's upgrade tree, if a game left one.
   if (n && shown[selected_]->stats &&
       (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
@@ -674,14 +698,73 @@ void FiguresScreen::Draw(float width, float height) {
     std::snprintf(count, sizeof(count), german_ ? "%d Figuren" : "%d figures", n);
   }
   Text(dl, regular_, 18 * u, {left, height - 82 * u}, kDim, count);
+  if (!message_.empty() && ImGui::GetTime() < message_until_) {
+    Text(dl, regular_, 18 * u, {left + TextWidth(regular_, 18 * u, count) + 30 * u, height - 82 * u},
+         Rgba(110, 220, 110), message_);
+  }
   float hx = left;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Spiel" : "Game");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40),
+            german_ ? "In anderes Profil kopieren" : "Copy to another profile");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   ImGui::End();
+}
+
+void FiguresScreen::DrawCopy(float width, float height, float u) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
+  const int n = int(copy_targets_.size());
+  if (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
+    copy_target_ = (copy_target_ + n - 1) % n;
+  }
+  if (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
+    copy_target_ = (copy_target_ + 1) % n;
+  }
+  const float pw = std::min(640 * u, width - 96 * u), row = 46 * u;
+  const float ph = 120 * u + row * float(n);
+  const ImVec2 a{(width - pw) * 0.5f, (height - ph) * 0.5f};
+  dl->AddRectFilled({0, 0}, {width, height}, Rgba(0, 0, 0, 140));
+  dl->AddRectFilled(a, {a.x + pw, a.y + ph}, kPanel, 18 * u);
+  dl->AddRect(a, {a.x + pw, a.y + ph}, kGold, 18 * u, 0, 3 * u);
+  Text(dl, bold_, 26 * u, {a.x + 28 * u, a.y + 20 * u}, kGold,
+       Fit(bold_, 26 * u, (german_ ? "Kopieren: " : "Copy: ") + copy_figure_.name, pw - 56 * u));
+  Text(dl, regular_, 18 * u, {a.x + 28 * u, a.y + 58 * u}, kDim,
+       german_ ? "In welches Profil? Die Figur bleibt auch hier, wie sie ist."
+               : "Into which profile? The figure stays here as well, as it is.");
+  for (int i = 0; i < n; ++i) {
+    const float y = a.y + 96 * u + row * float(i);
+    if (i == copy_target_) {
+      dl->AddRectFilled({a.x + 20 * u, y - 4 * u}, {a.x + pw - 20 * u, y + row - 10 * u}, Rgba(60, 70, 140), 10 * u);
+    }
+    Text(dl, bold_, 22 * u, {a.x + 36 * u, y + 2 * u}, i == copy_target_ ? kWhite : kDim, copy_targets_[size_t(i)].name);
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    const Profile& target = copy_targets_[size_t(copy_target_)];
+    std::error_code ec;
+    fs::path rel = fs::relative(copy_figure_.file.parent_path(), figures_dir_, ec);
+    if (ec || rel.empty() || rel.native().starts_with(L"..")) rel.clear();
+    const fs::path dir = ProfileFiguresDir(target) / rel;
+    fs::create_directories(dir, ec);
+    const std::u8string stem = copy_figure_.file.stem().u8string();
+    fs::path dest = sp::UniqueFigurePath(dir, std::string(stem.begin(), stem.end()));
+    // Keep the file's own extension (.sky, .bin) when it isn't .dump.
+    if (copy_figure_.file.extension() != ".dump") dest.replace_extension(copy_figure_.file.extension());
+    const bool copied = !fs::exists(dest, ec) && fs::copy_file(copy_figure_.file, dest, ec) && !ec;
+    message_ = copied ? (german_ ? "Kopiert ins Profil " : "Copied to the profile ") + target.name
+                      : (german_ ? "Konnte nicht kopieren" : "Could not copy");
+    message_until_ = ImGui::GetTime() + 5.0;
+    copying_ = false;
+  } else if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)) {
+    copying_ = false;
+  }
+  float hx = 48 * u;
+  const float hy = height - 52 * u;
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Kopieren" : "Copy");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Abbrechen" : "Cancel");
 }
 
 }  // namespace coreoflight

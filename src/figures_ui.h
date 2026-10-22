@@ -14,6 +14,7 @@
 
 #include "portal/figure_info.h"
 #include "portal/figure_stats.h"
+#include "profiles.h"
 
 struct ImFont;
 
@@ -85,6 +86,17 @@ class FiguresScreen {
   bool tree_ = false;  // the tree of tree_figure_ is open
   Figure tree_figure_;
   int tree_index_ = 0;  // the chosen upgrade, counted over all paths
+
+  // Y on one of the owner's figures: its file copied, as it is, into another profile's figure
+  // folder (profiles.h), the same sub-folder, a new name if one is there already.
+  void DrawCopy(float width, float height, float u);
+  bool copying_ = false;
+  std::vector<Profile> copy_targets_;
+  int copy_target_ = 0;
+  std::filesystem::path figures_dir_;  // the folder the library shows
+  Figure copy_figure_;
+  std::string message_;
+  double message_until_ = 0;
 };
 
 }  // namespace coreoflight
