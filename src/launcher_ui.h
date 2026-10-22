@@ -57,6 +57,7 @@ class LauncherUi {
   ProfilesScreen profiles_screen_;
   AchievementsScreen achievements_screen_;
   std::vector<GameAchievements> achievements_;
+  std::vector<uint64_t> last_saved_;  // per game, the active profile's (Windows file time)
   size_t settings_game_ = 0;
   // Each game's hero picture (FigurePicture), looked for again every ten seconds.
   std::vector<std::filesystem::path> hero_pictures_;

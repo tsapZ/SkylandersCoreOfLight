@@ -211,6 +211,21 @@ bool HasSave(const Profile& p, const fs::path& exe) {
   return fs::is_directory(saves, ec) && !fs::is_empty(saves, ec);
 }
 
+uint64_t LastSaved(const Profile& p, const fs::path& exe) {
+  std::error_code ec;
+  const fs::path saves = p.root / Utf8Path(UserDataName(exe)) / kSaveFolder;
+  uint64_t newest = 0;
+  for (fs::recursive_directory_iterator it(saves, ec), end; it != end; it.increment(ec)) {
+    if (ec) break;
+    if (!it->is_regular_file(ec)) continue;
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (!GetFileAttributesExW(it->path().c_str(), GetFileExInfoStandard, &data)) continue;
+    const FILETIME& t = data.ftLastWriteTime;
+    newest = std::max(newest, uint64_t(t.dwHighDateTime) << 32 | t.dwLowDateTime);
+  }
+  return newest;
+}
+
 int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
   const fs::path source = ProfileFiguresDir(from), target = ProfileFiguresDir(to);
   if (source == target) return 0;

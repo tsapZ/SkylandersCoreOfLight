@@ -80,6 +80,8 @@ exe and gets out of the way while the game runs; no game needs it.
   leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
   picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
   `<game>recompchievements\<title id>.toml`, which the SDK keeps.
+- Each card also says when the active profile last saved the game (the newest file in its save
+  folder, `<game>recomp\B13EBABEBABEBABE`).
 - `--documents=<folder>` runs the launcher on a copy: that folder in place of Documents for the
   figures, pictures and profiles, and the games it starts get their user data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English

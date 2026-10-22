@@ -89,7 +89,12 @@ void LauncherUi::Refresh() {
 
 void LauncherUi::CountAchievements() {
   achievements_.clear();
-  for (const Game& game : AllGames()) achievements_.push_back(LoadAchievements(game, ActiveProfile()));
+  last_saved_.clear();
+  for (size_t i = 0; i < AllGames().size(); ++i) {
+    achievements_.push_back(LoadAchievements(AllGames()[i], ActiveProfile()));
+    last_saved_.push_back(i < found_.size() && !found_[i].exe.empty() ? LastSaved(ActiveProfile(), found_[i].exe)
+                                                                        : 0);
+  }
 }
 
 void LauncherUi::AddDisc(const std::filesystem::path& iso) {
@@ -230,6 +235,12 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
   const float state_size = 20 * s;
   Text(dl, regular_, state_size, {x + 18 * s, y + h - 64 * s}, state_col, state, w - 36 * s);
+  // When the active profile last saved it.
+  if (installed && index < last_saved_.size() && last_saved_[index]) {
+    const std::string when =
+        (german_ ? "Zuletzt gespeichert " : "Last saved ") + FileTimeDate(last_saved_[index], german_);
+    Text(dl, regular_, 16 * s, {x + 18 * s, y + h - 38 * s}, kDim, when.c_str(), w - 36 * s);
+  }
   if (installed && selected) {
     const char* go = german_ ? "Starten" : "Play";
     const float go_size = 24 * s;

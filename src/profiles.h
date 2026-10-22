@@ -49,6 +49,9 @@ std::filesystem::path ProfileFiguresDir(const Profile& p);
 std::filesystem::path ProfilePicturesDir(const Profile& p);
 // Whether the profile has a save of the game (its user data's save folder has something).
 bool HasSave(const Profile& p, const std::filesystem::path& exe);
+// When the profile last saved the game: the newest file in that save folder, as a Windows file
+// time; 0 if there is none.
+uint64_t LastSaved(const Profile& p, const std::filesystem::path& exe);
 
 // Copies of `from`'s figures into `to`'s figure folder, the same file names: as they are, or as
 // new figures (the same Skylanders back at the start, new serial numbers). Figures already there
