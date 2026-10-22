@@ -18,6 +18,13 @@ exe and gets out of the way while the game runs; no game needs it.
   (`docs/game/default.xex.sha256`): "Bereit", "Andere Disc-Version" or "Disc fehlt".
 - **Shows a few of the game's own settings** from its settings file next to its exe
   (`<game>recomp.toml`): resolution scale, frame rate, native 3D, language. It only reads it.
+- **Sets up a disc** (#6): X (D) picks an ISO of the owner's own disc; dropping one on the window
+  or on coreoflight.exe does the same. The launcher reads the image's file system itself (XDVDFS,
+  src/xiso.cpp: a full Xbox 360 dump with the game partition 0xFD90000 into it, or a trimmed image),
+  knows the game by its default.xex's SHA-256 (the hash each game pins) and unpacks the disc into
+  the rom\ folder that game reads, with a progress bar; default.xex comes last, so a folder left
+  half done never counts as a disc, and B doesn't quit meanwhile. A disc that is set up already, a
+  game that isn't installed and an unknown disc each get their own message.
 - **Each game's own settings** (#7): Y (Tab, a right click) on a card opens the game's settings
   with exactly the pages of its F4 menu (Grafik, Bildrate, Spiel, Portal, Steuerung), their texts,
   options and explanations. The launcher doesn't know them itself: it starts the game's exe with
@@ -39,7 +46,7 @@ exe and gets out of the way while the game runs; no game needs it.
 
 - Settings that take a free value (no list of options) are shown but not changed here; the
   game's own menu (F10) has them.
-- Extracting an ISO into a game's `rom\` (#6), the figure library (#8), profiles (#4).
+- A folder with an unpacked disc instead of an ISO (#6), the figure library (#8), profiles (#4).
 - Pictures: the cards are plain colours and text; pictures would come from the owner's discs at
   run time, as in the games' menus (no artwork is shipped).
 
@@ -56,6 +63,14 @@ Dear ImGui (thirdparty/imgui, 1.92.5, the version the games' SDK uses), so it bu
 and needs neither the SDK nor the games' sources.
 
 ## Checked (2026-10-22)
+
+- Disc set-up: the Trap Team ISO on the developer layout said "die Disc ist schon eingerichtet" and
+  chose Trap Team. In a test folder (coreoflight.ini pointing Spyro's Adventure at a stand-in exe)
+  the Spyro's Adventure ISO unpacked in 38 s: the same 1,142 files with the same sizes as the
+  owner's rom folder, default.xex and two large archives with the same SHA-256; the card turned
+  "Bereit".
+- Settings: Trap Team's five pages, a change, the page switch and the question about unsaved
+  changes; every game writes its pages in 1.1 to 2.5 s.
 
 - In the developer layout all six games were found, their discs "Bereit" (the hashes match), the
   cards show each game's settings; arrows move the choice.

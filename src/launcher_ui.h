@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "disc_import.h"
 #include "game_settings.h"
 #include "games.h"
 #include "settings_ui.h"
@@ -24,6 +25,8 @@ class LauncherUi {
   void* TakeStartedProcess();
   // After a game ended: look for the games again (one may have been installed meanwhile).
   void Refresh();
+  // An ISO dropped on the window or given on the command line: set up like one picked with X.
+  void AddDisc(const std::filesystem::path& iso);
 
  private:
   void Start(size_t index);
@@ -44,6 +47,10 @@ class LauncherUi {
   std::vector<SettingsLoader> loaders_;
   SettingsScreen settings_;
   size_t settings_game_ = 0;
+  // Setting up a disc from an ISO (disc_import.h), and its phase at the last frame.
+  DiscImport import_;
+  DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
+  double import_shown_until_ = 0;
 };
 
 }  // namespace coreoflight

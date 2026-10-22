@@ -50,7 +50,11 @@ std::unordered_map<std::string, std::string> ReadIni(const fs::path& path) {
   std::unordered_map<std::string, std::string> out;
   std::ifstream in(path);
   std::string line;
+  bool first = true;
   while (std::getline(in, line)) {
+    // Notepad saves UTF-8 with a byte order mark in front of the first key.
+    if (first && line.starts_with("\xEF\xBB\xBF")) line.erase(0, 3);
+    first = false;
     const auto comment = line.find_first_of(";#");
     if (comment != std::string::npos) line.resize(comment);
     const auto eq = line.find('=');

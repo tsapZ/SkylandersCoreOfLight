@@ -21,6 +21,8 @@ add_executable(coreoflight WIN32
   src/main.cpp
   src/games.cpp
   src/game_settings.cpp
+  src/disc_import.cpp
+  src/xiso.cpp
   src/settings_ui.cpp
   src/launcher_ui.cpp
   ${IMGUI_DIR}/imgui.cpp

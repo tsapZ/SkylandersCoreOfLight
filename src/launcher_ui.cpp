@@ -80,6 +80,10 @@ void LauncherUi::Refresh() {
   }
 }
 
+void LauncherUi::AddDisc(const std::filesystem::path& iso) {
+  if (!import_.running()) import_.Start(iso, found_, german_);
+}
+
 void* LauncherUi::TakeStartedProcess() {
   void* p = started_;
   started_ = nullptr;
@@ -274,11 +278,19 @@ bool LauncherUi::Draw(float width, float height) {
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
     OpenSettings(selected_);
   }
+  // X / D: the owner's own disc (ISO) for a game, recognised and unpacked into its rom folder.
+  if (!import_.running() &&
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_D, false))) {
+    std::filesystem::path iso;
+    if (DiscImport::PickIso(iso, german_)) import_.Start(iso, found_, german_);
+  }
   // The chosen game's settings are read ahead (the game takes a few seconds to name them).
   if (selected_ < loaders_.size() && !found_[selected_].exe.empty() && !loaders_[selected_].started()) {
     loaders_[selected_].Start(found_[selected_], AllGames()[selected_].key);
   }
-  const bool quit = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+  // Not while a disc is being unpacked (it would stop half done).
+  const bool quit = !import_.running() && (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+                                           ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false));
 
   // The figure folder and the hints at the bottom.
   char figures[160];
@@ -290,7 +302,37 @@ bool LauncherUi::Draw(float width, float height) {
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Starten" : "Play");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Beenden" : "Quit");
+  // The disc being set up: what happens, and how far the unpacking is.
+  const DiscImport::Phase phase = import_.phase();
+  if (phase != import_seen_) {
+    if (phase == DiscImport::Phase::kDone) {
+      const int game = import_.game();
+      Refresh();  // the disc check again
+      if (game >= 0) selected_ = size_t(game);
+    }
+    if (phase == DiscImport::Phase::kDone || phase == DiscImport::Phase::kFailed) {
+      import_shown_until_ = ImGui::GetTime() + 10.0;
+    }
+    import_seen_ = phase;
+  }
+  if (import_.running() || (phase != DiscImport::Phase::kIdle && ImGui::GetTime() < import_shown_until_)) {
+    const float bx = width * 0.5f, by = height - 100 * u, bw = width * 0.5f - 48 * u;
+    const std::string text = import_.message();
+    const ImU32 col = phase == DiscImport::Phase::kFailed ? Rgba(240, 110, 110)
+                      : phase == DiscImport::Phase::kDone ? Rgba(110, 220, 110)
+                                                          : kWhite;
+    Text(dl, regular_, 19 * u, {bx, by - 4 * u}, col, text.c_str(), bw);
+    if (phase == DiscImport::Phase::kUnpacking) {
+      const float p = std::clamp(import_.progress(), 0.0f, 1.0f);
+      dl->AddRectFilled({bx, by + 46 * u}, {bx + bw, by + 60 * u}, Rgba(40, 50, 100), 7 * u);
+      dl->AddRectFilled({bx, by + 46 * u}, {bx + bw * p, by + 60 * u}, kGold, 7 * u);
+      char percent[16];
+      std::snprintf(percent, sizeof(percent), "%d %%", int(p * 100));
+      Text(dl, bold_, 18 * u, {bx + bw - TextWidth(bold_, 18 * u, percent), by + 64 * u}, kDim, percent);
+    }
+  }
   if (!error_.empty() && ImGui::GetTime() < error_until_) {
     const std::string text = (german_ ? "Konnte nicht starten: " : "Could not start: ") + Utf8(error_);
     Text(dl, regular_, 20 * u, {hx + 20 * u, hy}, Rgba(240, 110, 110), text.c_str());

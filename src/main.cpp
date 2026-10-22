@@ -3,6 +3,7 @@
 
 #include <windows.h>
 #include <d3d11.h>
+#include <shellapi.h>
 
 #include <filesystem>
 
@@ -20,6 +21,7 @@ ID3D11DeviceContext* g_context = nullptr;
 IDXGISwapChain* g_swap_chain = nullptr;
 ID3D11RenderTargetView* g_target = nullptr;
 UINT g_resize_width = 0, g_resize_height = 0;
+coreoflight::LauncherUi* g_ui = nullptr;  // for a file dropped on the window
 
 void CreateTarget() {
   ID3D11Texture2D* back = nullptr;
@@ -78,6 +80,14 @@ LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     case WM_SYSCOMMAND:
       if ((wparam & 0xfff0) == SC_KEYMENU) return 0;  // no ALT menu
       break;
+    case WM_DROPFILES: {
+      // An ISO dropped on the window: set up like one picked with X.
+      const HDROP drop = reinterpret_cast<HDROP>(wparam);
+      wchar_t path[MAX_PATH * 4] = L"";
+      if (g_ui && DragQueryFileW(drop, 0, path, UINT(std::size(path)))) g_ui->AddDisc(path);
+      DragFinish(drop);
+      return 0;
+    }
     case WM_DESTROY:
       PostQuitMessage(0);
       return 0;
@@ -133,6 +143,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
+  g_ui = &ui;
+  // An ISO dragged onto coreoflight.exe (or named on its command line) is set up at once.
+  int argc = 0;
+  if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
+    if (argc > 1) ui.AddDisc(argv[1]);
+    LocalFree(argv);
+  }
+  DragAcceptFiles(hwnd, TRUE);
 
   bool running = true;
   HANDLE game = nullptr;
