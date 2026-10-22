@@ -109,7 +109,8 @@ exe and gets out of the way while the game runs; no game needs it.
   profile's figures made new (the same Skylanders back at the start, new serial numbers), with
   copies of them as they are, or with none. In the figure library, Y (C) copies the chosen figure's
   file, as it is, into another profile's figure folder (the same sub-folder, "Name (2).dump" if the
-  name is taken). X renames it (keyboard), Back deletes it into the
+  name is taken). X renames it with an on-screen keyboard (the pad moves over the keys, A types,
+  X deletes, Y a space, LB capitals, Start done; a keyboard types straight in), Back deletes it into the
   recycle bin. `Profiles\profiles.ini` remembers the active profile and the main profile's name
   and picture. The games themselves still call their player "User".
 - **Achievements** (RB / E, for the chosen game; LB / RB switch the game): the game's own list

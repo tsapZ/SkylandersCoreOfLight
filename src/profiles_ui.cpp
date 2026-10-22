@@ -1,5 +1,7 @@
 #include "profiles_ui.h"
 
+#include <cmath>
+#include <cctype>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -10,6 +12,7 @@
 
 #include "achievements.h"
 #include "imgui.h"
+#include "imgui_internal.h"  // ImTextCharToUtf8
 #include "portal/figure_file.h"
 #include "textures.h"
 
@@ -414,28 +417,161 @@ void ProfilesScreen::Draw(float width, float height) {
       break;
     }
     case Mode::kName: {
-      draw_panel(190 * u);
-      const float x = panel.x + 28 * u, w = panel_w - 56 * u;
-      Text(dl, bold_, 28 * u, {x, panel.y + 22 * u}, kGold, german_ ? "Name des Profils" : "The profile's name");
-      ImGui::SetNextWindowPos({x, panel.y + 70 * u});
-      ImGui::SetNextWindowSize({w, 60 * u});
-      ImGui::SetNextWindowFocus();
-      ImGui::Begin("profile_name", nullptr,
-                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                       ImGuiWindowFlags_NoBackground);
-      ImGui::PushFont(bold_);
-      ImGui::SetNextItemWidth(w - 16 * u);
+      // The name with an on-screen keyboard, for the pad (the owner: everything with the controller
+      // first; it needed a physical keyboard): the pad moves over the keys, A types the key, X
+      // deletes, Y types a space, LB switches capitals, Start keeps the name, B cancels. A keyboard
+      // types straight into it (Enter keeps, Esc cancels). At most 15 letters, as the games pass it
+      // on as the player's name.
       if (focus_name_) {
-        ImGui::SetKeyboardFocusHere();
         focus_name_ = false;
+        osk_row_ = 1;
+        osk_col_ = 0;
+        osk_caps_ = name_[0] == '\0';
       }
-      const bool entered = ImGui::InputText("##name", name_, sizeof(name_), ImGuiInputTextFlags_EnterReturnsTrue);
-      ImGui::PopFont();
-      ImGui::End();
-      Text(dl, regular_, 18 * u, {x, panel.y + 140 * u}, kDim,
-           german_ ? "Mit der Tastatur eingeben, Enter beh\xC3\xA4lt ihn." : "Type it, Enter keeps it.");
-      if (entered || once(ImGuiKey_GamepadFaceDown)) {
-        std::string name = name_;
+      static const std::vector<std::vector<std::string>> kRowsDe = {
+          {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
+          {"Q", "W", "E", "R", "T", "Z", "U", "I", "O", "P", "\xC3\x9C"},
+          {"A", "S", "D", "F", "G", "H", "J", "K", "L", "\xC3\x96", "\xC3\x84"},
+          {"Y", "X", "C", "V", "B", "N", "M", "\xC3\x9F", "-", "."}};
+      static const std::vector<std::vector<std::string>> kRowsEn = {
+          {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
+          {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"},
+          {"A", "S", "D", "F", "G", "H", "J", "K", "L", "'"},
+          {"Z", "X", "C", "V", "B", "N", "M", "-", "."}};
+      const auto& rows = german_ ? kRowsDe : kRowsEn;
+      const int row_count = int(rows.size()) + 1;  // the last: caps, space, delete, done
+      auto row_len = [&](int r) { return r < int(rows.size()) ? int(rows[size_t(r)].size()) : 4; };
+      // The name's letters (UTF-8), for the limit and for deleting the last one.
+      auto letters = [](const std::string& s) {
+        int n = 0;
+        for (unsigned char c : s) n += (c & 0xC0) != 0x80;
+        return n;
+      };
+      std::string name = name_;
+      auto type = [&](const std::string& text) {
+        if (letters(name) + letters(text) > 15) return;
+        name += text;
+      };
+      auto erase_last = [&] {
+        while (!name.empty() && (static_cast<unsigned char>(name.back()) & 0xC0) == 0x80) name.pop_back();
+        if (!name.empty()) name.pop_back();
+      };
+      // A key in the case the capitals switch says (the umlauts too; ß has no capital here).
+      auto key_text = [&](const std::string& key) {
+        if (osk_caps_) return key;
+        if (key == "\xC3\x9C") return std::string("\xC3\xBC");
+        if (key == "\xC3\x96") return std::string("\xC3\xB6");
+        if (key == "\xC3\x84") return std::string("\xC3\xA4");
+        std::string lower = key;
+        for (char& c : lower) c = char(std::tolower(static_cast<unsigned char>(c)));
+        return lower;
+      };
+      bool done = false, cancel = false;
+      // What a key does; letters turn the capitals off after the first one.
+      auto press = [&](int r, int c) {
+        if (r < int(rows.size())) {
+          const std::string& key = rows[size_t(r)][size_t(c)];
+          type(key_text(key));
+          if (std::isalpha(static_cast<unsigned char>(key[0])) || static_cast<unsigned char>(key[0]) >= 0x80) {
+            osk_caps_ = false;
+          }
+        } else if (c == 0) {
+          osk_caps_ = !osk_caps_;
+        } else if (c == 1) {
+          type(" ");
+        } else if (c == 2) {
+          erase_last();
+        } else {
+          done = true;
+        }
+      };
+      // The pad on the keys.
+      const bool up = pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp);
+      const bool down =
+          pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown);
+      auto move_row = [&](int d) {
+        const float at = (float(osk_col_) + 0.5f) / float(row_len(osk_row_));
+        osk_row_ = (osk_row_ + d + row_count) % row_count;
+        osk_col_ = std::clamp(int(at * float(row_len(osk_row_))), 0, row_len(osk_row_) - 1);
+      };
+      if (up) move_row(-1);
+      if (down) move_row(+1);
+      if (left) osk_col_ = (osk_col_ + row_len(osk_row_) - 1) % row_len(osk_row_);
+      if (right) osk_col_ = (osk_col_ + 1) % row_len(osk_row_);
+      if (once(ImGuiKey_GamepadFaceDown)) press(osk_row_, osk_col_);
+      if (pressed(ImGuiKey_GamepadFaceLeft)) erase_last();  // held: repeats, to clear a name quickly
+      if (once(ImGuiKey_GamepadFaceUp)) type(" ");
+      if (once(ImGuiKey_GamepadL1) || once(ImGuiKey_GamepadL3)) osk_caps_ = !osk_caps_;
+      if (once(ImGuiKey_GamepadStart) || once(ImGuiKey_Enter) || once(ImGuiKey_KeypadEnter)) done = true;
+      if (back) cancel = true;
+      // The keyboard types itself (the arrows still move over the keys).
+      for (const ImWchar ch : io.InputQueueCharacters) {
+        if (ch < 0x20 || ch == 0x7F) continue;
+        char utf8[5] = {};
+        ImTextCharToUtf8(utf8, ch);
+        type(utf8);
+      }
+      if (pressed(ImGuiKey_Backspace)) erase_last();
+
+      // The panel, centred: the title, the name, the keys.
+      const float ph = 500 * u;
+      const ImVec2 p0{(width - panel_w) * 0.5f, std::max(20 * u, (height - ph) * 0.5f - 30 * u)};
+      dl->AddRectFilled({0, 0}, {width, height}, Rgba(0, 0, 0, 140));
+      dl->AddRectFilled(p0, {p0.x + panel_w, p0.y + ph}, kPanel, 18 * u);
+      dl->AddRect(p0, {p0.x + panel_w, p0.y + ph}, kGold, 18 * u, 0, 3 * u);
+      const float x = p0.x + 28 * u, w = panel_w - 56 * u;
+      Text(dl, bold_, 28 * u, {x, p0.y + 22 * u}, kGold, german_ ? "Name des Profils" : "The profile's name");
+      const ImVec2 f0{x, p0.y + 68 * u}, f1{x + w, p0.y + 124 * u};
+      dl->AddRectFilled(f0, f1, Rgba(8, 14, 40, 235), 12 * u);
+      dl->AddRect(f0, f1, Rgba(120, 140, 200), 12 * u, 0, 2 * u);
+      Text(dl, bold_, 30 * u, {f0.x + 16 * u, f0.y + 10 * u}, kWhite, name);
+      if (std::fmod(ImGui::GetTime(), 1.0) < 0.6) {  // the caret
+        const float cx = f0.x + 18 * u + TextWidth(bold_, 30 * u, name.c_str());
+        dl->AddRectFilled({cx, f0.y + 12 * u}, {cx + 3 * u, f1.y - 12 * u}, kGold);
+      }
+      char count[16];
+      std::snprintf(count, sizeof(count), "%d / 15", letters(name));
+      Text(dl, regular_, 18 * u, {f1.x - TextWidth(regular_, 18 * u, count) - 14 * u, f0.y + 17 * u}, kDim, count);
+      // The keys: the letter rows, then caps, space, delete, done (wider).
+      const float key_gap = 8 * u, key_h = 50 * u;
+      float ky = p0.y + 146 * u;
+      for (int r = 0; r < row_count; ++r) {
+        const int len = row_len(r);
+        const bool special = r == int(rows.size());
+        const float widths[4] = {0.18f, 0.42f, 0.18f, 0.22f};
+        float kx = x;
+        for (int c = 0; c < len; ++c) {
+          const float kw = special ? (w - key_gap * 3) * widths[c] : (w - key_gap * 10) / 11.0f;
+          const ImVec2 k0{kx, ky}, k1{kx + kw, ky + key_h};
+          const bool hover = io.MousePos.x >= k0.x && io.MousePos.x < k1.x && io.MousePos.y >= k0.y && io.MousePos.y < k1.y;
+          if (hover && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) {
+            osk_row_ = r;
+            osk_col_ = c;
+          }
+          if (hover && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            osk_row_ = r;
+            osk_col_ = c;
+            press(r, c);
+          }
+          const bool on = r == osk_row_ && c == osk_col_;
+          const bool lit = special && c == 0 && osk_caps_;
+          dl->AddRectFilled(k0, k1, on ? kGold : lit ? Rgba(70, 90, 160) : Rgba(30, 40, 90, 240), 10 * u);
+          std::string label;
+          if (!special) {
+            label = key_text(rows[size_t(r)][size_t(c)]);
+          } else {
+            const char* labels_de[4] = {"Gro\xC3\x9F", "Leerzeichen", "L\xC3\xB6schen", "Fertig"};
+            const char* labels_en[4] = {"Caps", "Space", "Delete", "Done"};
+            label = german_ ? labels_de[c] : labels_en[c];
+          }
+          const float ls = special ? 22 * u : 26 * u;
+          Text(dl, bold_, ls, {k0.x + (kw - TextWidth(bold_, ls, label.c_str())) * 0.5f, k0.y + (key_h - ls) * 0.5f - 2 * u},
+               on ? Rgba(60, 35, 0) : kWhite, label);
+          kx += kw + key_gap;
+        }
+        ky += key_h + key_gap;
+      }
+      if (done) {
         name.erase(0, name.find_first_not_of(" \t"));
         name.erase(name.find_last_not_of(" \t") + 1);
         if (!name.empty() && selected_ < profiles_.size()) {
@@ -446,11 +582,16 @@ void ProfilesScreen::Draw(float width, float height) {
           Load();
         }
         mode_ = Mode::kList;
-      } else if (back) {
+      } else if (cancel) {
         mode_ = Mode::kList;
       }
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Enter", Rgba(70, 170, 70), german_ ? "Behalten" : "Keep");
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Esc", Rgba(200, 60, 60), german_ ? "Abbrechen" : "Cancel");
+      std::snprintf(name_, sizeof(name_), "%s", name.c_str());
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Tippen" : "Type");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "L\xC3\xB6schen" : "Delete");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Leerzeichen" : "Space");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Gro\xC3\x9F / klein" : "Caps");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Fertig" : "Done");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Abbrechen" : "Cancel");
       break;
     }
     case Mode::kPicture: {

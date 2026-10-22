@@ -48,6 +48,9 @@ class ProfilesScreen {
   Mode mode_ = Mode::kList;
   char name_[64] = {};
   bool focus_name_ = false;
+  // The on-screen keyboard of kName: the key the pad is on, capitals (on for the first letter).
+  int osk_row_ = 1, osk_col_ = 0;
+  bool osk_caps_ = true;
   std::vector<std::pair<uint16_t, uint16_t>> pictures_;  // the choice for kPicture
   size_t picture_ = 0;
   std::string message_;
