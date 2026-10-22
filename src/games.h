@@ -62,8 +62,9 @@ std::filesystem::path MainFiguresDir();
 int CountFigures();
 
 // A figure's picture as one of the games left it (Pictures\<game>\<id>-<variant>.png next to the
-// figure folder; the active profile's, then the main profile's), the newest game's first; empty if
-// no game has left one yet.
+// figure folder; the active profile's, then the main profile's): the figure's own game's first (a
+// Series 1 Spyro from Spyro's Adventure, a Series 2 one from Giants), then the newest game's;
+// empty if no game has left one yet.
 std::filesystem::path FigurePicture(uint16_t id, uint16_t variant);
 
 // "key = value" lines of an ini file (";" and "#" start a comment, a byte order mark is skipped).

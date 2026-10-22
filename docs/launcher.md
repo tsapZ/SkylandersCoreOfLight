@@ -60,7 +60,7 @@ exe and gets out of the way while the game runs; no game needs it.
   `FigureStats::creation_class`). The pictures
   are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
   in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
-  `StartFigurePictureCache`), and the library takes the newest game's picture of each figure; a
+  `StartFigurePictureCache`), and the library takes each figure's picture from its own game (a Series 1 Spyro from Spyro's Adventure, a Series 2 one from Giants; the owner's wish, 2026-10-22), else the newest game's; a
   figure no played game has a picture of gets its element's colour and first letter. The figure's
   hat shows by its game name, with its picture and bonuses: the games leave `hats.txt` and
   `hat-<n>.png` there too. A (Enter) on one of the owner's figures opens its **upgrade tree** as

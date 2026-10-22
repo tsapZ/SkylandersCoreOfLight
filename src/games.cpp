@@ -11,6 +11,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "portal/figure_catalog.h"
 #include "profiles.h"
 
 namespace coreoflight {
@@ -233,10 +234,15 @@ fs::path FiguresDir() { return ProfileFiguresDir(ActiveProfile()); }
 fs::path FigurePicture(uint16_t id, uint16_t variant) {
   wchar_t name[32];
   std::swprintf(name, std::size(name), L"%u-%u.png", unsigned(id), unsigned(variant));
-  // The pictures are the discs', the same for every profile: the main profile's too.
-  for (const fs::path& root : {ProfilePicturesDir(ActiveProfile()), MainFiguresDir().parent_path() / "Pictures"}) {
-    for (size_t i = kGames.size(); i-- > 0;) {
-      const std::string game = kGames[i].name_en;
+  // The figure's own game first (the owner's wish: each figure as its own game shows it; the games
+  // themselves fill gaps from later games), then the newest game's. The pictures are the discs',
+  // the same for every profile: the main profile's too.
+  std::vector<std::string> games;
+  if (const auto* info = skylanders::portal::FindSkylander(id, variant)) games.emplace_back(info->game);
+  for (size_t i = kGames.size(); i-- > 0;) games.emplace_back(kGames[i].name_en);
+  const fs::path roots[] = {ProfilePicturesDir(ActiveProfile()), MainFiguresDir().parent_path() / "Pictures"};
+  for (const std::string& game : games) {
+    for (const fs::path& root : roots) {
       const fs::path p = root / Utf8Path(game) / name;
       if (IsFile(p)) return p;
     }
