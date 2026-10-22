@@ -13,6 +13,7 @@
 #include "games.h"
 #include "profiles.h"
 #include "imgui.h"
+#include "nxe_art.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 #include "textures.h"
@@ -493,8 +494,9 @@ void FiguresScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = std::min(width / 1280.0f, height / 720.0f);
-  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
-                              Rgba(3, 7, 22));
+  // A game's tab over that game's dashboard background (kGames is AllGames' order); every game's
+  // over the plain blue.
+  DrawBackdrop(dl, width, height, tab_ > 0 ? GameBackground(size_t(tab_ - 1)) : fs::path(), true);
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim,
        tree_ ? (german_ ? "UPGRADES" : "UPGRADES") : (german_ ? "FIGUREN" : "FIGURES"));
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold,

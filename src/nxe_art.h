@@ -22,7 +22,9 @@ std::filesystem::path NxeArt(const std::filesystem::path& rom_dir, const std::fi
 
 // The screens' background: `picture` (a 16:9 dashboard background) filling the window, darkened,
 // or the launcher's deep blue without one. UI thread only.
-void DrawBackdrop(ImDrawList* dl, float width, float height, const std::filesystem::path& picture);
+// `strong`: darker, for screens full of tiles.
+void DrawBackdrop(ImDrawList* dl, float width, float height, const std::filesystem::path& picture,
+                  bool strong = false);
 
 // Each game's dashboard background (by its index in AllGames), as the launcher found them, for
 // the screens that belong to one game (its settings, its achievements); empty if none.
