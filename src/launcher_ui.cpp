@@ -243,6 +243,11 @@ void LauncherUi::GameEnded() {
 }
 
 void LauncherUi::AddDisc(const std::filesystem::path& iso) {
+  // During the first-run setup a dropped ISO is filled in there (its game's row) instead.
+  if (setup_.is_open()) {
+    setup_.AddIso(iso);
+    return;
+  }
   if (!import_.running()) import_.Start(iso, found_, german_);
 }
 

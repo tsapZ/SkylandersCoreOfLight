@@ -59,6 +59,7 @@ class SetupScreen {
     std::filesystem::path iso;
     uint64_t bytes = 0;  // the disc's files without its system update
     bool chosen = false;
+    bool automatic = false;  // found next to an ISO chosen by hand, not chosen itself
     State state = State::kNoDisc;
     std::string note;
   };
@@ -83,6 +84,8 @@ class SetupScreen {
   Job job_;
   std::string language_;
   std::string message_;  // about the ISO chosen by hand
+  int pick_for_ = -1;    // the game whose ISO the file browser is choosing
+  bool nearby_ = false;  // search_ is the look next to a chosen ISO, not the whole PC
   bool finished_ = false;
 };
 

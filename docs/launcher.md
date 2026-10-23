@@ -18,14 +18,18 @@ exe and gets out of the way while the game runs; no game needs it.
   games): on a start with no game installed and `setup_done` not set in `coreoflight.toml`.
   - *Willkommen*: what the launcher is, that the discs are the player's own, the language (left /
     right), A on to the discs, B skips the setup.
-  - *Deine Discs*: first the choice, as the owner wanted nothing scanned unasked: "Automatisch
-    suchen" (`src/disc_search.cpp`, the same search as the file browser's Y: Downloads, Desktop and
-    Documents four folders deep, the drives two) or "ISO selbst auswählen" (the launcher's file
-    browser, pad and keyboard). Then one row per game with the ISO found for it and its size, or
-    "Schon eingerichtet" / "Keine Disc gefunden"; A ticks a game on or off, X adds an ISO by
-    hand (known by its default.xex like the search's), Y searches. Below: "Braucht 44,9 GB ·
-    frei auf G: 650 GB" (each chosen disc without its system update, 150 MB per game, 256 MB to
-    spare), in red with "Einrichten" off when the drive the games go to is too full.
+  - *Deine Discs*: the six games, nothing looked for unasked (the owner's wish). A on a game
+    opens the launcher's file browser (pad and keyboard) for its ISO, or an ISO is dropped on the
+    window; it is known by its default.xex and goes to its game's row ("Das ist die Disc von
+    ..." when it is another game's). Then its folder and the one above (one level down) are looked
+    through on a thread (`src/disc_search.cpp`, the reads are the ISOs' directories and
+    default.xex only) and the other games' ISOs found there are filled in as "automatisch
+    erkannt"; a wrong one is changed with A on its game. X ticks a game off and on, Y searches
+    the whole PC (the file browser's search: Downloads, Desktop and Documents four folders deep,
+    the drives two). Each row shows the ISO's size and path, or "Schon eingerichtet" /
+    "Keine Disc gefunden". Below: "Braucht 23,6 GB · frei auf G: 640,8 GB" (each chosen disc
+    without its system update, 150 MB per game, 256 MB to spare), in red with "Einrichten" off
+    when the drive the games go to is too full.
   - *Einrichten*: each chosen game installed from its setup (when it isn't), then its disc set
     up, one after the other, with the import's progress bar; B stops after the step running
     (a disc being unpacked at once). *Fertig*: how many are ready; A to the cards.
@@ -240,8 +244,9 @@ and needs neither the SDK nor the games' sources.
   on G:: welcome, "Automatisch suchen" found 9 ISOs and all six games, "Braucht 44,9 GB · frei
   auf G: 653,2 GB"; with only Spyro's Adventure ticked (7,8 GB) it installed the game, set up its
   disc with the progress bar, said "1 Spiel(e) bereit", and the card was "Bereit";
-  `setup_done = true` was written. "ISO selbst auswählen" and X open the file browser, B in it
-  comes back to the setup.
+  `setup_done = true` was written. Choosing by hand: with Spyro's Adventure's ISO dropped on the
+  window (`isotest\Skylanders\Spyro\`), the look next to it filled in Giants and Swap Force from
+  `Skylanders\Giants\` and `Skylanders\Swap Force\` as "automatisch erkannt" (23,6 GB).
 - A colleague's first start (2026-10-23): the launcher alone in a folder with the six beta.2
   setups in `games\`, on empty documents. Spyro's Adventure installed from its card in 12 s, its
   ISO given as a dropped file was set up in 76 s, the game started from its card into its German

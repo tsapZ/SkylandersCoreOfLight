@@ -72,7 +72,6 @@ void FindIsos(const fs::path& dir, int depth, const std::atomic<bool>& stop, std
 }  // namespace
 
 std::shared_ptr<DiscSearch> StartDiscSearch() {
-  auto search = std::make_shared<DiscSearch>();
   std::vector<std::pair<fs::path, int>> roots;
   for (REFKNOWNFOLDERID id : {FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Documents}) {
     if (const fs::path p = Known(id); !p.empty()) roots.emplace_back(p, kPlaceDepth);
@@ -84,6 +83,11 @@ std::shared_ptr<DiscSearch> StartDiscSearch() {
     const UINT type = GetDriveTypeW(root.c_str());
     if (type == DRIVE_FIXED || type == DRIVE_REMOVABLE) roots.emplace_back(fs::path(root), kDriveDepth);
   }
+  return StartDiscSearch(std::move(roots));
+}
+
+std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<fs::path, int>> roots) {
+  auto search = std::make_shared<DiscSearch>();
   std::thread([search, roots] {
     std::set<std::wstring> seen;  // an ISO under two of the roots once
     for (const auto& [root, depth] : roots) {

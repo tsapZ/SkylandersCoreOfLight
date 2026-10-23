@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 namespace coreoflight {
@@ -29,5 +30,8 @@ struct DiscSearch {
 
 // Starts a search; `stop` ends it early, `done` says it has finished.
 std::shared_ptr<DiscSearch> StartDiscSearch();
+// The same over the given folders only, each `depth` folder levels down (the setup's look next to
+// an ISO chosen by hand: its folder and the one above).
+std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<std::filesystem::path, int>> roots);
 
 }  // namespace coreoflight
