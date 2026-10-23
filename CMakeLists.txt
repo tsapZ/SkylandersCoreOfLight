@@ -46,6 +46,8 @@ add_executable(coreoflight WIN32
   src/achievements.cpp
   src/achievements_ui.cpp
   src/problem_report.cpp
+  src/saves.cpp
+  src/saves_ui.cpp
   src/coreoflight.rc
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp

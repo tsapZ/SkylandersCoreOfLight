@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "achievements_ui.h"
+#include "saves_ui.h"
 #include "disc_import.h"
 #include "file_browser.h"
 #include "figures_ui.h"
@@ -38,6 +39,9 @@ class LauncherUi {
   void AddDisc(const std::filesystem::path& iso);
   // The started game's window is up (main.cpp hides the launcher then): the launch screen ends.
   void GameWindowShown() { starting_ = false; }
+  // While the game runs (main.cpp, about four times a second): its saves' automatic copy every
+  // 60 minutes (saves.h AutoBackup, hub setting auto_backup).
+  void GameRunning();
   // How the game ended: a message when it wasn't the usual way (exit code 0).
   void GameExitCode(unsigned long code);
   // Fullscreen (hub setting, F11 / Alt+Enter): what main.cpp should show, and a switch that
@@ -97,6 +101,9 @@ class LauncherUi {
   FiguresScreen figures_screen_;
   ProfilesScreen profiles_screen_;
   AchievementsScreen achievements_screen_;
+  SavesScreen saves_screen_;  // RT / S
+  size_t running_game_ = 0;          // AllGames index of the running game
+  uint64_t last_auto_backup_ = 0;    // GetTickCount64 of the last automatic copy
   SetupScreen setup_;  // the first-run setup
   std::vector<GameAchievements> achievements_;
   std::vector<uint64_t> last_saved_;  // per game, the active profile's (Windows file time)

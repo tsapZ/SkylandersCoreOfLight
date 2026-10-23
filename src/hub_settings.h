@@ -20,6 +20,7 @@ struct HubSettings {
   bool title_music = true;        // a game's title music while its card is chosen
   bool animations = true;         // screens slide and fade in
   bool fullscreen = false;        // the window fills the screen (F11 / Alt+Enter switch it too)
+  bool auto_backup = true;        // the saves copied at a game's start, end and every 60 minutes
   bool setup_done = false;        // the first-run setup (setup_ui.h) finished or skipped
 };
 

@@ -94,6 +94,7 @@ void LauncherUi::ApplyHubSettings() {
   figures_screen_.Init(regular_, bold_, german_);
   profiles_screen_.Init(regular_, bold_, german_);
   achievements_screen_.Init(regular_, bold_, german_);
+  saves_screen_.Init(regular_, bold_, german_);
   setup_.Init(regular_, bold_, german_);
 }
 
@@ -298,8 +299,20 @@ void LauncherUi::ToggleFullscreen() {
 void LauncherUi::GameEnded() {
   if (running_key_.empty()) return;
   AddPlaySeconds(running_profile_, running_key_, (GetTickCount64() - running_since_) / 1000);
+  // And the saves as the session left them.
+  if (hub_.auto_backup && running_game_ < found_.size()) {
+    AutoBackup(running_profile_, AllGames()[running_game_], found_[running_game_].exe);
+  }
   last_key_ = running_key_;
   running_key_.clear();
+}
+
+void LauncherUi::GameRunning() {
+  if (running_key_.empty() || !hub_.auto_backup || running_game_ >= found_.size()) return;
+  const uint64_t now = GetTickCount64();
+  if (now - last_auto_backup_ < 60ull * 60 * 1000) return;
+  last_auto_backup_ = now;
+  AutoBackup(running_profile_, AllGames()[running_game_], found_[running_game_].exe);
 }
 
 void LauncherUi::AddDisc(const std::filesystem::path& iso) {
@@ -368,6 +381,8 @@ void LauncherUi::Start(size_t index) {
   music_.Stop();
   void* process = nullptr;
   std::wstring error;
+  // The saves as they are before the game touches them (unchanged ones aren't copied again).
+  if (hub_.auto_backup) AutoBackup(ActiveProfile(), AllGames()[index], found_[index].exe);
   if (StartGame(found_[index], error, &process)) {
     started_ = process;
     starting_ = true;
@@ -376,6 +391,8 @@ void LauncherUi::Start(size_t index) {
     running_key_ = AllGames()[index].key;
     running_profile_ = ActiveProfile();
     running_since_ = GetTickCount64();
+    running_game_ = index;
+    last_auto_backup_ = running_since_;
   } else {
     error_ = (german_ ? L"Konnte nicht starten: " : L"Could not start: ") + error;
     error_until_ = ImGui::GetTime() + 6.0;
@@ -641,6 +658,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : crash_code_ != 0              ? "crash"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
+                       : saves_screen_.is_open()        ? "saves"
                        : achievements_screen_.is_open() ? "achievements"
                        : figures_screen_.is_open()      ? "figures"
                        : hub_screen_.is_open() || settings_.is_open() ? "settings"
@@ -943,6 +961,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
     }
     return true;
   }
+  if (saves_screen_.is_open()) {
+    saves_screen_.Draw(width, height);
+    return true;
+  }
   if (achievements_screen_.is_open()) {
     achievements_screen_.Draw(width, height);
     return true;
@@ -1069,6 +1091,11 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_E, false)) {
     achievements_screen_.Open(selected_);
   }
+  // RT / S: the chosen game's saves and their copies (saves_ui.h).
+  if ((ImGui::IsKeyPressed(ImGuiKey_GamepadR2, false) || ImGui::IsKeyPressed(ImGuiKey_S, false)) &&
+      selected_ < found_.size() && !found_[selected_].exe.empty()) {
+    saves_screen_.Open(selected_, found_[selected_].exe, GameBackground(selected_));
+  }
   // Back / P: the profiles (profiles_ui.h).
   if (profile_clicked || ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_P, false)) {
     profiles_screen_.Open(&found_);
@@ -1148,6 +1175,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RT", Rgba(80, 90, 140), german_ ? "Spielst\xC3\xA4nde" : "Saves");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Hub" : "Hub");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60),

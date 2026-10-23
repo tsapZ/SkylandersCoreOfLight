@@ -113,6 +113,19 @@ exe and gets out of the way while the game runs; no game needs it.
   profile folder, the Windows user name and the computer's name are replaced in every file
   (`%USERPROFILE%`, `%USERNAME%`, `%COMPUTERNAME%`). A store-only ZIP writer of its own, no
   library. Checked: 29 files, Explorer opens it, no user name left in it.
+- **Spielstände** (RT / S on a card, `src/saves_ui.cpp`, `src/saves.cpp`): the chosen game's saves of
+  the active profile on the left (Spielstand 1, 2, ..., the options last, each with when it was
+  saved), the copies of the chosen one on the right: the game's own previous version (the SDK keeps
+  the version before each save, `<user data>\save-backup\previous`), the launcher's backups, the
+  automatic ones and the ones made before a restore. X backs the save up, A on a copy puts it back
+  after asking (the save as it is now is backed up first), Y opens the backups' folder,
+  `Documents\Skylanders\Backups\<game key>\<profile id, main>\<save>\<date time>` (package\, header,
+  manifest.txt: the SDK's layout). **Automatic copies** (hub setting "Spielstände sichern", on): when
+  a game starts from here, when it ends and every 60 minutes while it runs, each save that changed
+  since its last automatic copy (a save is about 100 KB; the newest 10 automatic copies of each
+  stay). Checked on a copy of the documents: back up, restore the game's previous version, the
+  automatic copies of all three saves at a game's start. A path over 260 characters fails with the
+  reason shown (it happened with a deep test folder).
 - **After a crash** (a game started from here ends with an error code): "<Spiel> wurde unerwartet
   beendet", the code, and A: Problem melden (the same ZIP), B: Schließen. Checked by ending a
   running game from outside (code 0xFFFFFFFF).

@@ -58,6 +58,7 @@ HubSettings LoadHubSettings() {
   s.title_music = IsOn(get("title_music"), s.title_music);
   s.animations = IsOn(get("animations"), s.animations);
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
+  s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   return s;
 }
@@ -114,6 +115,14 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                                  "Der Hub f\xC3\xBCllt den Bildschirm, f\xC3\xBCr den Fernseher. F11 oder "
                                  "Alt+Enter schalten auch um.",
                                  settings.fullscreen));
+  page.settings.push_back(Switch(
+      "auto_backup", "Back up saves", "Spielst\xC3\xA4nde sichern",
+      "When a game starts and ends and every 60 minutes while it runs, a copy of each of its saves that "
+      "changed (about 100 KB each; the newest 10 stay). RT on a card shows them and puts one back.",
+      "Beim Start und Ende eines Spiels und alle 60 Minuten w\xC3\xA4hrend es l\xC3\xA4uft eine Kopie jedes "
+      "Spielstands, der sich ge\xC3\xA4ndert hat (je etwa 100 KB; die neuesten 10 bleiben). RT auf einer "
+      "Karte zeigt sie und holt einen zur\xC3\xBC" "ck.",
+      settings.auto_backup));
   // A button: the report (problem_report.h), made by the launcher when A is pressed on it.
   GameSetting report;
   report.cvar = "report_problem";

@@ -255,7 +255,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     if (game && game_shown) {
       // A game is running: the launcher waits hidden and comes back when it ends.
-      if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) continue;
+      if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) {
+        ui.GameRunning();
+        continue;
+      }
       DWORD code = 0;
       GetExitCodeProcess(game, &code);
       CloseHandle(game);
