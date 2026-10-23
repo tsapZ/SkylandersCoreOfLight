@@ -71,9 +71,11 @@ pictures of every figure.
 
 ## What the launcher does
 
-- **Finds the games** (where their installers put them, a path in `coreoflight.ini`, next to the
-  launcher or a developer's build) and **checks each disc** against the version its port is made
-  for.
+- **Finds the games** (where their installers put them, your games folder, a path in
+  `coreoflight.ini`, next to the launcher or a developer's build) and **checks each disc** against
+  the version its port is made for. The games folder can be changed any time in its settings:
+  games copied there (another drive, a network drive, a Linux folder when it runs with Proton) are
+  found with their disc, nothing gets unpacked again.
 - **Sets everything up on a first start** (no game installed yet): the language, then your discs,
   found by itself or chosen by hand, with the room they need and what is free, then each chosen
   game installed and its disc set up, one after the other.
@@ -81,8 +83,9 @@ pictures of every figure.
   Releases page, run silently, then its disc from your ISO.
 - **Keeps itself and the games up to date** from GitHub Releases (checked once a day, or by hand
   in its settings). A game with a newer version says "update available" on its card, and A asks:
-  update now (silently; saves, figures, disc and settings stay) or play first. A newer launcher
-  is offered at start and restarts itself after the update.
+  update now (silently; saves, figures, disc and settings stay) or play first; "Update all" on the
+  start screen does every game in one go. A newer launcher is offered at start and restarts itself
+  after the update.
 - **Sets up a disc from your ISO**: its own file browser, for the pad as well as the keyboard, or
   drop an ISO on the window; Y in it finds your discs by itself (the ISOs in Downloads, Desktop,
   Documents and on the drives, each listed by its game). It recognises the game, unpacks the disc into that game's folder and
@@ -98,7 +101,10 @@ pictures of every figure.
 - **Profiles** like Xbox accounts: create, rename, pick a picture, delete (with a confirmation);
   each profile has its own saves, figures and achievements, and the games show its name.
 - **The launcher's own settings**: language (German / English), the library's defaults, title
-  music, animations.
+  music and its volume, animations, fullscreen (also `--fullscreen` for Steam's launch options),
+  the games folder.
+- **Controller, keyboard or mouse** everywhere: the button hints at the bottom follow what you use
+  and can be clicked.
 
 Screenshots are left out of this repository on purpose: they would show the games' artwork,
 which belongs to Activision.

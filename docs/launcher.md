@@ -11,9 +11,23 @@ exe and gets out of the way while the game runs; no game needs it.
      too);
   2. where its installer put it: `InstallLocation` of its uninstall entry (`<AppId>_is1`, each game
      its own AppId), which also finds a game installed into another folder or a library folder;
-  3. the installer's default folder, `%LOCALAPPDATA%\Programs\<Game> Recompiled\`;
-  4. next to the launcher (the exe itself, or a folder named like the repository or the app);
-  5. a developer's layout above the launcher: `<Repo>\<Repo>\out\build\win-amd64-release\<exe>`.
+  3. the games folder (the setup's or the launcher's settings' "Spiele-Ordner", `--install_dir`,
+     `library` in `coreoflight.ini`): `<folder>\<Game> Recompiled`, `<folder>\<Repo>`, the folder
+     itself, then any folder up to two levels down holding the game's exe (a colleague's wish,
+     2026-10-23: games copied from another PC, on another drive, a network drive or a Linux folder
+     under Proton on SteamOS, found with their `rom\` as they are, nothing unpacked again). Such a
+     game has no uninstall entry and so no known version: it is "kopiert", its newest setup is
+     offered once and goes into its own folder (`/DIR=` the exe's folder), after which its entry
+     knows the version;
+  4. the installer's default folder, `%LOCALAPPDATA%\Programs\<Game> Recompiled\`;
+  5. next to the launcher (the exe itself, or a folder named like the repository or the app);
+  6. a developer's layout above the launcher: `<Repo>\<Repo>\out\build\win-amd64-release\<exe>`.
+- **The games folder** is chosen in the launcher's own folder browser (folders only, "Diesen
+  Ordner für die Spiele nehmen" in each; under Wine / Proton the Linux home folder from
+  `WINEHOMEDIR` among the places): A on "Spiele-Ordner" in the launcher's settings (any time) or in
+  the first-run setup (left / right there step through `<drive>:\Skylanders Recompiled` on every
+  fixed drive the launcher may write to; Wine's `Z:`, the Linux root, is left out). The games are
+  looked for there at once ("2 Spiel(e) in diesem Ordner gefunden"); new installs go there too.
 - **First-run setup** (`src/setup_ui.cpp`; the owner's wish, 2026-10-23, for friends trying the
   games): on a start with no game installed and `setup_done` not set in `coreoflight.toml`.
   - *Willkommen*: what the launcher is, that the discs are the player's own, the language (left /
@@ -54,6 +68,17 @@ exe and gets out of the way while the game runs; no game needs it.
   Checked 2026-10-23 in scratch: Swap Force installed without its disc, its entry's version set back
   to 0.1.0-alpha.2, the card offered the update, A brought the entry to 0.1.0-beta.1; then
   uninstalled, no entry left.
+  **"Alle aktualisieren (N)"** (a colleague's wish, 2026-10-23: six cards one by one) sits between
+  the title and the profile while any installed game has an update: a click, LT or U runs them one
+  after the other (download, silent setup), the button then says "Aktualisiere 2 von 3: Giants" and
+  the cards "Wird aktualisiert ..." / "Update wartet ..."; a queued game can't be started meanwhile,
+  a running one waits until it has ended, and at the end "Alle Spiele sind aktualisiert" or which
+  weren't. A newer launcher comes last (it restarts). **"Nach Updates suchen"** in the launcher's
+  settings shows "Suche nach Updates ..." at the bottom right of every screen, then "Kein neues
+  Update" or "Updates gefunden" with each game's versions and "Herunterladen" (the same queue; its
+  progress at the bottom right while another screen is open). Checked in scratch with stand-in
+  setups (they only wait and end): three copied games, also in a folder of their own name and two
+  levels down, each got `/DIR=` its own folder.
 - **Checks the disc:** the game looks for `rom\` in the folder it runs in (an installed game next
   to its exe, a developer's build three folders up), so the launcher looks there for
   `rom\default.xex` and compares its SHA-256 with the hash the game's repository pins
@@ -106,11 +131,25 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Hints for the input in use** (`src/hints.cpp`): the button hints at the bottom of every screen
   show the controller's buttons after a pad button or stick and the keyboard's keys (key caps:
   Enter, Esc, Tab, D, F, ...) after a key, a mouse move or a click, cross-fading in a quarter
-  second. A screen whose key differs from the usual one names it.
+  second. A screen whose key differs from the usual one names it. **A click on a hint** presses its
+  button for a frame (a colleague's wish, 2026-10-23: "Speichern", "Zurück", "Seite" with the
+  mouse): every `Hint()` leaves its area, and the click's press goes in as the controller's button
+  (also without a controller connected), so each screen's own handling runs; "LB/RB" takes the
+  half clicked. The dialogs' buttons take their own clicks.
+- **Lists under the mouse** (settings, file browser, figure library) scroll only when the chosen
+  row leaves the view (centred on it, a long page like "Grafik" jumped under a resting mouse, so
+  some rows couldn't be clicked); the wheel moves the choice a row per notch, a touchpad's small
+  steps add up.
+- **Greyed settings:** a setting the game's schema marks `enabled_by` (another bool setting it needs
+  on) is greyed and can't be changed while that one is off, with "Nur mit „...“ an." in its
+  explanation: "Tastatur spielt als" needs "Tastatur und Maus" (for games built before the schema
+  named it the launcher knows this pair itself).
 - **The launcher's own settings** (LB / Q, `src/hub_settings.cpp`), in the same screen as a game's,
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
-  the title music, the animations.
+  the title music and its volume (10-100 %, 60 at first), the animations, fullscreen (also at the
+  start, from the first frame; `--fullscreen` on the command line, e.g. Steam's launch options on
+  Bazzite or SteamOS, starts it in fullscreen whatever the setting says), the games folder.
 - **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
   one text file onto the desktop, `Skylanders-problem-report-<date>.txt` (the same name in German), and shows it in Explorer.
   Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with
