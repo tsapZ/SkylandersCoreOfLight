@@ -148,7 +148,9 @@ exe and gets out of the way while the game runs; no game needs it.
   are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
   in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
   `StartFigurePictureCache`), and the library takes each figure's picture from its own game (a Series 1 Spyro from Spyro's Adventure, a Series 2 one from Giants; the owner's wish, 2026-10-22), else the newest game's; a
-  figure no played game has a picture of gets its element's colour and first letter. The figure's
+  figure no played game has a picture of gets its element's colour and first letter. A figure that
+  was never played (its data has no play time, XP, gold or date yet, real or emulated alike) is
+  slightly greyed, "noch nie gespielt" (#15); the count says how many are played. The figure's
   hat shows by its game name, with its picture and bonuses: the games leave `hats.txt` and
   `hat-<n>.png` there too. A (Enter) on one of the owner's figures opens its **upgrade tree** as
   the games' details view has it: the attacks, basic upgrades, soul gem and Wow Pow, the two paths

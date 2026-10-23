@@ -43,6 +43,11 @@ class FiguresScreen {
     std::optional<skylanders::portal::FigureStats> stats;
     std::optional<skylanders::portal::TrapContents> trap;  // a Trap Team trap: the villain inside
     std::filesystem::path file;
+    // Ever played: its data has play time, XP, gold or a last played date (#15: a figure that
+    // never was is shown slightly greyed, real or made with the emulated portal alike).
+    bool played() const {
+      return stats && (stats->play_seconds || stats->xp || stats->gold || stats->last_played);
+    }
   };
   std::vector<const Figure*> Shown() const;
   // The figure's picture from the games' picture folders (the newest game that has one), or none.

@@ -664,7 +664,9 @@ void FiguresScreen::Draw(float width, float height) {
       selected_ = i;
     }
     const bool chosen = i == selected_;
-    const int alpha = f.owned ? 255 : 110;
+    // Not owned: faint; owned but never played: slightly greyed (#15).
+    const bool fresh = f.owned && !f.played();
+    const int alpha = !f.owned ? 110 : fresh ? 170 : 255;
     dl->AddRectFilled(a, b, chosen ? Rgba(60, 70, 140, 240) : Rgba(24, 30, 70, f.owned ? 235 : 150), 16 * u);
     // The figure's element, lightly: its colour fading in from the card's left edge.
     if (f.element != sp::Element::kNone) {
@@ -683,8 +685,9 @@ void FiguresScreen::Draw(float width, float height) {
     const ImTextureID texture = picture ? LoadTexture(*picture) : ImTextureID{};
     if (texture) {
       const float r = 32 * u;
+      const int grey = fresh ? 175 : 255;
       dl->AddImageRounded(texture, {c.x - r, c.y - r}, {c.x + r, c.y + r}, {0, 0}, {1, 1},
-                          Rgba(255, 255, 255, alpha), 10 * u);
+                          Rgba(grey, grey, grey, alpha), 10 * u);
     } else {
       const ImU32 ec = ElementColor(f.element);
       dl->AddCircleFilled(c, 26 * u, (ec & 0x00FFFFFF) | (ImU32(alpha) << 24), 32);
@@ -697,7 +700,9 @@ void FiguresScreen::Draw(float width, float height) {
     Text(dl, regular_, 15 * u, {tx0, a.y + 38 * u}, Rgba(180, 190, 215, alpha),
          Fit(regular_, 15 * u, Category(f.category, german_), tw));
     std::string line;
-    if (f.stats) {
+    if (fresh && !f.marked) {
+      line = german_ ? "noch nie gespielt" : "never played";
+    } else if (f.stats) {
       char text[64];
       std::snprintf(text, sizeof(text), german_ ? "Stufe %u  \xC2\xB7  %u Gold" : "Level %u  \xC2\xB7  %u gold",
                     unsigned(f.stats->level), unsigned(f.stats->gold));
@@ -709,7 +714,7 @@ void FiguresScreen::Draw(float width, float height) {
     } else {
       line = german_ ? "noch nicht gespielt" : "not played yet";
     }
-    Text(dl, regular_, 15 * u, {tx0, a.y + 62 * u}, f.stats ? kGold : Rgba(150, 160, 190, alpha), line);
+    Text(dl, regular_, 15 * u, {tx0, a.y + 62 * u}, f.stats && !fresh ? kGold : Rgba(150, 160, 190, alpha), line);
   }
 
   // Y / C: the chosen figure of the owner's into another profile.
@@ -888,9 +893,10 @@ void FiguresScreen::Draw(float width, float height) {
                                 : "Not in your figure folder. Do you have it anyway? Y marks it \"I own it\"."),
            w);
     }
-    if (!f.file.empty()) {
+    // The file's name at the bottom, below the rows (left out when they fill the panel).
+    if (const float file_y = std::max(y + 6 * u, bottom - 30 * u); !f.file.empty() && file_y + 16 * u <= bottom) {
       const std::u8string file = f.file.filename().u8string();
-      Text(dl, regular_, 14 * u, {x, bottom - 30 * u}, Rgba(120, 130, 160), std::string(file.begin(), file.end()), w);
+      Text(dl, regular_, 14 * u, {x, file_y}, Rgba(120, 130, 160), std::string(file.begin(), file.end()), w);
     }
   }
 
@@ -900,7 +906,11 @@ void FiguresScreen::Draw(float width, float height) {
     const int have = int(std::count_if(shown.begin(), shown.end(), [](const Figure* f) { return f->owned; }));
     std::snprintf(count, sizeof(count), german_ ? "%d von %d dabei" : "%d of %d owned", have, n);
   } else {
-    std::snprintf(count, sizeof(count), n == 1 ? (german_ ? "%d Figur" : "%d figure") : (german_ ? "%d Figuren" : "%d figures"), n);
+    const int played = int(std::count_if(shown.begin(), shown.end(), [](const Figure* f) { return f->played(); }));
+    std::snprintf(count, sizeof(count),
+                  n == 1 ? (german_ ? "%d Figur  \xC2\xB7  %d gespielt" : "%d figure  \xC2\xB7  %d played")
+                         : (german_ ? "%d Figuren  \xC2\xB7  %d gespielt" : "%d figures  \xC2\xB7  %d played"),
+                  n, played);
   }
   Text(dl, regular_, 18 * u, {left, height - 82 * u}, kDim, count);
   if (!message_.empty() && ImGui::GetTime() < message_until_) {
