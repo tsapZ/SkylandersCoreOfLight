@@ -185,8 +185,12 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
         Hat hat{line.substr(tab1 + 1, tab2 - tab1 - 1), line.substr(tab2 + 1), {}};
         const fs::path picture = dir / ("hat-" + std::to_string(number) + ".png");
         std::error_code exists_ec;
-        if (fs::exists(picture, exists_ec)) hat.picture = picture;
-        hats_[uint16_t(number)] = std::move(hat);
+        Hat& known = hats_[uint16_t(number)];
+        // A newer game's name, but an older game's picture when the newer one left none:
+        // Imaginators names 266 hats and leaves 3 of their pictures, Trap Team 35 of 245, while
+        // Swap Force and SuperChargers leave all of theirs.
+        hat.picture = fs::exists(picture, exists_ec) ? picture : known.picture;
+        known = std::move(hat);
       }
     }
   }
