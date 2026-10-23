@@ -41,9 +41,10 @@ You need:
 
 Then:
 
-1. Download the newest package from the [Releases](https://github.com/tsapZ/SkylandersCoreOfLight/releases)
-   page and unpack it anywhere. It holds the launcher and the six games' installers.
-2. Start `coreoflight.exe`. The first-run setup asks for your ISOs, one per game (it finds the
+1. Download `CoreOfLightSetup-<version>.exe` from the [Releases](https://github.com/tsapZ/SkylandersCoreOfLight/releases)
+   page and run it. It installs the launcher together with the six games' installers (no admin
+   rights needed; uninstall through Windows' Apps list).
+2. Start Core of Light. The first-run setup asks for your ISOs, one per game (it finds the
    others in the same folder by itself), checks them and installs the games.
 3. Choose a game and play. When the game asks for a Skylander, the portal menu opens by itself.
 

@@ -9,3 +9,5 @@
 *.sky
 *.dump
 **/figures/**/*.bin
+/installer/staging/
+/installer/Output/

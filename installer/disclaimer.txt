@@ -1,0 +1,14 @@
+Core of Light is a launcher for the recompiled Skylanders games (Spyro's Adventure, Giants,
+Swap Force, Trap Team, SuperChargers, Imaginators).
+
+It doesn't include any of the games or their data. You need your own Xbox 360 discs as ISO
+files; the launcher's first-run setup asks for them and checks each one.
+
+Your figures, saves and settings are kept in Documents\Skylanders and stay there when you
+uninstall. The games are apps of their own: uninstall them in Windows Settings > Apps.
+
+This is a test version and may contain bugs.
+
+This is an unofficial fan project. It is not affiliated with, endorsed by, or connected to
+Activision, Toys for Bob, or the owners of Skylanders. Skylanders and related names are
+trademarks of their owners.

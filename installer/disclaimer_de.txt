@@ -1,0 +1,14 @@
+﻿Core of Light startet die recompilierten Skylanders-Spiele (Spyro's Adventure, Giants,
+Swap Force, Trap Team, SuperChargers, Imaginators).
+
+Es enthält keins der Spiele und keine ihrer Daten. Du brauchst deine eigenen Xbox-360-Discs
+als ISO-Dateien; die Einrichtung beim ersten Start fragt danach und prüft jede.
+
+Deine Figuren, Spielstände und Einstellungen liegen in Dokumente\Skylanders und bleiben dort,
+auch beim Deinstallieren. Die Spiele sind eigene Apps: deinstallieren über
+Windows-Einstellungen > Apps.
+
+Das ist eine Testversion und kann Fehler enthalten.
+
+Ein inoffizielles Fan-Projekt, nicht mit Activision, Toys for Bob oder den Inhabern von
+Skylanders verbunden. Skylanders und die zugehörigen Namen sind Marken ihrer Inhaber.

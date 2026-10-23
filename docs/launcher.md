@@ -287,6 +287,18 @@ The exe is `out\build\release\coreoflight.exe`. It is a plain Win32 / Direct3D 1
 Dear ImGui (thirdparty/imgui, 1.92.5, the version the games' SDK uses), so it builds in seconds
 and needs neither the SDK nor the games' sources.
 
+The installer (`installer/CoreOfLight.iss`, Inno Setup 6): `tools\package_installer.ps1 -Games`
+after the release build. It stages the exe, the Visual C++ runtime DLLs from the local Visual
+Studio and, with `-Games`, the newest setup of each game from the repositories next to this one
+(`<Tools>\<Repo>\<Repo>\installer\Output`), then builds
+`installer\Output\CoreOfLightSetup-<version>.exe` with the version from `CMakeLists.txt`
+(`COREOFLIGHT_VERSION`, also in the problem report). It installs into
+`%LOCALAPPDATA%\Programs\Core of Light` without admin rights, the setups into its `games`
+folder (where the launcher looks first), and asks in English or German. Uninstalling leaves
+`Documents\Skylanders` and the games alone. Checked 2026-10-23: silent install into a scratch
+folder, the installed launcher starts into its first-run setup, silent uninstall removes it and
+its Apps entry.
+
 ## Checked (2026-10-22)
 
 - Achievements: Trap Team, run once on a copy, left 46 achievements with 46 pictures and their

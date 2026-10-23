@@ -225,8 +225,8 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   // What the PC is and which games the launcher found.
   std::string info;
   char line[256];
-  std::snprintf(line, sizeof(line), "Core of Light problem report, %04u-%02u-%02u %02u:%02u\n\n", t.wYear,
-                t.wMonth, t.wDay, t.wHour, t.wMinute);
+  std::snprintf(line, sizeof(line), "Core of Light " COREOFLIGHT_VERSION " problem report, %04u-%02u-%02u %02u:%02u\n\n",
+                t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute);
   info += line;
   info += "Windows " + WindowsVersion() + "\n";
   info += "Processor: " + ProcessorName() + "\n";
