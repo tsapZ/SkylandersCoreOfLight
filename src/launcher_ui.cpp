@@ -663,10 +663,10 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
 bool LauncherUi::Draw(float width, float height) {
   // The screen this frame will draw, in DrawScreens' order.
   const char* window = starting_                       ? "starting"
+                       : hub_update_ && !hub_update_put_off_ ? "hubupdate"
                        : setup_.is_open()              ? "setup"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
-                       : hub_update_ && !hub_update_put_off_ ? "hubupdate"
                        : crash_code_ != 0              ? "crash"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
@@ -1146,7 +1146,9 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
 bool LauncherUi::DrawScreens(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
   if (starting_) return DrawStarting(width, height);
-  if (hub_update_ && !hub_update_put_off_ && !setup_.is_open() && ask_update_ < 0 && !confirm_quit_) {
+  // A newer launcher first, before the first-run setup too: the newest one sets the games up.
+  if (hub_update_ && !hub_update_put_off_ && ask_update_ < 0 && !confirm_quit_ && !install_process_ &&
+      !import_.running()) {
     return DrawHubUpdate(width, height);
   }
   if (setup_.is_open()) {
