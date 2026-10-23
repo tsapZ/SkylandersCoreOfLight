@@ -248,7 +248,10 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   }
 }
 
-bool ContinueSupported(const Game& game) { return std::string_view(game.key) == "swapforce"; }
+bool ContinueSupported(const Game& game) {
+  const std::string_view key = game.key;
+  return key == "swapforce" || key == "superchargers";
+}
 
 bool StartGame(const Found& game, std::wstring& error, void** process, const std::wstring& extra) {
   STARTUPINFOW startup = {sizeof(startup)};

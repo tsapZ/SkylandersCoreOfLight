@@ -1139,8 +1139,16 @@ bool LauncherUi::DrawScreens(float width, float height) {
   const size_t per_row = two_rows ? 3 : n;
   const float gap = 22 * u;
   const float area_w = width - 96 * u;
-  const float card_w = std::min((area_w - gap * (per_row - 1)) / per_row, 300 * u);
-  const float card_h = two_rows ? card_w * 1.25f : card_w * 1.9f;
+  float card_w = std::min((area_w - gap * (per_row - 1)) / per_row, 300 * u);
+  float card_h = two_rows ? card_w * 1.25f : card_w * 1.9f;
+  // On a window wider than 16:9 (ultrawide) or a tall one the width alone would make the cards
+  // taller than the room between the title row (with the Weiterspielen tile) and the hints at the
+  // bottom; there the height decides, the cards keep their shape.
+  const float room_h = (height - 380 * u - (two_rows ? gap : 0.0f)) / (two_rows ? 2.0f : 1.0f);
+  if (room_h > 0 && card_h > room_h) {
+    card_w *= room_h / card_h;
+    card_h = room_h;
+  }
   const float rows_h = two_rows ? 2 * card_h + gap : card_h;
   const float x0 = (width - (card_w * per_row + gap * (per_row - 1))) * 0.5f;
   const float y0 = 150 * u + (height - 230 * u - 150 * u - rows_h) * 0.5f;

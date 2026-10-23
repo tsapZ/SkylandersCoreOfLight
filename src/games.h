@@ -76,9 +76,11 @@ void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_
 bool StartGame(const Found& game, std::wstring& error, void** process, const std::wstring& extra = {});
 
 // Whether "Weiterspielen" (#16, skylanders-portal continue_game) brings the game into its last
-// save: only where its save slot screen starts on the save played last (Swap Force; checked with a
-// real save 2026-10-23). Spyro's Adventure's and Giants' start on slot 1, where A begins a new game
-// in an empty slot; Trap Team, SuperChargers and Imaginators aren't checked with a real save yet.
+// save: only where its save slot screen starts on the save played last. Swap Force's does (checked
+// with a real save 2026-10-23), SuperChargers' too (saves in slots 1 and 2, slot 2 played last: the
+// book opens on Speicherplatz 2, and Weiterspielen got into it). Spyro's Adventure, Giants, Trap
+// Team and Imaginators start on slot 1 whichever was played last (checked the same way), where A
+// begins a new game in an empty slot or loads the wrong save.
 bool ContinueSupported(const Game& game);
 
 // Installing a game from the launcher (the owner's wish, 2026-10-23): its own setup
