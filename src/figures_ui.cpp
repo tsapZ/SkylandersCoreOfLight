@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 #include <set>
 #include <string_view>
 #include <system_error>
@@ -554,9 +555,11 @@ void FiguresScreen::Draw(float width, float height) {
   DrawBackdrop(dl, width, height,
                tab_ > 0 && tab_ <= int(std::size(kGames)) ? GameBackground(size_t(tab_ - 1)) : fs::path(), true);
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim,
-       tree_ ? (german_ ? "UPGRADES" : "UPGRADES") : (german_ ? "FIGUREN" : "FIGURES"));
+       tree_ ? (german_ ? "UPGRADES" : "UPGRADES") : board_ ? (german_ ? "FIGUREN" : "FIGURES")
+                                                        : (german_ ? "FIGUREN" : "FIGURES"));
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold,
        tree_ ? tree_figure_.name
+       : board_ ? std::string(german_ ? "Rangliste" : "Leaderboard")
        : tab_ == 1 + int(std::size(kGames))
            ? (all_ ? (german_ ? "Alle Magischen Objekte" : "Every magic item")
                    : (german_ ? "Meine Magischen Objekte" : "My magic items"))
@@ -571,6 +574,18 @@ void FiguresScreen::Draw(float width, float height) {
   }
   if (copying_) {
     DrawCopy(width, height, u);
+    ImGui::End();
+    return;
+  }
+  if (board_) {
+    DrawBoard(width, height, u);
+    ImGui::End();
+    return;
+  }
+  // Back / R: the Rangliste of the profile's figures (#13).
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+    board_ = true;
+    board_scroll_ = 0;
     ImGui::End();
     return;
   }
@@ -931,8 +946,193 @@ void FiguresScreen::Draw(float width, float height) {
               : f.marked      ? (german_ ? "Hab ich nicht" : "I don't own it")
                               : (german_ ? "Hab ich" : "I own it"));
   }
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Rangliste" : "Leaderboard");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   ImGui::End();
+}
+
+void FiguresScreen::DrawBoard(float width, float height, float u) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) ||
+      ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+    board_ = false;
+    return;
+  }
+  // The profile's figures with progress (their files'), the Skylanders only.
+  std::vector<const Figure*> mine;
+  for (const Figure& f : owned_) {
+    if (f.stats && !f.file.empty() && f.element != sp::Element::kNone) mine.push_back(&f);
+  }
+  struct List {
+    const char *de, *en;
+  };
+  static constexpr List kLists[] = {
+      {"Spielzeit", "Play time"},         {"Gold", "Gold"},
+      {"Level", "Level"},                 {"Upgrades", "Upgrades"},
+      {"Heldenpunkte", "Hero points"},    {"Zuletzt gespielt", "Last played"},
+      {"Bester pro Element", "Best of each element"},
+  };
+  constexpr int kCount = int(std::size(kLists));
+  if (pressed(ImGuiKey_GamepadL1) || pressed(ImGuiKey_Q) || pressed(ImGuiKey_PageUp)) {
+    board_list_ = (board_list_ + kCount - 1) % kCount;
+    board_scroll_ = 0;
+  }
+  if (pressed(ImGuiKey_GamepadR1) || pressed(ImGuiKey_E) || pressed(ImGuiKey_PageDown)) {
+    board_list_ = (board_list_ + 1) % kCount;
+    board_scroll_ = 0;
+  }
+  // The list: each figure with the value it is ranked by and how that reads.
+  struct Entry {
+    const Figure* f;
+    double value;
+    std::string text, label;
+  };
+  std::vector<Entry> entries;
+  char text[96];
+  for (const Figure* f : mine) {
+    const sp::FigureStats& s = *f->stats;
+    switch (board_list_) {
+      case 0:
+        if (s.play_seconds) entries.push_back({f, double(s.play_seconds), PlayTime(s.play_seconds, german_), {}});
+        break;
+      case 1:
+        std::snprintf(text, sizeof(text), "%u Gold", unsigned(s.gold));
+        if (s.gold) entries.push_back({f, double(s.gold), text, {}});
+        break;
+      case 2:
+        std::snprintf(text, sizeof(text), german_ ? "Stufe %u  " "\xC2\xB7" "  %u XP" : "Level %u  " "\xC2\xB7" "  %u XP",
+                      unsigned(s.level), unsigned(s.xp));
+        if (s.xp) entries.push_back({f, double(s.xp), text, {}});
+        break;
+      case 3:
+        std::snprintf(text, sizeof(text), "%d", sp::UpgradeCount(s));
+        if (sp::UpgradeCount(s)) entries.push_back({f, double(sp::UpgradeCount(s)), text, {}});
+        break;
+      case 4:
+        std::snprintf(text, sizeof(text), "%u / 100", unsigned(s.hero_points));
+        if (s.hero_points) entries.push_back({f, double(s.hero_points), text, {}});
+        break;
+      case 5:
+        if (s.last_played) {
+          std::snprintf(text, sizeof(text), "%02u.%02u.%04u", unsigned(s.last_played->day),
+                        unsigned(s.last_played->month), unsigned(s.last_played->year));
+          entries.push_back({f, double(s.last_played->year) * 10000 + s.last_played->month * 100 + s.last_played->day,
+                             text, {}});
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  if (board_list_ == 6) {
+    // Each element's figure with the most XP.
+    for (int e = int(sp::Element::kMagic); e <= int(sp::Element::kDark); ++e) {
+      const Figure* best = nullptr;
+      for (const Figure* f : mine) {
+        if (int(f->element) == e && f->stats->xp && (!best || f->stats->xp > best->stats->xp)) best = f;
+      }
+      if (!best) continue;
+      std::snprintf(text, sizeof(text), german_ ? "Stufe %u  " "\xC2\xB7" "  %u XP" : "Level %u  " "\xC2\xB7" "  %u XP",
+                    unsigned(best->stats->level), unsigned(best->stats->xp));
+      const sp::Element el = sp::Element(e);
+      entries.push_back({best, double(100 - e), text,
+                         german_ ? std::string(ElementDe(el)) : std::string(sp::ElementName(el))});
+    }
+  }
+  std::stable_sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) { return a.value > b.value; });
+
+  // The profile in one line: time and gold over all its figures, the element played most.
+  {
+    uint64_t seconds = 0, gold = 0;
+    std::map<sp::Element, uint64_t> by_element;
+    for (const Figure* f : mine) {
+      seconds += f->stats->play_seconds;
+      gold += f->stats->gold;
+      by_element[f->element] += f->stats->play_seconds;
+    }
+    std::string favourite;
+    uint64_t most = 0;
+    for (const auto& [el, s] : by_element) {
+      if (s > most) {
+        most = s;
+        favourite = german_ ? ElementDe(el) : std::string(sp::ElementName(el));
+      }
+    }
+    std::string line = (german_ ? "Gesamt: " : "In all: ") + PlayTime(uint32_t(std::min<uint64_t>(seconds, UINT32_MAX)), german_) +
+                       "  " "\xC2\xB7" "  " + std::to_string(gold) + " Gold";
+    if (!favourite.empty()) line += std::string("  " "\xC2\xB7" "  ") + (german_ ? "Lieblingselement: " : "Favourite element: ") + favourite;
+    Text(dl, regular_, 20 * u, {48 * u, 112 * u}, kDim, line);
+  }
+  // The lists as tabs.
+  const float left = 48 * u, right = width - 48 * u;
+  float tx = left;
+  const float ty = 146 * u;
+  for (int i = 0; i < kCount; ++i) {
+    const std::string name = german_ ? kLists[i].de : kLists[i].en;
+    const float w = TextWidth(bold_, 18 * u, name) + 26 * u;
+    if (tx + w > right) break;
+    const bool on = i == board_list_;
+    dl->AddRectFilled({tx, ty}, {tx + w, ty + 34 * u}, on ? kGold : Rgba(30, 38, 80), 17 * u);
+    Text(dl, bold_, 18 * u, {tx + 13 * u, ty + 6 * u}, on ? Rgba(60, 35, 0) : kDim, name);
+    tx += w + 8 * u;
+  }
+  // The ranks.
+  const float top = 196 * u, row_h = 56 * u, bottom = height - 96 * u;
+  const int visible = std::max(1, int((bottom - top) / (row_h + 6 * u)));
+  const int n = int(entries.size());
+  if (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
+    board_scroll_ = std::min(std::max(0, n - visible), board_scroll_ + 1);
+  }
+  if (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
+    board_scroll_ = std::max(0, board_scroll_ - 1);
+  }
+  if (ImGui::GetIO().MouseWheel != 0) {
+    board_scroll_ = std::clamp(board_scroll_ - int(ImGui::GetIO().MouseWheel), 0, std::max(0, n - visible));
+  }
+  if (!n) {
+    Text(dl, regular_, 22 * u, {left, top + 10 * u}, kDim,
+         german_ ? "Noch keine Figur mit Fortschritt: einmal spielen, dann steht sie hier."
+                 : "No figure with progress yet: play one, then it shows here.");
+  }
+  static const ImU32 kMedals[] = {Rgba(255, 204, 64), Rgba(200, 210, 225), Rgba(205, 127, 50)};
+  for (int i = board_scroll_; i < n && i < board_scroll_ + visible; ++i) {
+    const Entry& en = entries[size_t(i)];
+    const float y = top + (i - board_scroll_) * (row_h + 6 * u);
+    dl->AddRectFilled({left, y}, {right, y + row_h}, kPanel, 12 * u);
+    if (en.f->element != sp::Element::kNone) {
+      dl->AddRectFilled({left, y}, {left + 8 * u, y + row_h}, ElementColor(en.f->element), 12 * u,
+                        ImDrawFlags_RoundCornersLeft);
+    }
+    // The place: a medal for the first three.
+    const ImVec2 mc{left + 44 * u, y + row_h * 0.5f};
+    char place[8];
+    std::snprintf(place, sizeof(place), "%d", i + 1);
+    if (i < 3 && board_list_ != 6) {
+      dl->AddCircleFilled(mc, 19 * u, kMedals[i]);
+      Text(dl, bold_, 20 * u, {mc.x - TextWidth(bold_, 20 * u, place) * 0.5f, mc.y - 12 * u}, Rgba(40, 30, 10), place);
+    } else if (board_list_ != 6) {
+      Text(dl, bold_, 20 * u, {mc.x - TextWidth(bold_, 20 * u, place) * 0.5f, mc.y - 12 * u}, kDim, place);
+    }
+    const ImVec2 pc{left + 104 * u, y + row_h * 0.5f};
+    const fs::path* picture = Picture(*en.f);
+    if (const ImTextureID texture = picture ? LoadTexture(*picture) : ImTextureID{}) {
+      const float r = 24 * u;
+      dl->AddImageRounded(texture, {pc.x - r, pc.y - r}, {pc.x + r, pc.y + r}, {0, 0}, {1, 1}, kWhite, 8 * u);
+    }
+    float nx = left + 144 * u;
+    if (!en.label.empty()) {
+      Text(dl, bold_, 20 * u, {nx, y + 16 * u}, ElementColor(en.f->element), en.label);
+      nx += 150 * u;
+    }
+    Text(dl, bold_, 21 * u, {nx, y + 7 * u}, kWhite, Fit(bold_, 21 * u, en.f->name, right - nx - 320 * u));
+    Text(dl, regular_, 15 * u, {nx, y + 32 * u}, kDim, Fit(regular_, 15 * u, en.f->game, right - nx - 320 * u));
+    Text(dl, bold_, 21 * u, {right - 20 * u - TextWidth(bold_, 21 * u, en.text), y + 16 * u}, kGold, en.text);
+  }
+  float hx = left;
+  const float hy = height - 52 * u;
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Liste" : "List");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur" "\xC3\xBC" "ck" : "Back");
 }
 
 void FiguresScreen::DrawCopy(float width, float height, float u) {

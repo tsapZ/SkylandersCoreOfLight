@@ -103,6 +103,11 @@ class FiguresScreen {
   // Y on one of the owner's figures: its file copied, as it is, into another profile's figure
   // folder (profiles.h), the same sub-folder, a new name if one is there already.
   void DrawCopy(float width, float height, float u);
+  // The Rangliste (#13): the profile's figures ranked, one list at a time (Back / R).
+  void DrawBoard(float width, float height, float u);
+  bool board_ = false;
+  int board_list_ = 0;
+  int board_scroll_ = 0;
   bool copying_ = false;
   std::vector<Profile> copy_targets_;
   int copy_target_ = 0;

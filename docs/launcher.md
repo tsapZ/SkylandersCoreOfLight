@@ -150,7 +150,11 @@ exe and gets out of the way while the game runs; no game needs it.
   `StartFigurePictureCache`), and the library takes each figure's picture from its own game (a Series 1 Spyro from Spyro's Adventure, a Series 2 one from Giants; the owner's wish, 2026-10-22), else the newest game's; a
   figure no played game has a picture of gets its element's colour and first letter. A figure that
   was never played (its data has no play time, XP, gold or date yet, real or emulated alike) is
-  slightly greyed, "noch nie gespielt" (#15); the count says how many are played. The figure's
+  slightly greyed, "noch nie gespielt" (#15); the count says how many are played.
+  Back (R) opens the **Rangliste** (#13): the profile's Skylanders ranked by play time, gold,
+  level (XP), upgrades, hero points, last played, and the best of each element, LB / RB to
+  switch, medals for the first three, a line with the profile's total time and gold and the
+  element played most. All from the figure files (the games keep each figure's play time on it). The figure's
   hat shows by its game name, with its picture and bonuses: the games leave `hats.txt` and
   `hat-<n>.png` there too. A (Enter) on one of the owner's figures opens its **upgrade tree** as
   the games' details view has it: the attacks, basic upgrades, soul gem and Wow Pow, the two paths
