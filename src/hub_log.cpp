@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <mutex>
 
 namespace coreoflight {
 
@@ -16,6 +17,8 @@ fs::path HubLogFile() {
 }
 
 void HubLog(const std::string& line) {
+  static std::mutex mutex;  // the disc import writes from its own thread
+  std::lock_guard lock(mutex);
   const fs::path file = HubLogFile();
   if (file.empty()) return;
   std::error_code ec;

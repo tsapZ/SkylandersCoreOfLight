@@ -26,6 +26,8 @@ if (-not (Test-Path $exe)) { throw "$exe is missing: build the release first" }
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 New-Item -ItemType Directory -Force (Join-Path $staging "games") | Out-Null
 Copy-Item $exe $staging
+# The launcher's fallback font (Noto Sans, SIL OFL) for where Windows' Segoe UI isn't there (Wine / Proton).
+Copy-Item -Recurse (Join-Path $repo "fonts") (Join-Path $staging "fonts")
 
 # The CRT DLLs of the newest MSVC redist folder of any Visual Studio 2022 edition.
 $crt = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" -Directory -ErrorAction SilentlyContinue |

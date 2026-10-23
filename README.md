@@ -159,6 +159,9 @@ Windows, Visual Studio 2022 (C++), CMake and Ninja, from the **x64 Native Tools 
   fork with the shared menus on top. Submodule; keeps its own license.
 - **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut draws the launcher. Submodule
   (MIT).
+- **[Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)** by the Noto Project Authors, the
+  font where Windows' Segoe UI isn't there (Wine / Proton), in `fonts/` (SIL Open Font License,
+  `fonts/OFL.txt`).
 - Figure save-data decoding builds on public reverse-engineering of the Skylanders NFC format,
   among others **[SkyReader](https://github.com/reedstrm/SkyReader)**.
 - Reading the Xbox discs follows the XDVDFS format as [extract-xiso](https://github.com/XboxDev/extract-xiso)

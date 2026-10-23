@@ -574,7 +574,7 @@ void SetupScreen::Advance(const Launcher& launcher) {
     if (found[i].exe.empty()) {
       if (!launcher.setups || i >= launcher.setups->size() || (*launcher.setups)[i].empty()) {
         r.state = State::kFailed;
-        r.note = german_ ? "Kein Setup im Ordner games neben Core of Light" : "No setup in the games folder next to Core of Light";
+        r.note = german_ ? "Kein Setup gefunden (keine Verbindung zu GitHub?)" : "No setup found (no connection to GitHub?)";
         current_ = -1;
         continue;
       }

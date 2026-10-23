@@ -7,7 +7,7 @@ project(coreoflight LANGUAGES CXX RC)
 
 # The launcher's version: the problem report names it, tools/package_installer.ps1 builds the
 # installer with it, and updates from GitHub Releases (#17) will compare against it.
-set(COREOFLIGHT_VERSION "0.2.0-beta.1")
+set(COREOFLIGHT_VERSION "0.2.0-beta.2")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,6 +69,9 @@ target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_L
                                                IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
                                                COREOFLIGHT_VERSION="${COREOFLIGHT_VERSION}")
 target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
+# The fallback font next to the exe (main.cpp LoadFont: where Segoe UI isn't there, under Wine).
+add_custom_command(TARGET coreoflight POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:coreoflight>/fonts)
 if(MSVC)
   target_compile_options(coreoflight PRIVATE /W3 /utf-8)
 endif()

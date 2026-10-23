@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cwchar>
+#include <cwctype>
 #include <iterator>
 #include <fstream>
 #include <optional>
@@ -15,6 +16,7 @@
 #include <unordered_map>
 
 #include "portal/figure_catalog.h"
+#include "hub_log.h"  // WineVersion
 #include "profiles.h"
 
 namespace coreoflight {
@@ -309,6 +311,34 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
 }
 
 void SetInstallDir(const fs::path& dir) { g_install_dir = dir; }
+
+namespace {
+
+// Volume and file id of a folder, to tell whether two paths are the same folder.
+bool FolderId(const fs::path& dir, BY_HANDLE_FILE_INFORMATION& info) {
+  const HANDLE h = CreateFileW(dir.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                               OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+  if (h == INVALID_HANDLE_VALUE) return false;
+  const bool ok = GetFileInformationByHandle(h, &info) != 0;
+  CloseHandle(h);
+  return ok;
+}
+
+}  // namespace
+
+fs::path RealFolder(const fs::path& dir) {
+  if (WineVersion().empty()) return dir;
+  const std::wstring text = dir.wstring();
+  std::wstring lower = text;
+  std::transform(lower.begin(), lower.end(), lower.begin(), [](wchar_t c) { return wchar_t(std::towlower(c)); });
+  if (!lower.starts_with(L"z:\\home\\")) return dir;
+  const fs::path real = fs::path(L"Z:\\var\\home\\" + text.substr(8));
+  BY_HANDLE_FILE_INFORMATION a = {}, b = {};
+  if (!FolderId(dir, a) || !FolderId(real, b)) return dir;
+  const bool same = a.dwVolumeSerialNumber == b.dwVolumeSerialNumber && a.nFileIndexHigh == b.nFileIndexHigh &&
+                    a.nFileIndexLow == b.nFileIndexLow;
+  return same ? real : dir;
+}
 
 fs::path GamesFolder() { return g_install_dir.empty() ? KnownFolder(FOLDERID_LocalAppData) / "Programs" : g_install_dir; }
 

@@ -10,6 +10,7 @@
 #include <optional>
 #include <thread>
 
+#include "hub_log.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -143,7 +144,11 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
         shared->message = text;
       }
       shared->phase = phase;
+      // Every step in the launcher's log, so a report says why a disc wasn't set up (a colleague's
+      // under Wine: "many errors", none of the texts in the report).
+      HubLog("disc import: " + text);
     };
+    HubLog("disc import: " + std::string(reinterpret_cast<const char*>(iso.u8string().c_str())));
     // A folder with an unpacked disc, or an ISO.
     std::error_code ec;
     const bool folder = fs::is_directory(iso, ec);
@@ -244,9 +249,9 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
           ok = false;
           break;
         }
-        fs::create_directories((rom / relative).parent_path(), ec);
+        MakeDirs((rom / relative).parent_path());
         if (!fs::copy_file(iso / relative, rom / relative, fs::copy_options::overwrite_existing, ec)) {
-          error = (german ? "kann nicht kopieren: " : "cannot copy: ") + relative.string();
+          error = (german ? "kann nicht kopieren: " : "cannot copy: ") + relative.string() + " (" + ec.message() + ")";
           ok = false;
           break;
         }

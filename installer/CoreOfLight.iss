@@ -63,6 +63,9 @@ Source: "staging\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; The Visual C++ runtime next to the exe (copied from the maintainer's Visual Studio install by
 ; the packaging script, redistributable under Microsoft's VC++ Redistributable license).
 Source: "staging\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+; The fallback font where Windows' Segoe UI isn't there (Wine / Proton): Noto Sans, SIL Open Font
+; License (fonts\OFL.txt).
+Source: "staging\fonts\*"; DestDir: "{app}\fonts"; Flags: ignoreversion
 Source: "staging\games\*.exe"; DestDir: "{app}\games"; Flags: ignoreversion skipifsourcedoesntexist
 
 [InstallDelete]

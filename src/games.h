@@ -89,6 +89,10 @@ bool StartGame(const Found& game, std::wstring& error, void** process);
 // goes to <library>\<app name>, else to the setup's own default. The log is
 // %TEMP%\CoreOfLight\<key>-setup.log.
 void SetInstallDir(const std::filesystem::path& dir);
+// Under Wine a folder below Z:\home\ as its real place Z:\var\home\... when both are the same
+// folder (Fedora Atomic systems such as Bazzite link /home to /var/home; through the link the
+// discs couldn't be unpacked, 2026-10-24); else `dir` as it is.
+std::filesystem::path RealFolder(const std::filesystem::path& dir);
 // The folder new games go into (each into its own folder there): the one set, else
 // %LOCALAPPDATA%\Programs, as its setups do by default.
 std::filesystem::path GamesFolder();

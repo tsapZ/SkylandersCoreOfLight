@@ -186,13 +186,28 @@ std::filesystem::path LauncherDir() {
   return std::filesystem::path(std::wstring(path, n)).parent_path();
 }
 
-ImFont* LoadFont(ImGuiIO& io, const wchar_t* file) {
+// Windows' own font (Segoe UI), else the one in the launcher's fonts folder (Noto Sans, SIL OFL):
+// under Wine / Proton there is no Segoe UI, and Dear ImGui's built-in pixel font made the cards'
+// lines run into each other (a colleague's Bazzite, 2026-10-24).
+bool g_own_font = false;  // --own_font: the launcher's own font even where Segoe UI is (to see it)
+
+ImFont* LoadFont(ImGuiIO& io, const wchar_t* windows_file, const wchar_t* own_file) {
   wchar_t windows[MAX_PATH];
   GetWindowsDirectoryW(windows, MAX_PATH);
-  const std::filesystem::path path = std::filesystem::path(windows) / "Fonts" / file;
-  std::error_code ec;
-  if (!std::filesystem::exists(path, ec)) return nullptr;
-  return io.Fonts->AddFontFromFileTTF(path.string().c_str(), 32.0f);
+  for (const std::filesystem::path& path :
+       {std::filesystem::path(windows) / "Fonts" / windows_file, LauncherDir() / "fonts" / own_file}) {
+    std::error_code ec;
+    if (g_own_font && path.parent_path().filename() == "Fonts") continue;
+    if (!std::filesystem::exists(path, ec)) continue;
+    // The atlas reads the file by its UTF-8 name (the launcher folder may have any characters).
+    const std::u8string u8 = path.u8string();
+    if (ImFont* font = io.Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(u8.c_str()), 32.0f)) {
+      coreoflight::HubLog("font: " + std::string(reinterpret_cast<const char*>(path.filename().u8string().c_str())));
+      return font;
+    }
+  }
+  coreoflight::HubLog("font: none found, Dear ImGui's own");
+  return nullptr;
 }
 
 }  // namespace
@@ -224,6 +239,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       } else if (arg == L"--no_game_art") {
         // Screenshots to show: none of the games' pictures (textures.h).
         coreoflight::SetNoGameArt(true);
+      } else if (arg == L"--own_font") {
+        g_own_font = true;  // the fallback font (Noto Sans) as under Wine
       } else if (arg == L"--offline") {
         // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
         coreoflight::SetOffline(true);
@@ -258,8 +275,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_NavEnableKeyboard;
   ImGui_ImplWin32_Init(hwnd);
   ImGui_ImplDX11_Init(g_device, g_context);
-  ImFont* regular = LoadFont(io, L"segoeui.ttf");
-  ImFont* bold = LoadFont(io, L"segoeuib.ttf");
+  ImFont* regular = LoadFont(io, L"segoeui.ttf", L"NotoSans-Regular.ttf");
+  ImFont* bold = LoadFont(io, L"segoeuib.ttf", L"NotoSans-Bold.ttf");
   if (!regular) regular = io.Fonts->AddFontDefault();
   if (!bold) bold = regular;
 

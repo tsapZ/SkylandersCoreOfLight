@@ -152,6 +152,7 @@ void FileBrowser::List(const fs::path& folder) {
       const DWORD length = GetEnvironmentVariableW(L"WINEHOMEDIR", home, MAX_PATH);
       std::wstring path(home, length < MAX_PATH ? length : 0);
       if (path.starts_with(L"\\??\\")) path = path.substr(4);
+      if (!path.empty()) path = RealFolder(fs::path(path)).wstring();  // Z:\var\home rather than the /home link
       std::error_code ec;
       if (!path.empty() && fs::is_directory(path, ec)) {
         entries_.push_back({Entry::Kind::kPlace, german_ ? "Linux: Pers\xC3\xB6nlicher Ordner  " + Utf8(fs::path(path))

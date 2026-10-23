@@ -52,4 +52,14 @@ class XisoImage {
 // SHA-256 of a buffer, lower-case hex (Windows' CNG).
 std::string Sha256Hex(const void* data, size_t size);
 
+// The folders up to `dir` made one by one, an existing one (also a link) taken as it is; false
+// when `dir` isn't a folder afterwards. In place of std::filesystem::create_directories, which
+// checks each existing part: under Wine a Linux symlink such as Bazzite's /home -> /var/home may
+// not pass that, and nothing could be unpacked below it (a colleague's games folder, 2026-10-24;
+// C: worked, Z:\home\... didn't).
+bool MakeDirs(const std::filesystem::path& dir);
+
+// The text of the last Windows error, with its number, for a log.
+std::string LastErrorText();
+
 }  // namespace coreoflight

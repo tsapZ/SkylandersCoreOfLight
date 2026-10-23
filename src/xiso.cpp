@@ -124,12 +124,42 @@ bool XisoImage::Read(const Entry& entry, std::vector<uint8_t>& out) {
   return ReadAt(entry.offset, out.data(), out.size());
 }
 
+bool MakeDirs(const fs::path& dir) {
+  const std::wstring path = dir.wstring();
+  // Each prefix that ends before a separator, then the whole path; the drive ("Z:") and a UNC
+  // server part are left alone (they exist or nothing can be made).
+  for (size_t i = 1; i <= path.size(); ++i) {
+    if (i < path.size() && path[i] != L'\\' && path[i] != L'/') continue;
+    const std::wstring part = path.substr(0, i);
+    if (part.size() <= 3 && part.size() >= 2 && part[1] == L':') continue;
+    if (part.starts_with(L"\\\\") && std::count(part.begin(), part.end(), L'\\') <= 3) continue;
+    if (GetFileAttributesW(part.c_str()) != INVALID_FILE_ATTRIBUTES) continue;  // there: as it is
+    CreateDirectoryW(part.c_str(), nullptr);
+  }
+  const DWORD attributes = GetFileAttributesW(path.c_str());
+  return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+std::string LastErrorText() {
+  const DWORD code = GetLastError();
+  char text[256] = "";
+  FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, code,
+                 MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), text, sizeof(text), nullptr);
+  std::string out = text;
+  while (!out.empty() && (out.back() == '\n' || out.back() == '\r' || out.back() == ' ')) out.pop_back();
+  return "Windows error " + std::to_string(code) + (out.empty() ? "" : ": " + out);
+}
+
 bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, uint64_t)>& progress,
                         std::string& error, const std::string& skip_folder) {
   const uint64_t total = total_size(skip_folder);
   uint64_t done = 0;
   std::error_code ec;
-  fs::create_directories(to, ec);
+  if (!MakeDirs(to)) {
+    error = "cannot make the folder " + std::string(reinterpret_cast<const char*>(to.u8string().c_str())) + " (" +
+            LastErrorText() + ")";
+    return false;
+  }
   std::vector<char> buffer(size_t(4) << 20);
   // default.xex last: the launcher and the game take a folder with it as a complete disc, so one
   // left half done (the launcher closed, the disk full) never looks ready.
@@ -155,13 +185,16 @@ bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, u
     const Entry& e = *entry;
     const fs::path target = to / fs::path(std::u8string(reinterpret_cast<const char8_t*>(e.path.data()), e.path.size()));
     if (e.directory) {
-      fs::create_directories(target, ec);
+      MakeDirs(target);
       continue;
     }
-    fs::create_directories(target.parent_path(), ec);
+    if (!MakeDirs(target.parent_path())) {
+      error = "cannot make the folder for " + e.path + " (" + LastErrorText() + ")";
+      return false;
+    }
     std::ofstream out(target, std::ios::binary | std::ios::trunc);
     if (!out) {
-      error = "cannot write " + e.path;
+      error = "cannot write " + e.path + " (" + LastErrorText() + ")";
       return false;
     }
     uint64_t left = e.size, at = e.offset;

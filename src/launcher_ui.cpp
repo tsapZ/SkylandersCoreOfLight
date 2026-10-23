@@ -107,7 +107,8 @@ void LauncherUi::ApplyHubSettings() {
   german_ = HubGerman(hub_);
   // The games' folder chosen in the setup, unless the command line or coreoflight.ini set one.
   if (!hub_.games_dir.empty() && !GamesFolderChosen()) {
-    SetInstallDir(std::filesystem::path(std::u8string(hub_.games_dir.begin(), hub_.games_dir.end())));
+    // Under Wine through Z:\var\home rather than the /home link (RealFolder).
+    SetInstallDir(RealFolder(std::filesystem::path(std::u8string(hub_.games_dir.begin(), hub_.games_dir.end()))));
   }
   settings_.Init(regular_, bold_, german_);
   hub_screen_.Init(regular_, bold_, german_);
@@ -550,7 +551,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
         DrawPlatinumTrophy(dl, x + 22 * s + TextWidth(regular_, 21 * s, line.c_str()) + 16 * s, ly + 11 * s, 22 * s,
                            true);
       }
-      ly += 24 * s;
+      // A line that wraps (a wider font, Noto Sans under Wine) pushes the next one down.
+      const float height = regular_->CalcTextSizeA(21 * s, FLT_MAX, w - 44 * s, line.c_str()).y;
+      ly += std::max(24 * s, height + 3 * s);
     }
   }
   // The disc's state.
@@ -1265,7 +1268,9 @@ void LauncherUi::DrawUpdateAll(float width, float u) {
 }
 
 // The games folder chosen in the folder browser: set, saved, the games looked for there.
-void LauncherUi::ApplyGamesFolder(const std::filesystem::path& dir) {
+void LauncherUi::ApplyGamesFolder(const std::filesystem::path& chosen) {
+  const std::filesystem::path dir = RealFolder(chosen);  // Z:\home\... under Wine: its real place
+  HubLog("games folder: " + std::string(reinterpret_cast<const char*>(dir.u8string().c_str())));
   SetInstallDir(dir);
   std::error_code ec;
   std::filesystem::create_directories(HubSettingsFile().parent_path(), ec);  // a first start: not there yet

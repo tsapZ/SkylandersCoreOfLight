@@ -206,6 +206,13 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Its own log**, `%LOCALAPPDATA%\CoreOfLight\coreoflight.log` (`src/hub_log.cpp`): the start
   (version, Windows or Wine), each game's start and end, the window's focus, the pads coming and
   going and the first press after a game; "Problem melden" takes it along.
+- **Under Wine / Proton** (a colleague's Bazzite, 2026-10-24): the font is Noto Sans from the
+  launcher's `fonts` folder where Windows' Segoe UI isn't there (Dear ImGui's pixel font made the
+  cards' lines run into each other; `--own_font` shows it on Windows too). A games folder below
+  `Z:\home\` is taken as its real place `Z:\var\home\...` when both are the same folder
+  (Fedora Atomic links /home to /var/home), and the disc is unpacked with folders made one by one
+  (an existing one taken as it is): through the link no disc could be set up, the C: drive
+  worked. Each step of a disc import and its error with the Windows error go into the log.
 - **`--offline`**: no releases, no check, nothing downloaded or installed (scripted tests; one
   without it once installed two real games into a scratch folder). Games installed from the
   launcher get no desktop shortcut each (`/MERGETASKS=!desktopicon`).
