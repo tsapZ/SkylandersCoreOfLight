@@ -69,6 +69,10 @@ class SetupScreen {
   void DrawWelcome(float width, float height);
   void DrawDiscs(float width, float height, const Launcher& launcher);
   void DrawWork(float width, float height, const Launcher& launcher);
+  // Where the games go: %LOCALAPPDATA%\Programs, or "Skylanders Recompiled" on another fixed drive,
+  // switched with left / right (or A) on its row below the games and kept in the hub's settings.
+  void FindGameFolders();
+  void ChooseGameFolder(int choice);
 
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;
@@ -77,6 +81,8 @@ class SetupScreen {
   Page page_ = Page::kWelcome;
   int selected_ = 0;
   std::vector<Row> rows_;  // one per game, in AllGames() order
+  std::vector<std::filesystem::path> folders_;  // [0] empty: the default
+  int folder_ = 0;
   std::shared_ptr<DiscSearch> search_;
   size_t taken_ = 0;  // the search's results looked at so far
   int current_ = -1;  // the game being set up (kWork)

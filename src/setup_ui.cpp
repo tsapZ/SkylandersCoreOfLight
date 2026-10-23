@@ -11,6 +11,8 @@
 #include <system_error>
 #include <utility>
 
+#include "game_settings.h"
+#include "hub_settings.h"
 #include "imgui.h"
 #include "nxe_art.h"
 #include "xiso.h"
@@ -135,6 +137,39 @@ void SetupScreen::Open() {
   current_ = -1;
   stopping_ = false;
   job_ = {};
+  FindGameFolders();
+}
+
+void SetupScreen::FindGameFolders() {
+  folders_ = {std::filesystem::path()};
+  folder_ = 0;
+  wchar_t windows[MAX_PATH] = L"";
+  GetWindowsDirectoryW(windows, MAX_PATH);
+  const std::wstring system_drive = std::filesystem::path(windows).root_name().wstring();
+  const DWORD drives = GetLogicalDrives();
+  for (int d = 0; d < 26; ++d) {
+    if (!(drives & (1u << d))) continue;
+    const std::wstring root = std::wstring(1, wchar_t(L'A' + d)) + L":\\";
+    if (GetDriveTypeW(root.c_str()) != DRIVE_FIXED || root.substr(0, 2) == system_drive) continue;
+    folders_.push_back(std::filesystem::path(root) / L"Skylanders Recompiled");
+  }
+  // One set before (an earlier setup, coreoflight.ini, --install_dir) is chosen, and kept.
+  if (GamesFolderChosen()) {
+    const auto it = std::find(folders_.begin(), folders_.end(), GamesFolder());
+    if (it == folders_.end()) folders_.push_back(GamesFolder());
+    folder_ = int(std::find(folders_.begin(), folders_.end(), GamesFolder()) - folders_.begin());
+  }
+}
+
+void SetupScreen::ChooseGameFolder(int choice) {
+  if (folders_.empty()) return;
+  folder_ = (choice + int(folders_.size())) % int(folders_.size());
+  const std::filesystem::path& dir = folders_[size_t(folder_)];
+  SetInstallDir(dir);
+  std::error_code ec;
+  std::filesystem::create_directories(HubSettingsFile().parent_path(), ec);  // a first start: not there yet
+  const std::u8string u8 = dir.u8string();
+  WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", std::string(u8.begin(), u8.end()));
 }
 
 SetupScreen::Job SetupScreen::TakeJob() { return std::exchange(job_, Job{}); }
@@ -330,11 +365,12 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
   }
   // One row per game.
   const int n = int(rows_.size());
-  const float row_h = 58 * u, top = 166 * u;
+  // Six games and the folder row: a little lower than they'd like, so the button stays above the hints.
+  const float row_h = 52 * u, top = 166 * u;
   for (int i = 0; i < n; ++i) {
     const Row& r = rows_[size_t(i)];
     const Game& g = AllGames()[size_t(i)];
-    const float y = top + i * (row_h + 6 * u);
+    const float y = top + i * (row_h + 4 * u);
     const bool chosen_row = selected_ == i;
     dl->AddRectFilled({left, y}, {right, y + row_h}, kPanel, 12 * u);
     dl->AddRect({left, y}, {right, y + row_h}, chosen_row ? kGold : kEdge, 12 * u, 0, (chosen_row ? 3.0f : 1.5f) * u);
@@ -388,13 +424,28 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
     if (!rows_[i].chosen) continue;
     const fs::path folder = launcher.found && i < launcher.found->size() && !(*launcher.found)[i].exe.empty()
                                 ? (*launcher.found)[i].exe.parent_path()
-                                : InstallFolder(AllGames()[i]);
+                                : GamesFolder();
     free = FreeBytes(folder);
     drive = Utf8(folder.root_name());
     break;
   }
   const bool room = !needed || !free || *free >= needed;
-  const float sy = top + n * (row_h + 6 * u) + 10 * u;
+  {
+    const float y = top + n * (row_h + 4 * u);
+    const bool on = selected_ == n;
+    dl->AddRectFilled({left, y}, {right, y + row_h}, kPanel, 12 * u);
+    dl->AddRect({left, y}, {right, y + row_h}, on ? kGold : kEdge, 12 * u, 0, (on ? 3.0f : 1.5f) * u);
+    Text(dl, bold_, 22 * u, {left + 22 * u, y + 17 * u}, kWhite, german_ ? "Spiele-Ordner" : "Games folder");
+    const bool standard = folder_ <= 0 || folders_.empty();
+    const std::string where = (standard ? (german_ ? "Standard: " : "Default: ") : std::string()) + Utf8(GamesFolder());
+    const std::optional<uint64_t> folder_free = FreeBytes(GamesFolder());
+    const std::string room_text = folder_free ? "  \xC2\xB7  " + Gigabytes(*folder_free, german_) + (german_ ? " frei" : " free")
+                                              : std::string();
+    const std::string value = (on && folders_.size() > 1 ? "<  " : "") + where + room_text + (on && folders_.size() > 1 ? "  >" : "");
+    Text(dl, regular_, 20 * u, {left + 360 * u, y + 17 * u}, on ? kGold : kDim,
+         FitStart(regular_, 20 * u, value, right - left - 380 * u));
+  }
+  const float sy = top + (n + 1) * (row_h + 4 * u) + 10 * u;
   if (needed) {
     const std::string text = (german_ ? "Braucht " : "Needs ") + Gigabytes(needed, german_) + "  \xC2\xB7  " +
                              (free ? (german_ ? "frei auf " : "free on ") + drive + " " + Gigabytes(*free, german_)
@@ -412,12 +463,15 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
                                 : (german_ ? "Ohne Disc weiter" : "Continue without a disc");
   const float go_y = sy + (room ? 44 : 64) * u;
   if (!message_.empty()) Text(dl, regular_, 19 * u, {left + 340 * u, go_y + 12 * u}, kRed, message_);
-  Button(dl, bold_, u, left, go_y, 320 * u, go, selected_ == n, room);
+  Button(dl, bold_, u, left, go_y, 320 * u, go, selected_ == n + 1, room);
 
   if (Up() && selected_ > 0) --selected_;
-  if (Down() && selected_ < n) ++selected_;
+  if (Down() && selected_ < n + 1) ++selected_;
+  if (selected_ == n && (Left() || Right())) ChooseGameFolder(folder_ + (Left() ? -1 : 1));
   if (Accept()) {
-    if (selected_ < n) {
+    if (selected_ == n) {
+      ChooseGameFolder(folder_ + 1);
+    } else if (selected_ < n) {
       if (rows_[size_t(selected_)].state != State::kReady) {
         job_ = {Job::Kind::kPickIso, size_t(selected_), {}};
         pick_for_ = selected_;
@@ -456,7 +510,9 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
   float hx = 48 * u;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 160, 70),
-            selected_ < n ? (german_ ? "ISO w\xC3\xA4hlen" : "Choose its ISO") : go);
+            selected_ < n ? (german_ ? "ISO w\xC3\xA4hlen" : "Choose its ISO")
+            : selected_ == n ? (german_ ? "Anderer Ordner" : "Another folder")
+                             : go);
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(60, 110, 220), german_ ? "An / aus" : "On / off");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(200, 170, 40), german_ ? "Ganzen PC durchsuchen" : "Search the whole PC");
   Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");

@@ -60,6 +60,7 @@ HubSettings LoadHubSettings() {
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
   s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
+  s.games_dir = get("games_dir");
   return s;
 }
 

@@ -51,6 +51,24 @@ void SetFullscreen(HWND hwnd, bool on) {
 }
 
 // Whether the process has a visible top-level window (the game's, once it opened).
+// Brings the launcher's window to the front and gives it the keyboard focus. Without the focus
+// Dear ImGui drops every input each frame (io.AppFocusLost: the keys are cleared), the controllers'
+// too, and Windows lets a program take the foreground only in some cases: after a game closed with
+// Alt+F4 the launcher often isn't one of them (a colleague's report: the pad didn't steer it any
+// more). Joining the foreground window's input thread for the call is the usual way through.
+void TakeForeground(HWND hwnd) {
+  const HWND front = GetForegroundWindow();
+  if (front == hwnd) return;
+  const DWORD front_thread = front ? GetWindowThreadProcessId(front, nullptr) : 0;
+  const DWORD own_thread = GetCurrentThreadId();
+  const bool joined = front_thread && front_thread != own_thread && AttachThreadInput(front_thread, own_thread, TRUE);
+  ShowWindow(hwnd, SW_RESTORE);
+  BringWindowToTop(hwnd);
+  SetForegroundWindow(hwnd);
+  SetFocus(hwnd);
+  if (joined) AttachThreadInput(front_thread, own_thread, FALSE);
+}
+
 bool HasVisibleWindow(DWORD pid) {
   struct Find {
     DWORD pid;
@@ -234,6 +252,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   bool running = true;
   HANDLE game = nullptr;
   bool game_shown = false;  // the game's window is up and the launcher hidden
+  ULONGLONG took_back_until = 0;  // after a game: until then a pad press brings the launcher to the front
   while (running) {
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -269,13 +288,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       ui.GameExitCode(code);
       ui.Refresh();
       ShowWindow(hwnd, SW_SHOW);
-      SetForegroundWindow(hwnd);
+      TakeForeground(hwnd);
+      took_back_until = GetTickCount64() + 15000;
       // A button still held from the game (the press that left it) must not count as a press here
       // (A would start the game again, B ask to quit): wait until the pads' buttons and Enter,
       // Space and Esc are up (at most 3 s), and forget the keys' states from before the game (their
       // releases went to the game's window).
       for (int i = 0; i < 120 && coreoflight::InputHeld(); ++i) Sleep(25);
       ImGui::GetIO().ClearInputKeys();
+    }
+    // For a while after a game, a controller press brings the launcher back to the front should it
+    // not have got there (someone else's window in front, the pad's presses would be dropped).
+    if (took_back_until && GetTickCount64() < took_back_until && GetForegroundWindow() != hwnd &&
+        coreoflight::InputHeld()) {
+      TakeForeground(hwnd);
     }
     if (IsIconic(hwnd)) {
       Sleep(50);

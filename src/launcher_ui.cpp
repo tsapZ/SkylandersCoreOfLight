@@ -96,6 +96,10 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
 
 void LauncherUi::ApplyHubSettings() {
   german_ = HubGerman(hub_);
+  // The games' folder chosen in the setup, unless the command line or coreoflight.ini set one.
+  if (!hub_.games_dir.empty() && !GamesFolderChosen()) {
+    SetInstallDir(std::filesystem::path(std::u8string(hub_.games_dir.begin(), hub_.games_dir.end())));
+  }
   settings_.Init(regular_, bold_, german_);
   hub_screen_.Init(regular_, bold_, german_);
   browser_.Init(regular_, bold_, german_);

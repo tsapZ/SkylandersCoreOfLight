@@ -83,6 +83,11 @@ bool StartGame(const Found& game, std::wstring& error, void** process);
 // goes to <library>\<app name>, else to the setup's own default. The log is
 // %TEMP%\CoreOfLight\<key>-setup.log.
 void SetInstallDir(const std::filesystem::path& dir);
+// The folder new games go into (each into its own folder there): the one set, else
+// %LOCALAPPDATA%\Programs, as its setups do by default.
+std::filesystem::path GamesFolder();
+// Whether one is set at all (--install_dir, coreoflight.ini's "library" or the hub's "games_dir").
+bool GamesFolderChosen();
 // Where an install of `game` goes: <library>\<app name>, else the setup's default,
 // %LOCALAPPDATA%\Programs\<app name>.
 std::filesystem::path InstallFolder(const Game& game);

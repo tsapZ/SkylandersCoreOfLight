@@ -279,6 +279,10 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
 
 void SetInstallDir(const fs::path& dir) { g_install_dir = dir; }
 
+fs::path GamesFolder() { return g_install_dir.empty() ? KnownFolder(FOLDERID_LocalAppData) / "Programs" : g_install_dir; }
+
+bool GamesFolderChosen() { return !g_install_dir.empty(); }
+
 fs::path InstallFolder(const Game& game) {
   return (g_install_dir.empty() ? KnownFolder(FOLDERID_LocalAppData) / "Programs" : g_install_dir) /
          Utf8Path(game.app_name);
