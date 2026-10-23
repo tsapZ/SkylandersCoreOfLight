@@ -747,6 +747,11 @@ void FiguresScreen::Draw(float width, float height) {
       tree_ = true;
       tree_figure_ = *shown[selected_];
       tree_index_ = 0;
+    } else {
+      // Say why nothing opens: the games leave a figure's tree once they have shown it.
+      message_ = german_ ? "Noch kein Upgrade-Baum: Das Spiel legt ihn ab, wenn die Figur einmal darin war."
+                         : "No upgrade tree yet: the game leaves it once the figure has been in it.";
+      message_until_ = ImGui::GetTime() + 5.0;
     }
   }
   // The chosen figure's details.

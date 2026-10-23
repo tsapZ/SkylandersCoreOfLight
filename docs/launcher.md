@@ -90,6 +90,9 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
   itself while it runs and comes back when the game ends.
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
+- **The connected controllers** are shown left of the profile at the top right, as on the Xbox:
+  each pad's number (its XInput slot, 1-4) and, for a pad on batteries, three bars
+  (`XInputGetBatteryInformation`, asked every ten seconds; red at one bar).
 - **The figure library** (#8, Start / F): every figure in that folder with its level, XP to the
   next level, gold, play time, upgrades, nickname and the day it was last played, by game (LB /
   RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built

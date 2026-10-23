@@ -14,6 +14,37 @@
 
 namespace coreoflight {
 
+// Which XInput slots have a pad, as UpdatePads saw them last (it looks every two seconds).
+inline bool g_pad_connected[XUSER_MAX_COUNT] = {};
+
+// A connected pad's battery for the start screen: 0 empty .. 3 full, or -1 for a wired pad (or
+// one that doesn't say). Asked at most every ten seconds per pad.
+inline int PadBattery(DWORD pad) {
+  using GetBattery = DWORD(WINAPI*)(DWORD, BYTE, XINPUT_BATTERY_INFORMATION*);
+  static GetBattery get_battery = [] {
+    for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll"}) {
+      if (HMODULE m = LoadLibraryW(dll)) {
+        if (auto f = reinterpret_cast<GetBattery>(GetProcAddress(m, "XInputGetBatteryInformation"))) return f;
+      }
+    }
+    return GetBattery(nullptr);
+  }();
+  static int level[XUSER_MAX_COUNT] = {-1, -1, -1, -1};
+  static ULONGLONG asked[XUSER_MAX_COUNT] = {};
+  if (pad >= XUSER_MAX_COUNT || !get_battery) return -1;
+  const ULONGLONG now = GetTickCount64();
+  if (!asked[pad] || now - asked[pad] > 10000) {
+    asked[pad] = now;
+    XINPUT_BATTERY_INFORMATION info = {};
+    level[pad] = -1;
+    if (get_battery(pad, BATTERY_DEVTYPE_GAMEPAD, &info) == ERROR_SUCCESS &&
+        (info.BatteryType == BATTERY_TYPE_ALKALINE || info.BatteryType == BATTERY_TYPE_NIMH)) {
+      level[pad] = info.BatteryLevel;  // BATTERY_LEVEL_EMPTY .. BATTERY_LEVEL_FULL, 0 .. 3
+    }
+  }
+  return level[pad];
+}
+
 // Every connected XInput pad (slots 0-3) as Dear ImGui's gamepad keys, merged: its Win32 backend
 // reads only slot 0, so a second pad, or one that came back in another slot, did nothing
 // (IMGUI_IMPL_WIN32_DISABLE_GAMEPAD is set for it). Which slots are connected is looked at every
@@ -28,7 +59,7 @@ inline void UpdatePads(ImGuiIO& io) {
     }
     return GetState(nullptr);
   }();
-  static bool connected[XUSER_MAX_COUNT] = {};
+  bool* connected = g_pad_connected;
   static ULONGLONG checked = 0;
   const ULONGLONG now = GetTickCount64();
   const bool recheck = now - checked > 2000;

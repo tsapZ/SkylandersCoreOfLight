@@ -13,6 +13,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "nxe_art.h"
+#include "pad_state.h"
 #include "textures.h"
 
 namespace coreoflight {
@@ -471,6 +472,26 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
          initial.c_str());
   }
   dl->AddCircle(c, radius, kGold, 48, 2.5f * u);
+  // The connected controllers left of it, as on the Xbox: each pad's number and its battery
+  // (three bars; a wired pad has none).
+  float px = left - 26 * u;
+  for (int pad = XUSER_MAX_COUNT - 1; pad >= 0; --pad) {
+    if (!g_pad_connected[pad]) continue;
+    const int level = PadBattery(DWORD(pad));
+    const float w = (level >= 0 ? 52 : 32) * u, h = 30 * u;
+    const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
+    dl->AddRectFilled(a, b, Rgba(40, 50, 100, 230), 10 * u);
+    dl->AddRect(a, b, Rgba(90, 100, 150), 10 * u, 0, 1.5f * u);
+    const std::string number = std::to_string(pad + 1);
+    const float nx = level >= 0 ? a.x + 10 * u : a.x + (w - TextWidth(bold_, 20 * u, number.c_str())) * 0.5f;
+    Text(dl, bold_, 20 * u, {nx, c.y - 12 * u}, kWhite, number.c_str());
+    for (int bar = 0; bar < 3 && level >= 0; ++bar) {
+      const float bx = a.x + 26 * u + bar * 7 * u;
+      const ImU32 col = bar < level ? (level == 1 ? Rgba(240, 110, 110) : Rgba(110, 220, 110)) : Rgba(70, 80, 120);
+      dl->AddRectFilled({bx, c.y - 8 * u}, {bx + 5 * u, c.y + 8 * u}, col, 1.5f * u);
+    }
+    px = a.x - 8 * u;
+  }
   return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 }
 
