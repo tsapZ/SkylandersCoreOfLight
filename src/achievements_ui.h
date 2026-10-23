@@ -35,6 +35,8 @@ class AchievementsScreen {
   size_t game_ = 0;
   GameAchievements list_;
   int selected_ = 0, scroll_ = 0;
+  bool info_ = false;  // the chosen achievement shown large (A; B closes it)
+  void DrawInfo(float width, float height, float u);
 };
 
 }  // namespace coreoflight

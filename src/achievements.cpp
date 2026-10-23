@@ -126,4 +126,14 @@ std::string FileTimeDate(uint64_t filetime, bool german) {
   return text;
 }
 
+std::string FileTimeClock(uint64_t filetime) {
+  if (filetime <= 1) return {};
+  FILETIME utc{DWORD(filetime), DWORD(filetime >> 32)}, local{};
+  SYSTEMTIME st{};
+  if (!FileTimeToLocalFileTime(&utc, &local) || !FileTimeToSystemTime(&local, &st)) return {};
+  char text[16];
+  std::snprintf(text, sizeof(text), "%02u:%02u", unsigned(st.wHour), unsigned(st.wMinute));
+  return text;
+}
+
 }  // namespace coreoflight

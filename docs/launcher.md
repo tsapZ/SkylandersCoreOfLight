@@ -184,6 +184,10 @@ exe and gets out of the way while the game runs; no game needs it.
   leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
   picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
   `<game>recomp\achievements\<title id>.toml`, which the SDK keeps.
+- **Achievement info** (#14): A (or a click) on an achievement shows it large: its picture, the
+  name, the whole description and the locked one when the game has another, the gamerscore,
+  "Freigeschaltet am 20.10.2026 um 09:08" or "Noch nicht freigeschaltet", and how many of the
+  game's are unlocked; A or B closes it.
 - **Platinum trophy** (the owner's wish, 2026-10-23): once every achievement of a game is
   unlocked, its screen shows a platinum cup with the date of the last one in place of the bar, the
   card a small cup behind "Erfolge 38 / 38" and the profile card one per such game. When a game

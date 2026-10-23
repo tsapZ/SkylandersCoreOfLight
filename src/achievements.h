@@ -39,5 +39,7 @@ GameAchievements LoadAchievements(const Game& game, const Profile& profile);
 
 // "22.10.2026" (German) or "2026-10-22" for a Windows file time, in local time.
 std::string FileTimeDate(uint64_t filetime, bool german);
+// "14:32" for a Windows file time, in local time; empty for none.
+std::string FileTimeClock(uint64_t filetime);
 
 }  // namespace coreoflight

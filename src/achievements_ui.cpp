@@ -111,6 +111,7 @@ void AchievementsScreen::Load() {
   list_ = LoadAchievements(AllGames()[game_], ActiveProfile());
   selected_ = 0;
   scroll_ = 0;
+  info_ = false;
 }
 
 void AchievementsScreen::Draw(float width, float height) {
@@ -133,15 +134,24 @@ void AchievementsScreen::Draw(float width, float height) {
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
   auto once = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, false); };
   const size_t games = AllGames().size();
-  if (once(ImGuiKey_GamepadL1) || once(ImGuiKey_PageUp) || once(ImGuiKey_Q)) {
+  if (!info_ && (once(ImGuiKey_GamepadL1) || once(ImGuiKey_PageUp) || once(ImGuiKey_Q))) {
     game_ = (game_ + games - 1) % games;
     Load();
   }
-  if (once(ImGuiKey_GamepadR1) || once(ImGuiKey_PageDown) || once(ImGuiKey_E)) {
+  if (!info_ && (once(ImGuiKey_GamepadR1) || once(ImGuiKey_PageDown) || once(ImGuiKey_E))) {
     game_ = (game_ + 1) % games;
     Load();
   }
-  if (once(ImGuiKey_Escape) || once(ImGuiKey_GamepadFaceRight)) open_ = false;
+  const bool info_before = info_;  // what this frame's keys act on
+  if (info_) {
+    // The info view on top: B (or A again) closes it, nothing else moves.
+    if (once(ImGuiKey_Escape) || once(ImGuiKey_GamepadFaceRight) || once(ImGuiKey_Enter) ||
+        once(ImGuiKey_GamepadFaceDown) || ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      info_ = false;
+    }
+  } else if (once(ImGuiKey_Escape) || once(ImGuiKey_GamepadFaceRight)) {
+    open_ = false;
+  }
 
   // The games as tabs.
   float tx = 48 * u;
@@ -193,22 +203,24 @@ void AchievementsScreen::Draw(float width, float height) {
     const int n = int(list_.items.size());
     // Rows of two columns on a wide window: up / down move a row, left / right a column.
     const int columns = width > 1100 * u ? 2 : 1;
-    if (n > 0 && (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp))) {
+    const bool keys = !info_before;
+    if (keys && n > 0 && (once(ImGuiKey_Enter) || once(ImGuiKey_GamepadFaceDown))) info_ = true;
+    if (keys && n > 0 && (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp))) {
       if (selected_ >= columns) selected_ -= columns;
     }
-    if (n > 0 &&
+    if (keys && n > 0 &&
         (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown))) {
       selected_ = std::min(n - 1, selected_ + columns);
     }
-    if (n > 0 && columns > 1 &&
+    if (keys && n > 0 && columns > 1 &&
         (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft))) {
       selected_ = std::max(0, selected_ - 1);
     }
-    if (n > 0 && columns > 1 &&
+    if (keys && n > 0 && columns > 1 &&
         (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight))) {
       selected_ = std::min(n - 1, selected_ + 1);
     }
-    if (io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * 3, 0, std::max(0, n - 1));
+    if (keys && io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * 3, 0, std::max(0, n - 1));
     const float gap = 16 * u;
     const float row_h = 84 * u;
     const float list_top = top + 44 * u;
@@ -224,8 +236,13 @@ void AchievementsScreen::Draw(float width, float height) {
       const bool chosen = i == selected_;
       const bool got = a.unlocked != 0;
       if (io.MousePos.x >= x && io.MousePos.x < x + col_w && io.MousePos.y >= y && io.MousePos.y < y + row_h &&
-          (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) {
+          (io.MouseDelta.x != 0 || io.MouseDelta.y != 0) && !info_) {
         selected_ = i;
+      }
+      if (!info_before && io.MousePos.x >= x && io.MousePos.x < x + col_w && io.MousePos.y >= y &&
+          io.MousePos.y < y + row_h && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        selected_ = i;
+        info_ = true;
       }
       dl->AddRectFilled({x, y}, {x + col_w, y + row_h}, got ? kPanel : Rgba(16, 20, 46, 220), 14 * u);
       dl->AddRect({x, y}, {x + col_w, y + row_h}, chosen ? kGold : got ? Rgba(90, 140, 90) : kEdge, 14 * u, 0,
@@ -258,12 +275,65 @@ void AchievementsScreen::Draw(float width, float height) {
     }
   }
 
+  if (info_ && list_.known && selected_ >= 0 && size_t(selected_) < list_.items.size()) DrawInfo(width, height, u);
   float hx = 48 * u;
   const float hy = height - 52 * u;
+  if (!info_ && list_.known && !list_.items.empty()) {
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 160, 70), "Info");
+  }
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Spiel davor" : "Previous game");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "N\xC3\xA4" "chstes Spiel" : "Next game");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   ImGui::End();
+}
+
+void AchievementsScreen::DrawInfo(float width, float height, float u) {
+  ImDrawList* dl = ImGui::GetForegroundDrawList();
+  const Achievement& a = list_.items[size_t(selected_)];
+  const bool got = a.unlocked != 0;
+  dl->AddRectFilled({0, 0}, {width, height}, Rgba(0, 0, 0, 150));
+  const float w = std::min(760 * u, width - 96 * u), h = 360 * u;
+  const ImVec2 p0{(width - w) * 0.5f, (height - h) * 0.5f}, p1{p0.x + w, p0.y + h};
+  dl->AddRectFilled(p0, p1, Rgba(24, 30, 70, 250), 22 * u);
+  dl->AddRect(p0, p1, got ? kGold : kEdge, 22 * u, 0, 3.0f * u);
+  // The picture large, round as in the list.
+  const float icon = 168 * u;
+  const ImVec2 c{p0.x + 40 * u + icon * 0.5f, p0.y + 40 * u + icon * 0.5f};
+  dl->AddCircleFilled(c, icon * 0.5f, Rgba(18, 18, 22));
+  if (const ImTextureID texture = a.picture.empty() ? ImTextureID{} : LoadTexture(a.picture)) {
+    dl->AddImageRounded(texture, {c.x - icon * 0.5f, c.y - icon * 0.5f}, {c.x + icon * 0.5f, c.y + icon * 0.5f},
+                        {0, 0}, {1, 1}, got ? kWhite : Rgba(255, 255, 255, 90), icon * 0.5f);
+  }
+  if (got) dl->AddCircle(c, icon * 0.5f, kGreen, 64, 4.0f * u);
+  const float tx = p0.x + 72 * u + icon, tw = p1.x - tx - 32 * u;
+  float ty = p0.y + 40 * u;
+  char score[16];
+  std::snprintf(score, sizeof(score), "%uG", a.gamerscore);
+  Text(dl, bold_, 24 * u, {p1.x - 32 * u - TextWidth(bold_, 24 * u, score), ty}, got ? kGold : kDim, score);
+  dl->AddText(bold_, 32 * u, {tx, ty}, kWhite, a.name.c_str(), nullptr, tx + tw - TextWidth(bold_, 24 * u, score) - 16 * u);
+  ty += 52 * u;
+  dl->AddText(regular_, 21 * u, {tx, ty}, kDim, a.description.c_str(), nullptr, tx + tw);
+  ty += regular_->CalcTextSizeA(21 * u, FLT_MAX, tw, a.description.c_str()).y + 14 * u;
+  if (!a.locked_description.empty() && a.locked_description != a.description) {
+    const std::string locked = (german_ ? "Vor dem Freischalten: " : "Before it is unlocked: ") + a.locked_description;
+    dl->AddText(regular_, 18 * u, {tx, ty}, Rgba(140, 150, 180), locked.c_str(), nullptr, tx + tw);
+    ty += regular_->CalcTextSizeA(18 * u, FLT_MAX, tw, locked.c_str()).y + 14 * u;
+  }
+  std::string when;
+  if (got) {
+    const std::string date = FileTimeDate(a.unlocked, german_), clock = FileTimeClock(a.unlocked);
+    when = date.empty() ? (german_ ? "Freigeschaltet" : "Unlocked")
+                        : (german_ ? "Freigeschaltet am " : "Unlocked on ") + date +
+                              (clock.empty() ? std::string() : (german_ ? " um " : " at ") + clock);
+  } else {
+    when = german_ ? "Noch nicht freigeschaltet" : "Not unlocked yet";
+  }
+  Text(dl, bold_, 21 * u, {tx, std::max(ty, p0.y + 230 * u)}, got ? kGreen : kDim, when);
+  char count[96];
+  std::snprintf(count, sizeof(count), german_ ? "%d von %zu Erfolgen dieses Spiels" : "%d of %zu of this game's achievements",
+                list_.unlocked, list_.items.size());
+  Text(dl, regular_, 18 * u, {p0.x + 40 * u, p1.y - 44 * u}, kDim, count);
+  Hint(dl, bold_, 22 * u, {p1.x - 170 * u, p1.y - 48 * u}, "B", Rgba(200, 60, 60), german_ ? "Schlie\xC3\x9F" "en" : "Close");
 }
 
 }  // namespace coreoflight
