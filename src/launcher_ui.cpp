@@ -93,7 +93,14 @@ void LauncherUi::ApplyHubSettings() {
 void LauncherUi::Refresh() {
   FindGames(found_, launcher_dir_);
   setups_.clear();
-  for (const Game& game : AllGames()) setups_.push_back(FindSetup(game, launcher_dir_));
+  installed_versions_.clear();
+  for (size_t i = 0; i < AllGames().size(); ++i) {
+    setups_.push_back(FindSetup(AllGames()[i], launcher_dir_));
+    installed_versions_.push_back(i < found_.size() && !found_[i].exe.empty()
+                                      ? InstalledVersion(AllGames()[i], found_[i].exe)
+                                      : std::string());
+  }
+  update_put_off_.resize(AllGames().size(), false);
   LoadProfiles(german_);
   figures_ = CountFigures();
   CountAchievements();
@@ -164,9 +171,15 @@ void LauncherUi::UpdateInstall() {
   const size_t game = install_game_;
   Refresh();
   const std::string name = german_ ? AllGames()[game].name_de : AllGames()[game].name_en;
+  const bool update = std::exchange(install_is_update_, false);
   if (code == 0 && game < found_.size() && !found_[game].exe.empty()) {
     selected_ = game;
-    error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
+    if (update) {
+      const std::string version = game < installed_versions_.size() ? installed_versions_[game] : std::string();
+      error_ = Wide(name + (german_ ? " ist aktualisiert (" : " is updated (") + version + ")");
+    } else {
+      error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
+    }
   } else {
     const std::string why = GameInstallError(game);
     char text[256];
@@ -237,6 +250,11 @@ void LauncherUi::Start(size_t index) {
     }
     say(L"Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
         L"This game isn't installed (its installer from its project)");
+    return;
+  }
+  // A newer setup than the installed game: ask first (once a launch; "Erst spielen" plays).
+  if (UpdateAvailable(index) && !install_process_ && index < update_put_off_.size() && !update_put_off_[index]) {
+    ask_update_ = int(index);
     return;
   }
   switch (found_[index].disc.load()) {
@@ -395,8 +413,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   } else {
     switch (f.disc.load()) {
       case DiscState::kMatches:
-        state = german_ ? "Bereit" : "Ready";
-        state_col = Rgba(110, 220, 110);
+        state = UpdateAvailable(index) ? (german_ ? "Bereit  \xC2\xB7  Update verf\xC3\xBC" "gbar" : "Ready  \xC2\xB7  update available")
+                                       : (german_ ? "Bereit" : "Ready");
+        state_col = UpdateAvailable(index) ? kGold : Rgba(110, 220, 110);
         break;
       case DiscState::kOther:
         state = german_ ? "Andere Disc-Version" : "Another disc version";
@@ -499,6 +518,7 @@ bool LauncherUi::Draw(float width, float height) {
   // The screen this frame will draw, in DrawScreens' order.
   const char* window = starting_                       ? "starting"
                        : confirm_quit_                 ? "quit"
+                       : ask_update_ >= 0              ? "update"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
                        : achievements_screen_.is_open() ? "achievements"
@@ -639,10 +659,78 @@ bool LauncherUi::DrawQuitConfirm(float width, float height) {
   return true;
 }
 
+bool LauncherUi::UpdateAvailable(size_t index) const {
+  if (index >= installed_versions_.size() || installed_versions_[index].empty() || index >= setups_.size() ||
+      setups_[index].empty()) {
+    return false;
+  }
+  return VersionLess(installed_versions_[index], SetupVersion(AllGames()[index], setups_[index]));
+}
+
+// "Update for <game>?": A runs the newer setup over the installed game (silently, as an install;
+// saves, figures, the disc and the settings file stay), B plays the installed one for now.
+bool LauncherUi::DrawUpdateConfirm(float width, float height) {
+  const size_t index = size_t(ask_update_);
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("update", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, index < background_art_.size() ? background_art_[index] : std::filesystem::path());
+  const float bw = 640 * u, bh = 260 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const Game& game = AllGames()[index];
+  const std::string title = (german_ ? "Update f\xC3\xBCr " : "Update for ") + std::string(german_ ? game.name_de : game.name_en);
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
+  const std::string versions = (german_ ? "Installiert: " : "Installed: ") + installed_versions_[index] +
+                               (german_ ? "   \xC2\xB7   Neu: " : "   \xC2\xB7   New: ") +
+                               SetupVersion(game, setups_[index]);
+  Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, versions.c_str())) * 0.5f, a.y + 84 * u}, kWhite,
+       versions.c_str());
+  const char* keeps = german_ ? "Spielst\xC3\xA4nde, Figuren, Disc und Einstellungen bleiben."
+                              : "Saves, figures, the disc and the settings stay.";
+  Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, keeps)) * 0.5f, a.y + 118 * u}, kDim, keeps);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, a.y + 170 * u}, q{x + 260 * u, a.y + 222 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    Hint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Aktualisieren" : "Update");
+  const bool no = button(b.x - 310 * u, "B", Rgba(200, 60, 60), german_ ? "Erst spielen" : "Play first");
+  ImGui::End();
+  if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    ask_update_ = -1;
+    if (StartGameInstall(index, setups_[index], german_, &install_process_, true)) {
+      install_game_ = index;
+      install_since_ = ImGui::GetTime();
+      install_is_update_ = true;
+    } else {
+      install_process_ = nullptr;
+      error_ = german_ ? L"Der Installer lie\x00DF sich nicht starten" : L"Could not start the installer";
+      error_until_ = ImGui::GetTime() + 6.0;
+    }
+  } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_update_ = -1;
+    if (index < update_put_off_.size()) update_put_off_[index] = true;
+    Start(index);
+  }
+  return true;
+}
+
 bool LauncherUi::DrawScreens(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
   if (starting_) return DrawStarting(width, height);
   if (confirm_quit_) return DrawQuitConfirm(width, height);
+  if (ask_update_ >= 0) return DrawUpdateConfirm(width, height);
   if (browser_.is_open()) {
     browser_.Draw(width, height);
     // The chosen disc is recognised by its default.xex and unpacked into its game's rom folder.

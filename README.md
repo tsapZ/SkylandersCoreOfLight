@@ -33,7 +33,9 @@ pictures of every figure.
   launcher or a developer's build) and **checks each disc** against the version its port is made
   for.
 - **Installs a game** that isn't there yet with A on its card: the game's own setup, silently,
-  then its disc from your ISO.
+  then its disc from your ISO. A newer setup for an installed game shows "Update verfügbar" on
+  its card, and A asks: update now (silently; saves, figures, disc and settings stay) or play
+  first.
 - **Sets up a disc from your ISO**: its own file browser, for the pad as well as the keyboard, or
   drop an ISO on the window; Y in it finds your discs by itself (the ISOs in Downloads, Desktop,
   Documents and on the drives, each listed by its game). It recognises the game, unpacks the disc into that game's folder and

@@ -24,6 +24,16 @@ exe and gets out of the way while the game runs; no game needs it.
   else to the setup's default. If the setup stops, its reason comes from its log
   (`%TEMP%\CoreOfLight\<key>-setup.log`). The game stays an ordinary install: its own uninstall
   entry, Start menu entry and uninstaller, and it runs without the launcher.
+  **Updates:** for a game its setup installed (its
+  uninstall entry's InstallLocation holds the exe the launcher found), the entry's DisplayVersion
+  is compared with the setup's version from its name (`<Repo>Setup-<version>.exe`; the setup
+  with the highest version is the one taken, 0.1.0-alpha.2 < 0.1.0-beta.1 < 0.1.0). A newer one
+  shows "Bereit · Update verfügbar" on the card, and A asks first: "Aktualisieren" runs the
+  setup silently over the game where it is (no `/DIR`; the disc page is skipped and the settings
+  file kept, as for an install), "Erst spielen" starts the game and doesn't ask again this launch.
+  Checked 2026-10-23 in scratch: Swap Force installed without its disc, its entry's version set back
+  to 0.1.0-alpha.2, the card offered the update, A brought the entry to 0.1.0-beta.1; then
+  uninstalled, no entry left.
 - **Checks the disc:** the game looks for `rom\` in the folder it runs in (an installed game next
   to its exe, a developer's build three folders up), so the launcher looks there for
   `rom\default.xex` and compares its SHA-256 with the hash the game's repository pins

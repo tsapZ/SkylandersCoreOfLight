@@ -5,10 +5,12 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cwchar>
 #include <iterator>
 #include <fstream>
+#include <optional>
 #include <thread>
 #include <unordered_map>
 
@@ -277,19 +279,92 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
 
 void SetInstallDir(const fs::path& dir) { g_install_dir = dir; }
 
+std::string SetupVersion(const Game& game, const fs::path& setup) {
+  const std::string name = setup.stem().string();
+  const std::string prefix = std::string(game.repo) + "Setup-";
+  return name.starts_with(prefix) ? name.substr(prefix.size()) : std::string();
+}
+
+bool VersionLess(const std::string& a, const std::string& b) {
+  // "0.1.0-beta.1": the release numbers, then the pre-release, which comes before the release.
+  auto split = [](const std::string& v, char sep) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    while (true) {
+      const size_t at = v.find(sep, start);
+      parts.push_back(v.substr(start, at == std::string::npos ? std::string::npos : at - start));
+      if (at == std::string::npos) break;
+      start = at + 1;
+    }
+    return parts;
+  };
+  auto number = [](const std::string& s) -> std::optional<unsigned long> {
+    if (s.empty() || !std::all_of(s.begin(), s.end(), [](unsigned char c) { return std::isdigit(c); })) {
+      return std::nullopt;
+    }
+    return std::stoul(s);
+  };
+  // Compares two dot-separated lists: numbers as numbers (below words), words as text, a longer
+  // list after a shorter one it starts with. -1, 0 or 1.
+  auto compare = [&](const std::vector<std::string>& x, const std::vector<std::string>& y) {
+    for (size_t i = 0; i < std::min(x.size(), y.size()); ++i) {
+      const auto nx = number(x[i]), ny = number(y[i]);
+      if (nx && ny) {
+        if (*nx != *ny) return *nx < *ny ? -1 : 1;
+      } else if (nx || ny) {
+        return nx ? -1 : 1;
+      } else if (x[i] != y[i]) {
+        return x[i] < y[i] ? -1 : 1;
+      }
+    }
+    return x.size() == y.size() ? 0 : (x.size() < y.size() ? -1 : 1);
+  };
+  const size_t da = a.find('-'), db = b.find('-');
+  const int release = compare(split(a.substr(0, da), '.'), split(b.substr(0, db), '.'));
+  if (release) return release < 0;
+  const bool pa = da != std::string::npos, pb = db != std::string::npos;
+  if (pa != pb) return pa;  // a pre-release before its release
+  return pa && compare(split(a.substr(da + 1), '.'), split(b.substr(db + 1), '.')) < 0;
+}
+
+std::string InstalledVersion(const Game& game, const fs::path& exe) {
+  const std::wstring key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
+                           Utf8Path(game.app_id).wstring() + L"_is1";
+  for (HKEY root : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
+    wchar_t location[MAX_PATH * 2] = L"", version[128] = L"";
+    DWORD size = sizeof(location), vsize = sizeof(version);
+    if (RegGetValueW(root, key.c_str(), L"InstallLocation", RRF_RT_REG_SZ, nullptr, location, &size) !=
+        ERROR_SUCCESS) {
+      continue;
+    }
+    std::error_code ec;
+    if (!fs::equivalent(fs::path(location) / game.exe, exe, ec)) continue;
+    if (RegGetValueW(root, key.c_str(), L"DisplayVersion", RRF_RT_REG_SZ, nullptr, version, &vsize) ==
+        ERROR_SUCCESS) {
+      const std::u8string u8 = fs::path(version).u8string();
+      return std::string(u8.begin(), u8.end());
+    }
+  }
+  return {};
+}
+
 fs::path FindSetup(const Game& game, const fs::path& launcher_dir) {
-  // The newest <Repo>Setup-*.exe of a folder (by its time: the version is in the name).
+  // The <Repo>Setup-*.exe of a folder with the highest version (then the newest).
   auto newest = [&](const fs::path& dir) {
     fs::path best;
+    std::string best_version;
     fs::file_time_type best_time{};
     std::error_code ec;
     const std::string prefix = std::string(game.repo) + "Setup-";
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
       const std::string name = entry.path().filename().string();
       if (!name.starts_with(prefix) || entry.path().extension() != ".exe") continue;
+      const std::string version = SetupVersion(game, entry.path());
       const auto t = entry.last_write_time(ec);
-      if (best.empty() || t > best_time) {
+      if (best.empty() || VersionLess(best_version, version) ||
+          (!VersionLess(version, best_version) && t > best_time)) {
         best = entry.path();
+        best_version = version;
         best_time = t;
       }
     }
@@ -314,7 +389,7 @@ fs::path SetupLog(size_t game) {
 
 }  // namespace
 
-bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** process) {
+bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** process, bool update) {
   if (game >= kGames.size() || setup.empty()) return false;
   const fs::path log = SetupLog(game);
   std::error_code ec;
@@ -326,7 +401,8 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
                          L" /NOROM=1 /PORTAL=software /SCALE=2 /LANGUAGE=" +
                          (german ? L"german" : L"english") + L" /RESOLUTION=" + std::to_wstring(w) + L"x" +
                          std::to_wstring(h) + L" \"/LOG=" + log.wstring() + L"\"";
-  if (!g_install_dir.empty()) {
+  // An update goes where the game is (the setup knows it from its AppId's entry).
+  if (!g_install_dir.empty() && !update) {
     command += L" \"/DIR=" + (g_install_dir / Utf8Path(kGames[game].app_name)).wstring() + L"\"";
   }
   STARTUPINFOW startup = {sizeof(startup)};

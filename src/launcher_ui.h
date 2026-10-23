@@ -119,7 +119,16 @@ class LauncherUi {
   void* install_process_ = nullptr;
   size_t install_game_ = 0;
   double install_since_ = 0;
+  bool install_is_update_ = false;
   void UpdateInstall();
+  // Updates: each game's installed version (empty when it wasn't installed by its setup), the
+  // games whose update the owner put off this launch ("Erst spielen"), and the card whose A asks
+  // "Update ... jetzt installieren?" (-1: none).
+  std::vector<std::string> installed_versions_;
+  std::vector<bool> update_put_off_;
+  int ask_update_ = -1;
+  bool UpdateAvailable(size_t index) const;
+  bool DrawUpdateConfirm(float width, float height);
   // A game was just started: its launch screen, until its window is up (main.cpp).
   bool starting_ = false;
   size_t starting_game_ = 0;

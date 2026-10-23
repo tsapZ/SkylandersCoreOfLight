@@ -82,8 +82,19 @@ bool StartGame(const Found& game, std::wstring& error, void** process);
 // goes to <library>\<app name>, else to the setup's own default. The log is
 // %TEMP%\CoreOfLight\<key>-setup.log.
 void SetInstallDir(const std::filesystem::path& dir);
+// The setup with the highest version of the folders above (by its name's version, then its time).
 std::filesystem::path FindSetup(const Game& game, const std::filesystem::path& launcher_dir);
-bool StartGameInstall(size_t game, const std::filesystem::path& setup, bool german, void** process);
+// `update`: the game is installed already; its setup goes over it where it is (no /DIR), and,
+// as for an install, skips the disc page and keeps the settings file.
+bool StartGameInstall(size_t game, const std::filesystem::path& setup, bool german, void** process,
+                      bool update = false);
+// Updates: the version the game's setup put at `exe` (DisplayVersion of its uninstall entry, when
+// that entry's InstallLocation holds this exe), empty for a game not installed by its setup (a
+// developer's build); a setup's version from its name (<Repo>Setup-<version>.exe); and whether
+// version a is older than b (0.1.0-alpha.2 < 0.1.0-beta.1 < 0.1.0, numbers as numbers).
+std::string InstalledVersion(const Game& game, const std::filesystem::path& exe);
+std::string SetupVersion(const Game& game, const std::filesystem::path& setup);
+bool VersionLess(const std::string& a, const std::string& b);
 // Why the last install of `game` stopped, from its setup log ("ROM: ..." lines and the like);
 // empty if the log says nothing.
 std::string GameInstallError(size_t game);
