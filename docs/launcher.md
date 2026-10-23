@@ -104,7 +104,7 @@ exe and gets out of the way while the game runs; no game needs it.
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
   the title music, the animations.
 - **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
-  one text file onto the desktop, `Skylanders-Problembericht-<date>.txt`, and shows it in Explorer.
+  one text file onto the desktop, `Skylanders-problem-report-<date>.txt` (the same name in German), and shows it in Explorer.
   Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with
   nothing to unpack (the owner: no archives from strangers). Its parts, each under a
   `===== <part> =====` line: `info` (Windows version, processor, memory, graphics cards with

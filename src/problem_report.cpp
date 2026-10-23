@@ -210,7 +210,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   GetLocalTime(&t);
   wchar_t name[96];
   std::swprintf(name, std::size(name), L"%ls-%04u-%02u-%02u-%02u%02u.txt",
-                german ? L"Skylanders-Problembericht" : L"Skylanders-problem-report", t.wYear, t.wMonth, t.wDay,
+                L"Skylanders-problem-report", t.wYear, t.wMonth, t.wDay,
                 t.wHour, t.wMinute);
   const fs::path report_path = desktop / name;
 
@@ -259,7 +259,8 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   }
   report.Add("info", clean(info));
 
-  // Each game's settings file and its three newest logs.
+  // Each game's settings file, its newest logs and problem notes.
+  std::vector<fs::path> notes;
   for (size_t i = 0; i < games.size() && i < found.size(); ++i) {
     const Found& f = found[i];
     if (f.exe.empty()) continue;
@@ -270,6 +271,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     if (f.exe.parent_path() / "logs" != dirs[0]) dirs.push_back(f.exe.parent_path() / "logs");
     // The newest log, then the newest three of real sessions: the launcher's own short runs of a
     // game (its settings list, its pictures) leave logs of a few hundred bytes.
+    size_t game_notes = 0;
     for (const fs::path& dir : dirs) {
       const std::vector<fs::path> logs = Newest(dir, L".log", 40);
       size_t taken = 0;
@@ -278,6 +280,15 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
         if (k > 0 && fs::file_size(logs[k], ec) < 4096) continue;
         report.Add(folder + "logs/" + Utf8(logs[k].filename()), clean(ReadTail(logs[k], kLogTail)));
         ++taken;
+      }
+      // The game's own problem notes (its settings menu's Report a problem, skylanders-portal
+      // problem_note.h): the newest three, their pictures next to the report.
+      for (const fs::path& note : Newest(dir, L".txt", 40)) {
+        if (note.filename().wstring().rfind(L"problem-", 0) != 0) continue;
+        if (game_notes >= 3) break;
+        report.Add(folder + "notes/" + Utf8(note.filename()), clean(ReadTail(note)));
+        notes.push_back(note);
+        ++game_notes;
       }
     }
   }
@@ -296,6 +307,17 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   if (!report.Write(report_path)) {
     error = german ? "Konnte den Bericht nicht auf den Desktop schreiben" : "Could not write the report to the desktop";
     return {};
+  }
+  // The notes' pictures beside it, <report>-1.png, -2.png, ...
+  int picture = 0;
+  for (const fs::path& note : notes) {
+    fs::path png = note;
+    png.replace_extension(".png");
+    std::error_code ec;
+    if (!fs::exists(png, ec)) continue;
+    fs::path to = report_path;
+    to.replace_filename(report_path.stem().wstring() + L"-" + std::to_wstring(++picture) + L".png");
+    fs::copy_file(png, to, fs::copy_options::overwrite_existing, ec);
   }
   return report_path;
 }

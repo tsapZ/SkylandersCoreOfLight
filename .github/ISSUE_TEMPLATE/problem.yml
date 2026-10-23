@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for testing! The report from Core of Light helps most: **LB** (the launcher's settings) > **Problem melden**, or the question after a crash. It is one text file on your desktop, with your Windows user name taken out. Drag it into the last field.
+        Thanks for testing! The report from Core of Light helps most: **LB** (the launcher's settings) > **Report a problem**, or the question after a crash. It is one text file on your desktop, with your Windows user name taken out. Drag it into the last field.
   - type: dropdown
     id: game
     attributes:
@@ -51,4 +51,4 @@ body:
     id: report
     attributes:
       label: Report file
-      description: Drag the Skylanders-Problembericht .txt file here (or paste its text).
+      description: Drag the Skylanders-problem-report .txt file here (or paste its text).
