@@ -69,7 +69,12 @@ void SetTextureDevice(ID3D11Device* device) {
   g_device = device;
 }
 
+bool g_no_game_art = false;
+
+void SetNoGameArt(bool on) { g_no_game_art = on; }
+
 ImTextureID LoadTexture(const std::filesystem::path& path) {
+  if (g_no_game_art) return ImTextureID{};
   const auto now = std::chrono::steady_clock::now();
   auto [it, added] = g_textures.try_emplace(path.wstring());
   Entry& e = it->second;

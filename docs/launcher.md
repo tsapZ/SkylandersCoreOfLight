@@ -232,6 +232,13 @@ exe and gets out of the way while the game runs; no game needs it.
   game's own menu (F10) has them.
 - The profile's picture in the games (only the name is passed); online co-op (#1-#3).
 
+## Screenshots to show
+
+`coreoflight.exe --no_game_art` leaves out every picture of the games (the disc tiles and
+backgrounds, figure, hat and achievement pictures): the screens draw their own placeholders, an
+element's colour with the initial and the plain backdrop. Only for screenshots that may be shown
+(the artwork is Activision's); not a setting. With `--documents=<copy>` for made-up data.
+
 ## Build
 
 From a Visual Studio 2022 x64 developer prompt:

@@ -215,6 +215,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       } else if (arg.starts_with(L"--install_dir=")) {
         // A library folder for games installed from the launcher (games.h StartGameInstall).
         coreoflight::SetInstallDir(arg.substr(14));
+      } else if (arg == L"--no_game_art") {
+        // Screenshots to show: none of the games' pictures (textures.h).
+        coreoflight::SetNoGameArt(true);
       } else if (iso.empty()) {
         iso = arg;
       }

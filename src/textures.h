@@ -21,4 +21,9 @@ ImTextureID LoadTexture(const std::filesystem::path& path);
 // Drops every texture (before the device goes).
 void ReleaseTextures();
 
+// --no_game_art, for screenshots to show (the owner, 2026-10-23: only for that, no setting): every
+// picture is one of the games' (discs, figures, hats, achievements), so LoadTexture gives none and
+// the screens draw their own placeholders (an element's colour and initial, the plain backdrop).
+void SetNoGameArt(bool on);
+
 }  // namespace coreoflight
