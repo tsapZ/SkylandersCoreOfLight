@@ -11,6 +11,7 @@
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
+#include "hints.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
 #include "textures.h"
@@ -291,6 +292,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     coreoflight::UpdatePads(io);
     SetFullscreen(hwnd, ui.fullscreen());
     ImGui::NewFrame();
+    coreoflight::UpdateHintInput();
     if (!ui.Draw(io.DisplaySize.x, io.DisplaySize.y)) running = false;
     ImGui::Render();
     const float clear[4] = {0.01f, 0.03f, 0.09f, 1.0f};

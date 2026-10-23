@@ -1,4 +1,5 @@
 #include "profiles_ui.h"
+#include "hints.h"
 
 #include <cmath>
 #include <cctype>
@@ -58,14 +59,10 @@ std::string Fit(ImFont* font, float size, std::string text, float width) {
   return text + "...";
 }
 
+// A hint: the controller button or the keyboard key (hints.h), and what it does.
 float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
-           const char* label) {
-  const float bw = std::max(TextWidth(font, size * 0.8f, button) + size * 0.5f, size * 1.24f);
-  const ImVec2 a{pos.x, pos.y + size * 0.55f - size * 0.62f};
-  dl->AddRectFilled(a, {a.x + bw, a.y + size * 1.24f}, col, size * 0.62f);
-  Text(dl, font, size * 0.8f, {a.x + (bw - TextWidth(font, size * 0.8f, button)) * 0.5f, pos.y + size * 0.13f},
-       kWhite, button);
-  const float x = a.x + bw + size * 0.4f;
+           const char* label, const char* key = nullptr) {
+  const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
@@ -383,10 +380,10 @@ void ProfilesScreen::Draw(float width, float height) {
                 on_profile ? (german_ ? "Mit diesem Profil spielen" : "Play with this profile")
                            : (german_ ? "Anlegen" : "Make it"));
       if (on_profile) {
-        hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Bild" : "Picture");
-        hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Name" : "Name");
+        hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Bild" : "Picture", "Tab");
+        hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Name" : "Name", "F2");
         if (selected_ > 0) {
-          hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "L\xC3\xB6schen" : "Delete");
+          hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "L\xC3\xB6schen" : "Delete", "Del");
         }
       }
       hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
@@ -611,10 +608,10 @@ void ProfilesScreen::Draw(float width, float height) {
       }
       std::snprintf(name_, sizeof(name_), "%s", name.c_str());
       hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Tippen" : "Type");
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "L\xC3\xB6schen" : "Delete");
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Leerzeichen" : "Space");
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Gro\xC3\x9F / klein" : "Caps");
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Fertig" : "Done");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "L\xC3\xB6schen" : "Delete", "");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Leerzeichen" : "Space", "");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Gro\xC3\x9F / klein" : "Caps", "");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Fertig" : "Done", "Enter");
       hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Abbrechen" : "Cancel");
       break;
     }

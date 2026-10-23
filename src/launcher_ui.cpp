@@ -1,4 +1,5 @@
 #include "launcher_ui.h"
+#include "hints.h"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -64,15 +65,10 @@ float TextWidth(ImFont* font, float size, const char* text) {
   return font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x;
 }
 
-// A round button glyph like the games' hints: (A) green, (B) red.
+// A hint: the controller button or the keyboard key (hints.h), and what it does.
 float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
-           const char* label) {
-  const float r = size * 0.62f;
-  const ImVec2 c{pos.x + r, pos.y + size * 0.55f};
-  dl->AddCircleFilled(c, r, col);
-  const float bw = TextWidth(font, size * 0.8f, button);
-  Text(dl, font, size * 0.8f, {c.x - bw * 0.5f, c.y - size * 0.42f}, kWhite, button);
-  const float x = pos.x + 2 * r + size * 0.4f;
+           const char* label, const char* key = nullptr) {
+  const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
@@ -1300,16 +1296,36 @@ bool LauncherUi::DrawScreens(float width, float height) {
                   figures_, ActiveProfile().name.c_str());
   }
   Text(dl, regular_, 20 * u, {48 * u, height - 92 * u}, kDim, figures);
+  // While a game writes its pictures (UpdatePictureExport), a note at the bottom right: the game
+  // runs for it in the background, and should its window show for a moment, it isn't a pop-up to
+  // close (a colleague did, 2026-10-23).
+  if (pictures_process_ && pictures_game_ < AllGames().size()) {
+    const Game& game = AllGames()[pictures_game_];
+    const std::string note =
+        german_ ? std::string(game.name_de) + ": Bilder werden von der Disc gelesen. L\xC3\xA4uft im Hintergrund und endet von selbst."
+                : std::string(game.name_en) + ": reading its pictures from the disc. Runs in the background and ends by itself.";
+    const float size = 19 * u, tw = TextWidth(regular_, size, note.c_str());
+    const float right = width - 48 * u, x = right - tw - 46 * u;
+    // Beside the figures line, or above it where the window is too narrow for both.
+    const bool beside = x > 48 * u + TextWidth(regular_, 20 * u, figures) + 24 * u;
+    const float y = height - (beside ? 100 : 144) * u;
+    dl->AddRectFilled({x, y}, {right, y + 36 * u}, Rgba(24, 30, 70, 230), 18 * u);
+    const ImVec2 c{x + 22 * u, y + 18 * u};
+    const float a0 = float(ImGui::GetTime()) * 5.0f;
+    dl->PathArcTo(c, 8 * u, a0, a0 + 4.2f, 24);
+    dl->PathStroke(kGold, 0, 2.5f * u);
+    Text(dl, regular_, size, {x + 38 * u, y + 7 * u}, kWhite, note.c_str());
+  }
   float hx = 48 * u;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70),
             continue_focus_ ? (german_ ? "Weiterspielen" : "Continue") : (german_ ? "Starten" : "Play"));
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings", "Tab");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc", "D");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RT", Rgba(80, 90, 140), german_ ? "Spielst\xC3\xA4nde" : "Saves");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles", "P");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Hub" : "Hub");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60),
             import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));

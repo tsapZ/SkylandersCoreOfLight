@@ -1,4 +1,5 @@
 #include "setup_ui.h"
+#include "hints.h"
 
 #include <windows.h>
 
@@ -54,14 +55,10 @@ std::string FitStart(ImFont* font, float size, std::string text, float width) {
   return "..." + text;
 }
 
+// A hint: the controller button or the keyboard key (hints.h), and what it does.
 float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
-           const std::string& label) {
-  const float bw = std::max(TextWidth(font, size * 0.8f, button) + size * 0.5f, size * 1.24f);
-  const ImVec2 a{pos.x, pos.y + size * 0.55f - size * 0.62f};
-  dl->AddRectFilled(a, {a.x + bw, a.y + size * 1.24f}, col, size * 0.62f);
-  Text(dl, font, size * 0.8f, {a.x + (bw - TextWidth(font, size * 0.8f, button)) * 0.5f, pos.y + size * 0.13f},
-       kWhite, button);
-  const float x = a.x + bw + size * 0.4f;
+           const std::string& label, const char* key = nullptr) {
+  const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
