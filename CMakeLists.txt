@@ -7,7 +7,7 @@ project(coreoflight LANGUAGES CXX RC)
 
 # The launcher's version: the problem report names it, tools/package_installer.ps1 builds the
 # installer with it, and updates from GitHub Releases (#17) will compare against it.
-set(COREOFLIGHT_VERSION "0.1.0-beta.6")
+set(COREOFLIGHT_VERSION "0.1.0-beta.7")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,6 +45,7 @@ add_executable(coreoflight WIN32
   src/setup_ui.cpp
   src/launcher_ui.cpp
   src/hints.cpp
+  src/updates.cpp
   src/nxe_art.cpp
   src/profiles.cpp
   src/profiles_ui.cpp
@@ -66,7 +67,7 @@ target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/bac
 target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
                                                IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
                                                COREOFLIGHT_VERSION="${COREOFLIGHT_VERSION}")
-target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm)
+target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
 if(MSVC)
   target_compile_options(coreoflight PRIVATE /W3 /utf-8)
 endif()

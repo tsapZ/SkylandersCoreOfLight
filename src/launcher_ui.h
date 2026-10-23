@@ -3,6 +3,8 @@
 // The launcher's one screen: a card per game, controller, keyboard and mouse (launcher_ui.cpp).
 
 #include <filesystem>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +20,7 @@
 #include "profiles_ui.h"
 #include "settings_ui.h"
 #include "setup_ui.h"
+#include "updates.h"
 
 struct ImFont;
 
@@ -146,6 +149,30 @@ class LauncherUi {
   double install_since_ = 0;
   bool install_is_update_ = false;
   void UpdateInstall();
+  // Updates from GitHub Releases (updates.h, #17). The releases known (the last check's, then a
+  // check in the background once a day or when asked) go into setups_: a game whose release is
+  // newer than its setup here gets the release's setup, downloaded when it is needed (the card
+  // shows the progress). The launcher's own newer release is offered at the start, when it was
+  // installed by its setup.
+  struct UpdateWork;  // shared with the check and download threads
+  std::shared_ptr<UpdateWork> work_;
+  std::vector<Release> releases_;
+  std::vector<std::string> setup_urls_;  // per game: where setups_[i] comes from while it isn't there
+  std::optional<Release> hub_update_;
+  bool hub_update_put_off_ = false;
+  bool manual_check_ = false;
+  void StartUpdateCheck(bool manual);
+  void UpdateReleases();
+  void ApplyReleases();
+  // Installs (or updates) a game from setups_: at once from a file that is there, else once it is
+  // downloaded. False if it can't (no setup, or an install or download already running).
+  bool BeginInstall(size_t game, bool update);
+  void StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update, bool hub);
+  void UpdateDownload();
+  bool Downloading() const;
+  bool DownloadingFor(size_t game) const;
+  float DownloadProgress() const;
+  bool DrawHubUpdate(float width, float height);
   // A disc set up meanwhile: the games looked for again (its disc check), its card chosen.
   void UpdateImport();
   // Updates: each game's installed version (empty when it wasn't installed by its setup), the

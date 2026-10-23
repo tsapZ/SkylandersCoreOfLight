@@ -123,6 +123,19 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
       "Spielstands, der sich ge\xC3\xA4ndert hat (je etwa 100 KB; die neuesten 10 bleiben). RT auf einer "
       "Karte zeigt sie und holt einen zur\xC3\xBC" "ck.",
       settings.auto_backup));
+  // A button: the updates from GitHub (updates.h), looked for when A is pressed on it.
+  GameSetting updates;
+  updates.cvar = "check_updates";
+  updates.en = "Check for updates";
+  updates.de = "Nach Updates suchen";
+  updates.help_en = "Asks GitHub for new versions of Core of Light and of every game (it does so by itself once "
+                    "a day). A newer Core of Light offers to update itself; a game's update shows on its card.";
+  updates.help_de = "Fragt bei GitHub nach neuen Versionen von Core of Light und aller Spiele (das passiert auch "
+                    "von selbst einmal am Tag). Ein neueres Core of Light bietet an, sich zu aktualisieren; das "
+                    "Update eines Spiels steht auf seiner Karte.";
+  updates.type = "action";
+  updates.options = {{"", "Check now", "Jetzt suchen"}};
+  page.settings.push_back(std::move(updates));
   // A button: the report (problem_report.h), made by the launcher when A is pressed on it.
   GameSetting report;
   report.cvar = "report_problem";

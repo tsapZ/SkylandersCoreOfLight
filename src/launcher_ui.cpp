@@ -6,6 +6,9 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
+#include <thread>
 #include <string_view>
 #include <cmath>
 #include <cstdio>
@@ -81,7 +84,10 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   bold_ = bold;
   hub_ = LoadHubSettings();
   ApplyHubSettings();
+  work_ = std::make_shared<UpdateWork>();
+  releases_ = LoadKnownReleases();
   Refresh();
+  if (UpdateCheckDue()) StartUpdateCheck(false);
   // The first-run setup: on a first start with no game there (a friend's PC, not a developer's).
   if (!hub_.setup_done && std::none_of(found_.begin(), found_.end(), [](const Found& f) { return !f.exe.empty(); })) {
     setup_.Open();
@@ -111,6 +117,7 @@ void LauncherUi::Refresh() {
                                       : std::string());
   }
   update_put_off_.resize(AllGames().size(), false);
+  ApplyReleases();
   LoadProfiles(german_);
   figures_ = CountFigures();
   const std::vector<GameAchievements> before = achievements_;
@@ -347,14 +354,12 @@ void LauncherUi::Start(size_t index) {
       say(L"Ein Spiel wird gerade installiert", L"A game is being installed");
       return;
     }
+    if (Downloading()) {
+      say(L"Ein Spiel wird gerade heruntergeladen", L"A game is being downloaded");
+      return;
+    }
     if (index < setups_.size() && !setups_[index].empty()) {
-      if (StartGameInstall(index, setups_[index], german_, &install_process_)) {
-        install_game_ = index;
-        install_since_ = ImGui::GetTime();
-      } else {
-        install_process_ = nullptr;
-        say(L"Der Installer lie\x00DF sich nicht starten", L"Could not start the installer");
-      }
+      if (!BeginInstall(index, false)) say(L"Der Installer lie\x00DF sich nicht starten", L"Could not start the installer");
       return;
     }
     say(L"Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
@@ -532,8 +537,12 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   ImU32 state_col = kDim;
   if (!installed) {
     const bool installing = install_process_ && install_game_ == index;
-    state = installing ? (german_ ? "Wird installiert ..." : "Installing ...")
-                       : (german_ ? "Nicht installiert" : "Not installed");
+    static char downloading[64];
+    std::snprintf(downloading, sizeof(downloading), german_ ? "L\xC3\xA4" "dt herunter ... %d %%" : "Downloading ... %d %%",
+                  int(DownloadProgress() * 100.0f));
+    state = DownloadingFor(index) ? downloading
+            : installing          ? (german_ ? "Wird installiert ..." : "Installing ...")
+                                  : (german_ ? "Nicht installiert" : "Not installed");
   } else {
     switch (f.disc.load()) {
       case DiscState::kMatches:
@@ -657,6 +666,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : setup_.is_open()              ? "setup"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
+                       : hub_update_ && !hub_update_put_off_ ? "hubupdate"
                        : crash_code_ != 0              ? "crash"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
@@ -679,6 +689,8 @@ bool LauncherUi::Draw(float width, float height) {
   UpdateTitleMusicExport();
   UpdatePictureExport();
   UpdateInstall();
+  UpdateReleases();
+  UpdateDownload();
   UpdateImport();
   {
     std::filesystem::path wanted;
@@ -886,12 +898,7 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
   ImGui::End();
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
     ask_update_ = -1;
-    if (StartGameInstall(index, setups_[index], german_, &install_process_, true)) {
-      install_game_ = index;
-      install_since_ = ImGui::GetTime();
-      install_is_update_ = true;
-    } else {
-      install_process_ = nullptr;
+    if (!BeginInstall(index, true)) {
       error_ = german_ ? L"Der Installer lie\x00DF sich nicht starten" : L"Could not start the installer";
       error_until_ = ImGui::GetTime() + 6.0;
     }
@@ -903,9 +910,245 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
   return true;
 }
 
+// --- Updates from GitHub Releases (updates.h) ------------------------------------------------
+
+namespace {
+
+// A release asset's file name as a path (the names are ASCII: <Repo>Setup-<version>.exe).
+std::filesystem::path AssetPath(const std::string& name) { return std::filesystem::path(std::u8string(name.begin(), name.end())); }
+
+}  // namespace
+
+struct LauncherUi::UpdateWork {
+  std::mutex mutex;
+  std::atomic<bool> checking{false};
+  bool fresh = false;              // a check ended (under `mutex`)
+  std::vector<Release> releases;   // what it found (under `mutex`)
+  std::atomic<int> download{0};    // 0 none, 1 running, 2 done, 3 failed
+  std::atomic<float> progress{0.0f};
+  std::atomic<bool> cancel{false};
+  // What the download is for (UI thread only).
+  size_t game = 0;
+  bool update = false, hub = false;
+  std::filesystem::path file;
+};
+
+void LauncherUi::StartUpdateCheck(bool manual) {
+  if (manual) manual_check_ = true;
+  if (work_->checking.exchange(true)) return;
+  std::vector<std::pair<std::string, std::string>> repos = {{"SkylandersCoreOfLight", "CoreOfLightSetup"}};
+  for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo) + "Setup"});
+  std::thread([work = work_, repos] {
+    std::vector<Release> found;
+    for (const auto& [repo, prefix] : repos) {
+      if (auto release = FetchLatestRelease(repo, prefix)) found.push_back(*release);
+    }
+    // Nothing at all: no network (or GitHub down); the releases known before stay.
+    if (!found.empty()) SaveKnownReleases(found);
+    {
+      std::lock_guard lock(work->mutex);
+      work->releases = std::move(found);
+      work->fresh = true;
+    }
+    work->checking = false;
+  }).detach();
+}
+
+void LauncherUi::UpdateReleases() {
+  std::vector<Release> found;
+  {
+    std::lock_guard lock(work_->mutex);
+    if (!work_->fresh) return;
+    work_->fresh = false;
+    found = std::move(work_->releases);
+  }
+  const bool manual = std::exchange(manual_check_, false);
+  if (found.empty()) {
+    if (manual) {
+      error_ = german_ ? L"Keine Verbindung zu GitHub: Updates lassen sich gerade nicht pr\x00FC" L"fen"
+                       : L"No connection to GitHub: updates can't be checked right now";
+      error_until_ = ImGui::GetTime() + 8.0;
+    }
+    return;
+  }
+  releases_ = std::move(found);
+  if (!install_process_ && !Downloading()) Refresh();
+  if (manual) {
+    hub_update_put_off_ = false;
+    std::string games;
+    for (size_t i = 0; i < AllGames().size(); ++i) {
+      if (!UpdateAvailable(i)) continue;
+      if (!games.empty()) games += ", ";
+      games += german_ ? AllGames()[i].name_de : AllGames()[i].name_en;
+    }
+    const std::string text = hub_update_  ? std::string()
+                             : !games.empty() ? (german_ ? "Updates auf den Karten: " : "Updates on the cards: ") + games
+                                              : (german_ ? "Alles ist aktuell (Core of Light " COREOFLIGHT_VERSION ")"
+                                                         : "Everything is up to date (Core of Light " COREOFLIGHT_VERSION ")");
+    if (!text.empty()) {
+      error_ = Wide(text);
+      error_until_ = ImGui::GetTime() + 8.0;
+    }
+  }
+}
+
+void LauncherUi::ApplyReleases() {
+  setup_urls_.assign(AllGames().size(), std::string());
+  for (size_t i = 0; i < AllGames().size() && i < setups_.size(); ++i) {
+    const Game& game = AllGames()[i];
+    for (const Release& r : releases_) {
+      if (r.repo != game.repo) continue;
+      // The release's setup when it's newer than the one here, or there is none here.
+      if (setups_[i].empty() || VersionLess(SetupVersion(game, setups_[i]), r.version)) {
+        setups_[i] = DownloadsDir() / AssetPath(r.asset);
+        setup_urls_[i] = r.url;
+      }
+    }
+  }
+  hub_update_.reset();
+  // Only a launcher its setup installed updates itself (a developer's build is left alone).
+  std::error_code ec;
+  if (!std::filesystem::exists(launcher_dir_ / "unins000.exe", ec)) return;
+  for (const Release& r : releases_) {
+    if (r.repo == "SkylandersCoreOfLight" && VersionLess(COREOFLIGHT_VERSION, r.version)) hub_update_ = r;
+  }
+}
+
+bool LauncherUi::Downloading() const { return work_ && work_->download.load() == 1; }
+
+bool LauncherUi::DownloadingFor(size_t game) const { return Downloading() && !work_->hub && work_->game == game; }
+
+float LauncherUi::DownloadProgress() const { return work_ ? work_->progress.load() : 0.0f; }
+
+void LauncherUi::StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update,
+                               bool hub) {
+  work_->game = game;
+  work_->update = update;
+  work_->hub = hub;
+  work_->file = file;
+  work_->progress = 0.0f;
+  work_->cancel = false;
+  work_->download = 1;
+  std::thread([work = work_, url, file] {
+    work->download = DownloadFile(url, file, &work->progress, &work->cancel) ? 2 : 3;
+  }).detach();
+}
+
+bool LauncherUi::BeginInstall(size_t game, bool update) {
+  if (game >= setups_.size() || setups_[game].empty() || install_process_ || Downloading()) return false;
+  std::error_code ec;
+  if (!std::filesystem::exists(setups_[game], ec)) {
+    if (game >= setup_urls_.size() || setup_urls_[game].empty()) return false;
+    StartDownload(setup_urls_[game], setups_[game], game, update, false);
+    return true;
+  }
+  if (!StartGameInstall(game, setups_[game], german_, &install_process_, update)) {
+    install_process_ = nullptr;
+    return false;
+  }
+  install_game_ = game;
+  install_since_ = ImGui::GetTime();
+  install_is_update_ = update;
+  return true;
+}
+
+void LauncherUi::UpdateDownload() {
+  const int state = work_->download.load();
+  if (state != 2 && state != 3) return;
+  work_->download = 0;
+  if (work_->hub) return;  // DrawHubUpdate takes it
+  const size_t game = work_->game;
+  const std::string name = german_ ? AllGames()[game].name_de : AllGames()[game].name_en;
+  if (state == 3 || !BeginInstall(game, work_->update)) {
+    error_ = Wide(name + (german_ ? ": Der Download ist fehlgeschlagen" : ": the download failed"));
+    error_until_ = ImGui::GetTime() + 8.0;
+  }
+}
+
+// "Core of Light <version> is here": A downloads the launcher's new setup, runs it silently (it
+// keeps the install folder and starts the launcher again, /RELAUNCH=1) and quits; B leaves it
+// for this launch.
+bool LauncherUi::DrawHubUpdate(float width, float height) {
+  const Release& release = *hub_update_;
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("hubupdate", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, std::filesystem::path());
+  const float bw = 680 * u, bh = 280 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const std::string title = "Core of Light " + release.version;
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
+  char line[200];
+  std::snprintf(line, sizeof(line), german_ ? "Installiert: %s   \xC2\xB7   Download: %.1f MB" : "Installed: %s   \xC2\xB7   Download: %.1f MB",
+                COREOFLIGHT_VERSION, double(release.size) / (1024.0 * 1024.0));
+  Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, line)) * 0.5f, a.y + 84 * u}, kWhite, line);
+  const char* keeps = german_ ? "Der Hub l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+                              : "The launcher downloads it, installs it and starts again. Games and saves stay.";
+  Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, keeps)) * 0.5f, a.y + 118 * u}, kDim, keeps);
+  const bool downloading = Downloading() && work_->hub;
+  const int state = work_->download.load();
+  if (downloading || (work_->hub && state >= 2)) {
+    // The bar while it downloads.
+    const ImVec2 p{a.x + 60 * u, a.y + 180 * u}, q{b.x - 60 * u, a.y + 206 * u};
+    dl->AddRectFilled(p, q, Rgba(30, 40, 90, 240), 13 * u);
+    dl->AddRectFilled(p, {p.x + (q.x - p.x) * DownloadProgress(), q.y}, kGold, 13 * u);
+    ImGui::End();
+    if (state == 2) {
+      work_->download = 0;
+      STARTUPINFOW startup = {sizeof(startup)};
+      PROCESS_INFORMATION info = {};
+      std::wstring command = L"\"" + work_->file.wstring() + L"\" /SILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH=1";
+      if (CreateProcessW(work_->file.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &info)) {
+        CloseHandle(info.hThread);
+        CloseHandle(info.hProcess);
+        return false;  // the launcher quits; the setup replaces it and starts the new one
+      }
+      error_ = german_ ? L"Das Update lie\x00DF sich nicht starten" : L"Could not start the update";
+      error_until_ = ImGui::GetTime() + 8.0;
+      hub_update_put_off_ = true;
+    } else if (state == 3) {
+      work_->download = 0;
+      error_ = german_ ? L"Der Download des Updates ist fehlgeschlagen" : L"The update's download failed";
+      error_until_ = ImGui::GetTime() + 8.0;
+      hub_update_put_off_ = true;
+    }
+    return true;
+  }
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, a.y + 180 * u}, q{x + 260 * u, a.y + 232 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    Hint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 60 * u, "A", Rgba(70, 170, 70), german_ ? "Jetzt aktualisieren" : "Update now");
+  const bool no = button(b.x - 320 * u, "B", Rgba(200, 60, 60), german_ ? "Sp\xC3\xA4ter" : "Later");
+  ImGui::End();
+  if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    if (!Downloading() && !install_process_) {
+      StartDownload(release.url, DownloadsDir() / AssetPath(release.asset), 0, false, true);
+    }
+  } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    hub_update_put_off_ = true;
+  }
+  return true;
+}
+
 bool LauncherUi::DrawScreens(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
   if (starting_) return DrawStarting(width, height);
+  if (hub_update_ && !hub_update_put_off_ && !setup_.is_open() && ask_update_ < 0 && !confirm_quit_) {
+    return DrawHubUpdate(width, height);
+  }
   if (setup_.is_open()) {
     // X on its disc page: the file browser for an ISO the search didn't find, over the setup.
     if (browser_.is_open()) {
@@ -913,16 +1156,11 @@ bool LauncherUi::DrawScreens(float width, float height) {
       if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) setup_.AddIso(chosen);
       return true;
     }
-    setup_.Draw(width, height, {&found_, &setups_, install_process_ != nullptr, &import_});
+    setup_.Draw(width, height, {&found_, &setups_, install_process_ != nullptr || Downloading(), &import_});
     // It says what comes next; the launcher's own install and disc import do it.
     const SetupScreen::Job job = setup_.TakeJob();
     if (job.kind == SetupScreen::Job::Kind::kInstall && !install_process_ && job.game < setups_.size()) {
-      if (StartGameInstall(job.game, setups_[job.game], german_, &install_process_)) {
-        install_game_ = job.game;
-        install_since_ = ImGui::GetTime();
-      } else {
-        install_process_ = nullptr;
-      }
+      BeginInstall(job.game, false);
     } else if (job.kind == SetupScreen::Job::Kind::kImport && !import_.running()) {
       import_.Start(job.iso, found_, german_);
     } else if (job.kind == SetupScreen::Job::Kind::kCancel) {
@@ -984,7 +1222,12 @@ bool LauncherUi::DrawScreens(float width, float height) {
       LoadProfiles(german_);
     }
     // "Problem melden": the report on the desktop, shown in Explorer.
-    if (hub_screen_.TakeAction() == "report_problem") {
+    const std::string action = hub_screen_.TakeAction();
+    if (action == "check_updates") {
+      StartUpdateCheck(true);
+      hub_screen_.ShowMessage(german_ ? "Suche nach Updates ..." : "Looking for updates ...");
+    }
+    if (action == "report_problem") {
       std::string error;
       const std::filesystem::path report = WriteProblemReport(found_, launcher_dir_, german_, error);
       if (report.empty()) {
