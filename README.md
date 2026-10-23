@@ -35,7 +35,8 @@ pictures of every figure.
 - **Installs a game** that isn't there yet with A on its card: the game's own setup, silently,
   then its disc from your ISO.
 - **Sets up a disc from your ISO**: its own file browser, for the pad as well as the keyboard, or
-  drop an ISO on the window. It recognises the game, unpacks the disc into that game's folder and
+  drop an ISO on the window; Y in it finds your discs by itself (the ISOs in Downloads, Desktop,
+  Documents and on the drives, each listed by its game). It recognises the game, unpacks the disc into that game's folder and
   leaves the ISO where it is.
 - **A card per game** with the active profile's play time, achievements and last save; the game's
   title music plays while its card is chosen (straight from the game's disc, which each game

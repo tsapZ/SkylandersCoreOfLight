@@ -48,7 +48,13 @@ exe and gets out of the way while the game runs; no game needs it.
   unknown disc each get their own message. A folder with an
   unpacked disc (default.xex in it) works the same way: O picks one with the Windows dialog, or
   drop it on the window; its files are copied into the rom folder. The ISO itself stays where it
-  is.
+  is. **"Discs suchen"** (Y in the browser, or its first entry above the drives) looks for the
+  discs by itself on a thread of its own: every .iso of 100 MB or more in Downloads, Desktop and
+  Documents (four folder levels down) and on the fixed and removable drives (two levels; Windows',
+  the programs' and hidden folders left out), each read like a disc being set up and listed by
+  game when its default.xex is one of the six ("Trap Team · D:\ISOs\..."); A sets it up.
+  Checked 2026-10-23 on the owner's PC: all eight discs among 9 ISO files in 644 folders, in about
+  3 s.
 - **The title music** (`src/music.cpp`): while a game's card is chosen its title music plays,
   faded in and looped, through Windows' MCI. It comes straight from the game's disc: the track its
   title screen streams, decoded by the game itself (skylanders-portal `title_music.h`). Each game

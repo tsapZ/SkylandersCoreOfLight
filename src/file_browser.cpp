@@ -6,11 +6,16 @@
 #include <algorithm>
 #include <cfloat>
 #include <cwctype>
+#include <functional>
+#include <set>
 #include <system_error>
+#include <thread>
 #include <utility>
 
+#include "games.h"
 #include "imgui.h"
 #include "nxe_art.h"
+#include "xiso.h"
 
 namespace coreoflight {
 namespace {
@@ -78,7 +83,114 @@ bool LessNoCase(const std::wstring& a, const std::wstring& b) {
                                       [](wchar_t x, wchar_t y) { return std::towlower(x) < std::towlower(y); });
 }
 
+std::wstring Lower(std::wstring s) {
+  std::transform(s.begin(), s.end(), s.begin(), [](wchar_t c) { return wchar_t(std::towlower(c)); });
+  return s;
+}
+
+// The disc search: how deep it goes below the usual folders and below a drive, the folders it
+// leaves out (Windows' own, programs, caches) and the smallest ISO it reads (a disc image is GBs).
+constexpr int kPlaceDepth = 4;  // Documents\<folder>\<folder>\<folder>\Trap Team.iso
+constexpr int kDriveDepth = 2;
+constexpr uintmax_t kSmallestIso = 100ull << 20;
+const wchar_t* const kSkipFolders[] = {L"windows", L"program files", L"program files (x86)", L"programdata",
+                                       L"appdata", L"node_modules", L"recovery", L"perflogs"};
+
+// Calls `on_iso` for every .iso file under `dir`, `depth` folder levels down, until `stop`.
+void FindIsos(const fs::path& dir, int depth, const std::atomic<bool>& stop, std::atomic<int>& folders,
+              const std::function<void(const fs::path&)>& on_iso) {
+  std::error_code ec;
+  ++folders;
+  for (fs::directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec), end; it != end;
+       it.increment(ec)) {
+    if (ec || stop) break;
+    const fs::path p = it->path();
+    const std::wstring name = Lower(p.filename().wstring());
+    if (name.empty() || name[0] == L'$' || name[0] == L'.') continue;
+    std::error_code type_ec;
+    if (it->is_directory(type_ec)) {
+      if (depth <= 0) continue;
+      const DWORD attributes = GetFileAttributesW(p.c_str());
+      if (attributes == INVALID_FILE_ATTRIBUTES ||
+          (attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_REPARSE_POINT))) {
+        continue;
+      }
+      if (std::find(std::begin(kSkipFolders), std::end(kSkipFolders), name) != std::end(kSkipFolders)) continue;
+      FindIsos(p, depth - 1, stop, folders, on_iso);
+    } else if (p.extension().wstring().size() == 4 && Lower(p.extension().wstring()) == L".iso" &&
+               it->file_size(type_ec) >= kSmallestIso) {
+      on_iso(p);
+    }
+  }
+}
+
 }  // namespace
+
+void FileBrowser::StartSearch() {
+  StopSearch();
+  auto search = std::make_shared<Search>();
+  search_ = search;
+  searching_view_ = true;
+  listed_found_ = 0;
+  ListSearch();
+  std::vector<std::pair<fs::path, int>> roots;
+  for (REFKNOWNFOLDERID id : {FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Documents}) {
+    if (const fs::path p = Known(id); !p.empty()) roots.emplace_back(p, kPlaceDepth);
+  }
+  const DWORD drives = GetLogicalDrives();
+  for (int d = 0; d < 26; ++d) {
+    if (!(drives & (1u << d))) continue;
+    const std::wstring root = std::wstring(1, wchar_t(L'A' + d)) + L":\\";
+    const UINT type = GetDriveTypeW(root.c_str());
+    if (type == DRIVE_FIXED || type == DRIVE_REMOVABLE) roots.emplace_back(fs::path(root), kDriveDepth);
+  }
+  std::thread([search, roots] {
+    std::set<std::wstring> seen;  // an ISO under two of the roots once
+    for (const auto& [root, depth] : roots) {
+      FindIsos(root, depth, search->stop, search->folders, [&](const fs::path& iso) {
+        std::error_code ec;
+        const std::wstring key = Lower(fs::weakly_canonical(iso, ec).wstring());
+        if (!seen.insert(key).second) return;
+        ++search->isos;
+        // Read like a disc being set up (disc_import.cpp): its default.xex, known by its SHA-256.
+        auto image = XisoImage::Open(iso);
+        const XisoImage::Entry* xex = image ? image->Find("default.xex") : nullptr;
+        std::vector<uint8_t> data;
+        if (!xex || !image->Read(*xex, data)) return;
+        const std::string hash = Sha256Hex(data.data(), data.size());
+        int game = -1;
+        for (size_t i = 0; i < AllGames().size(); ++i) {
+          if (IsGameDisc(AllGames()[i], hash)) game = int(i);
+        }
+        std::lock_guard lock(search->mutex);
+        search->found.push_back({game, iso});
+      });
+      if (search->stop) break;
+    }
+    search->done = true;
+  }).detach();
+}
+
+void FileBrowser::StopSearch() {
+  if (search_) search_->stop = true;
+}
+
+void FileBrowser::ListSearch() {
+  if (listed_found_ == 0) {
+    entries_.clear();
+    selected_ = 0;
+    folder_.clear();
+  }
+  if (!search_) return;
+  std::lock_guard lock(search_->mutex);
+  for (; listed_found_ < search_->found.size(); ++listed_found_) {
+    const FoundDisc& d = search_->found[listed_found_];
+    if (d.game < 0) continue;  // another disc or version: counted, not offered
+    const Game& g = AllGames()[size_t(d.game)];
+    entries_.push_back({Entry::Kind::kFound, std::string(german_ ? g.name_de : g.name_en) + "  \xC2\xB7  " + Utf8(d.iso),
+                        d.iso});
+  }
+}
 
 void FileBrowser::Init(ImFont* regular, ImFont* bold, bool german) {
   regular_ = regular;
@@ -90,6 +202,8 @@ void FileBrowser::Open(const fs::path& folder) {
   open_ = true;
   chosen_.clear();
   message_.clear();
+  StopSearch();
+  searching_view_ = false;
   fs::path start = folder;
   if (start.empty()) start = last_folder_;
   if (start.empty()) start = Known(FOLDERID_Downloads);
@@ -103,7 +217,11 @@ void FileBrowser::List(const fs::path& folder) {
   selected_ = 0;
   folder_ = folder;
   if (folder.empty()) {
-    // The usual places, then every drive.
+    // The disc search first, then the usual places, then every drive.
+    entries_.push_back({Entry::Kind::kSearch,
+                        german_ ? "Discs suchen (Downloads, Desktop, Dokumente und die Laufwerke)"
+                                : "Find my discs (Downloads, Desktop, Documents and the drives)",
+                        {}});
     const std::pair<REFKNOWNFOLDERID, const char*> places[] = {
         {FOLDERID_Downloads, german_ ? "Downloads" : "Downloads"},
         {FOLDERID_Desktop, german_ ? "Desktop" : "Desktop"},
@@ -172,10 +290,16 @@ void FileBrowser::Choose(const Entry& e) {
     case Entry::Kind::kPlace:
       List(e.path);
       break;
+    case Entry::Kind::kSearch:
+      StartSearch();
+      break;
     case Entry::Kind::kThisFolder:
     case Entry::Kind::kIso:
+    case Entry::Kind::kFound:
       chosen_ = e.path;
-      last_folder_ = e.kind == Entry::Kind::kIso ? e.path.parent_path() : e.path.parent_path();
+      last_folder_ = e.path.parent_path();
+      StopSearch();
+      searching_view_ = false;
       open_ = false;
       break;
   }
@@ -196,7 +320,24 @@ void FileBrowser::Draw(float width, float height) {
   Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
        german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO");
   const float left = 48 * u, top = 128 * u;
-  const std::string where = folder_.empty() ? (german_ ? "Dieser PC" : "This PC") : Utf8(folder_);
+  std::string where = folder_.empty() ? (german_ ? "Dieser PC" : "This PC") : Utf8(folder_);
+  if (searching_view_ && search_) {
+    ListSearch();
+    const int folders = search_->folders.load(), isos = search_->isos.load();
+    const int discs = int(entries_.size());
+    char status[200];
+    if (!search_->done) {
+      std::snprintf(status, sizeof(status),
+                    german_ ? "Suche Discs ... %d Ordner, %d ISO-Dateien angesehen" : "Looking for discs ... %d folders, %d ISO files seen",
+                    folders, isos);
+    } else {
+      std::snprintf(status, sizeof(status),
+                    german_ ? "Fertig: %d Skylanders-Disc(s) unter %d ISO-Dateien in %d Ordnern"
+                            : "Done: %d Skylanders disc(s) among %d ISO files in %d folders",
+                    discs, isos, folders);
+    }
+    where = status;
+  }
   Text(dl, regular_, 20 * u, {left, top}, kDim, FitStart(regular_, 20 * u, where, width - 2 * left));
 
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
@@ -229,23 +370,42 @@ void FileBrowser::Draw(float width, float height) {
     if (chosen) dl->AddRect(a, b, kGold, 12 * u, 0, 2.5f * u);
     // A small symbol: a disc for an ISO or an unpacked disc, a folder for the others.
     const ImVec2 c{a.x + 26 * u, (a.y + b.y) * 0.5f};
-    if (e.kind == Entry::Kind::kIso || e.kind == Entry::Kind::kThisFolder) {
+    if (e.kind == Entry::Kind::kIso || e.kind == Entry::Kind::kThisFolder || e.kind == Entry::Kind::kFound) {
       dl->AddCircleFilled(c, 13 * u, Rgba(200, 210, 235), 24);
       dl->AddCircleFilled(c, 4 * u, Rgba(40, 50, 90), 12);
+    } else if (e.kind == Entry::Kind::kSearch) {
+      // A magnifying glass.
+      dl->AddCircle({c.x - 3 * u, c.y - 3 * u}, 9 * u, kGold, 24, 3 * u);
+      dl->AddLine({c.x + 4 * u, c.y + 4 * u}, {c.x + 12 * u, c.y + 12 * u}, kGold, 4 * u);
     } else if (e.kind != Entry::Kind::kUp) {
       dl->AddRectFilled({c.x - 13 * u, c.y - 8 * u}, {c.x + 13 * u, c.y + 10 * u}, Rgba(230, 180, 70), 3 * u);
       dl->AddRectFilled({c.x - 13 * u, c.y - 12 * u}, {c.x - 2 * u, c.y - 6 * u}, Rgba(230, 180, 70), 2 * u);
     }
-    const ImU32 col = e.kind == Entry::Kind::kIso || e.kind == Entry::Kind::kThisFolder ? kGold : kWhite;
-    Text(dl, e.kind == Entry::Kind::kIso ? bold_ : regular_, 20 * u, {a.x + 54 * u, a.y + 9 * u}, col,
+    const bool disc = e.kind == Entry::Kind::kIso || e.kind == Entry::Kind::kThisFolder || e.kind == Entry::Kind::kFound;
+    const ImU32 col = disc || e.kind == Entry::Kind::kSearch ? kGold : kWhite;
+    const bool bold = e.kind == Entry::Kind::kIso || e.kind == Entry::Kind::kFound || e.kind == Entry::Kind::kSearch;
+    Text(dl, bold ? bold_ : regular_, 20 * u, {a.x + 54 * u, a.y + 9 * u}, col,
          FitStart(regular_, 20 * u, e.label, b.x - a.x - 70 * u));
   }
-  if (n <= 1 && !folder_.empty()) {
+  if (searching_view_ && n == 0) {
+    Text(dl, regular_, 19 * u, {left, list_top + row_h * 0.4f}, kDim,
+         search_ && search_->done
+             ? (german_ ? "Keine Skylanders-Disc gefunden. B: selbst einen Ordner w\xC3\xA4hlen."
+                        : "No Skylanders disc found. B: choose a folder yourself.")
+             : (german_ ? "Einen Moment ..." : "One moment ..."));
+  } else if (n <= 1 && !folder_.empty()) {
     Text(dl, regular_, 19 * u, {left, list_top + row_h * 1.2f}, kDim,
          german_ ? "Hier sind keine ISO-Dateien und keine Ordner." : "No ISO files and no folders here.");
   }
   if (n && (clicked >= 0 || once(ImGuiKey_Enter) || once(ImGuiKey_GamepadFaceDown))) {
     Choose(entries_[clicked >= 0 ? clicked : selected_]);
+  } else if (once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Y)) {
+    StartSearch();  // Y: look for the discs from anywhere
+  } else if (searching_view_ && (once(ImGuiKey_Backspace) || once(ImGuiKey_GamepadFaceRight))) {
+    // B in the results: back to the drives and places.
+    StopSearch();
+    searching_view_ = false;
+    List({});
   } else if (once(ImGuiKey_Backspace) || once(ImGuiKey_GamepadFaceRight)) {
     // B: one level up; above the drives it closes.
     if (folder_.empty()) {
@@ -254,11 +414,14 @@ void FileBrowser::Draw(float width, float height) {
       Choose({Entry::Kind::kUp, {}, {}});
     }
   } else if (once(ImGuiKey_Escape)) {
+    StopSearch();
+    searching_view_ = false;
     open_ = false;
   }
   float hx = left;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x96" "ffnen / einlesen" : "Open / add");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Discs suchen" : "Find my discs");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
   Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
