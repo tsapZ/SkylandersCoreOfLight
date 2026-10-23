@@ -975,7 +975,7 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
       {"Spielzeit", "Play time"},         {"Gold", "Gold"},
       {"Level", "Level"},                 {"Upgrades", "Upgrades"},
       {"Heldenpunkte", "Hero points"},    {"Zuletzt gespielt", "Last played"},
-      {"Bester pro Element", "Best of each element"},
+      {"Bester pro Element", "Best of each element"}, {"Titel", "Titles"},
   };
   constexpr int kCount = int(std::size(kLists));
   if (pressed(ImGuiKey_GamepadL1) || pressed(ImGuiKey_Q) || pressed(ImGuiKey_PageUp)) {
@@ -1042,6 +1042,56 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
       const sp::Element el = sp::Element(e);
       entries.push_back({best, double(100 - e), text,
                          german_ ? std::string(ElementDe(el)) : std::string(sp::ElementName(el))});
+    }
+  }
+  if (board_list_ == 7) {
+    // A title for the profile's best figure in each thing, in this order; a figure can hold several.
+    struct Title {
+      const char *de, *en;
+      double (*score)(const sp::FigureStats&);  // the higher the better; 0 = not in the running
+    };
+    static constexpr Title kTitles[] = {
+        {"Der Veteran", "The Veteran", [](const sp::FigureStats& s) { return double(s.play_seconds); }},
+        {"Der Meister", "The Master", [](const sp::FigureStats& s) { return double(s.xp); }},
+        {"Der Schatzj" "\xC3\xA4" "ger", "The Treasure Hunter", [](const sp::FigureStats& s) { return double(s.gold); }},
+        {"Der T" "\xC3\xBC" "ftler", "The Tinkerer", [](const sp::FigureStats& s) { return double(sp::UpgradeCount(s)); }},
+        {"Der Held", "The Hero", [](const sp::FigureStats& s) { return double(s.hero_points); }},
+        // On the most consoles (Wii, Xbox 360, PS3), more than one only.
+        {"Der Weltenbummler", "The Globetrotter",
+         [](const sp::FigureStats& s) {
+           const int n = (s.platforms & 1) + (s.platforms >> 1 & 1) + (s.platforms >> 2 & 1);
+           return n > 1 ? double(n) : 0.0;
+         }},
+        // The played figure with the least XP: the one that waits for its turn.
+        {"Der Neuling", "The Rookie", [](const sp::FigureStats& s) { return s.xp ? 1e9 - double(s.xp) : 0.0; }},
+    };
+    for (size_t t = 0; t < std::size(kTitles); ++t) {
+      const Figure* best = nullptr;
+      double best_score = 0;
+      for (const Figure* f : mine) {
+        const double score = kTitles[t].score(*f->stats);
+        if (score > best_score) {
+          best = f;
+          best_score = score;
+        }
+      }
+      if (!best) continue;
+      const sp::FigureStats& s = *best->stats;
+      switch (t) {
+        case 0: std::snprintf(text, sizeof(text), "%s", PlayTime(s.play_seconds, german_).c_str()); break;
+        case 1:
+        case 6:
+          std::snprintf(text, sizeof(text), german_ ? "Stufe %u  " "\xC2\xB7" "  %u XP" : "Level %u  " "\xC2\xB7" "  %u XP",
+                        unsigned(s.level), unsigned(s.xp));
+          break;
+        case 2: std::snprintf(text, sizeof(text), "%u Gold", unsigned(s.gold)); break;
+        case 3: std::snprintf(text, sizeof(text), "%d Upgrades", sp::UpgradeCount(s)); break;
+        case 4: std::snprintf(text, sizeof(text), german_ ? "%u Heldenpunkte" : "%u hero points", unsigned(s.hero_points)); break;
+        default:
+          std::snprintf(text, sizeof(text), german_ ? "auf %d Konsolen" : "on %d consoles", int(best_score));
+          break;
+      }
+      entries.push_back({best, double(100 - int(t)), text, german_ ? kTitles[t].de : kTitles[t].en});
     }
   }
   std::stable_sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) { return a.value > b.value; });
@@ -1112,10 +1162,10 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
     const ImVec2 mc{left + 44 * u, y + row_h * 0.5f};
     char place[8];
     std::snprintf(place, sizeof(place), "%d", i + 1);
-    if (i < 3 && board_list_ != 6) {
+    if (i < 3 && board_list_ < 6) {
       dl->AddCircleFilled(mc, 19 * u, kMedals[i]);
       Text(dl, bold_, 20 * u, {mc.x - TextWidth(bold_, 20 * u, place) * 0.5f, mc.y - 12 * u}, Rgba(40, 30, 10), place);
-    } else if (board_list_ != 6) {
+    } else if (board_list_ < 6) {
       Text(dl, bold_, 20 * u, {mc.x - TextWidth(bold_, 20 * u, place) * 0.5f, mc.y - 12 * u}, kDim, place);
     }
     const ImVec2 pc{left + 104 * u, y + row_h * 0.5f};
@@ -1126,8 +1176,11 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
     }
     float nx = left + 144 * u;
     if (!en.label.empty()) {
-      Text(dl, bold_, 20 * u, {nx, y + 16 * u}, ElementColor(en.f->element), en.label);
-      nx += 150 * u;
+      // Titles in gold, elements in their colour; the column as wide as the widest of the list.
+      float label_w = 150 * u;
+      for (const Entry& other : entries) label_w = std::max(label_w, TextWidth(bold_, 20 * u, other.label) + 20 * u);
+      Text(dl, bold_, 20 * u, {nx, y + 16 * u}, board_list_ == 7 ? kGold : ElementColor(en.f->element), en.label);
+      nx += label_w;
     }
     Text(dl, bold_, 21 * u, {nx, y + 7 * u}, kWhite, Fit(bold_, 21 * u, en.f->name, right - nx - 320 * u));
     Text(dl, regular_, 15 * u, {nx, y + 32 * u}, kDim, Fit(regular_, 15 * u, en.f->game, right - nx - 320 * u));
