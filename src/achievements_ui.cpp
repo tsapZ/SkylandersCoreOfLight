@@ -144,18 +144,19 @@ void AchievementsScreen::Draw(float width, float height) {
     const int n = int(list_.items.size());
     // Rows of two columns on a wide window: up / down move a row, left / right a column.
     const int columns = width > 1100 * u ? 2 : 1;
-    if (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
+    if (n > 0 && (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp))) {
       if (selected_ >= columns) selected_ -= columns;
     }
-    if (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
+    if (n > 0 &&
+        (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown))) {
       selected_ = std::min(n - 1, selected_ + columns);
     }
-    if (columns > 1 && (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) ||
-                        pressed(ImGuiKey_GamepadLStickLeft))) {
+    if (n > 0 && columns > 1 &&
+        (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft))) {
       selected_ = std::max(0, selected_ - 1);
     }
-    if (columns > 1 && (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) ||
-                        pressed(ImGuiKey_GamepadLStickRight))) {
+    if (n > 0 && columns > 1 &&
+        (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight))) {
       selected_ = std::min(n - 1, selected_ + 1);
     }
     if (io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * 3, 0, std::max(0, n - 1));
