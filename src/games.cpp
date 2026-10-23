@@ -466,6 +466,34 @@ bool ExeMentions(const fs::path& exe, std::string_view text) {
 
 }  // namespace
 
+namespace {
+
+// SW_HIDE in the start-up info hides only the first window a program shows; the games show theirs
+// themselves once the picture is set up, so an export could come up as a tiny window with the
+// game's intro (seen on a colleague's PC after a disc import, and closed as a strange pop-up). So
+// the launcher hides every window of the export's process as soon as it is visible, for as long
+// as the process runs (polled every 20 ms; it may flash for a moment).
+void KeepWindowsHidden(HANDLE process) {
+  HANDLE own = nullptr;
+  if (!DuplicateHandle(GetCurrentProcess(), process, GetCurrentProcess(), &own, SYNCHRONIZE, FALSE, 0)) return;
+  const DWORD pid = GetProcessId(process);
+  std::thread([own, pid] {
+    while (WaitForSingleObject(own, 20) == WAIT_TIMEOUT) {
+      EnumWindows(
+          [](HWND hwnd, LPARAM wanted) -> BOOL {
+            DWORD owner = 0;
+            GetWindowThreadProcessId(hwnd, &owner);
+            if (owner == DWORD(wanted) && IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);
+            return TRUE;
+          },
+          LPARAM(pid));
+    }
+    CloseHandle(own);
+  }).detach();
+}
+
+}  // namespace
+
 bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
   if (found.exe.empty() || !ExeMentions(found.exe, "export_title_music")) return false;
   wchar_t temp[MAX_PATH] = L"";
@@ -484,6 +512,7 @@ bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
     return false;
   }
   CloseHandle(info.hThread);
+  KeepWindowsHidden(info.hProcess);
   *process = info.hProcess;
   return true;
 }
@@ -507,6 +536,7 @@ bool StartPictureExport(size_t game, const Found& found, void** process) {
     return false;
   }
   CloseHandle(info.hThread);
+  KeepWindowsHidden(info.hProcess);
   *process = info.hProcess;
   return true;
 }
