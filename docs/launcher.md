@@ -100,6 +100,10 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
   itself while it runs and comes back when the game ends.
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
+- **DirectInput pads** (the Logitech Dual Action and the like, which XInput doesn't see) drive the
+  launcher as well: read through Windows' joystick API with SDL's layout for the Dual Action
+  (1-4 = X A B Y, 5 / 6 shoulders, 7 / 8 triggers, 9 Back, 10 Start, the hat as the d-pad);
+  XInput pads, which show up there too, are left out by their HID path ("IG_"), `src/pad_state.h`.
 - **The connected controllers** are shown left of the profile at the top right, as on the Xbox:
   each pad's number (its XInput slot, 1-4) and, for a pad on batteries, three bars
   (`XInputGetBatteryInformation`, asked every ten seconds; red at one bar).
