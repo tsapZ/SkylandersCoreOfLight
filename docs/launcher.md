@@ -122,17 +122,6 @@ exe and gets out of the way while the game runs; no game needs it.
   each log's last 512 KB), the setups' logs (`%TEMP%\CoreOfLight`) and the launcher's settings.
   The profile folder, the Windows user name and the computer's name are replaced
   (`%USERPROFILE%`, `%USERNAME%`, `%COMPUTERNAME%`). Checked: 204 KB, 31 parts, no user name.
-- **Weiterspielen** (#16; hub setting "Weiterspielen", on): a tile between the title and the profile,
-  "Weiterspielen · Swap Force · mit Chop Chop · vor 2 Tagen" with the figure's picture; Up from the
-  cards chooses it, A (or a click) starts that game with `--continue_game=true` (skylanders-portal):
-  it presses A through the title, the menus and the save slots until the game asks for a Skylander,
-  then puts player 1's newest Recent figure that game reads on the portal. Offered for the game
-  played last among those that get into the save played last (`ContinueSupported`): Swap Force and
-  SuperChargers, whose slot screens start on it, and Trap Team and Giants, whose games move the
-  cursor there first (their `continue_slot.cpp`, from the menu script's "selection cur"). Spyro's
-  Adventure and Imaginators start on slot 1 and aren't offered. Checked: from the tile into Swap
-  Force's hub with Chop Chop on the portal, 35 s; SuperChargers, Trap Team and Giants by script with
-  saves in a later slot.
 - **Spielstände** (RT / S on a card, `src/saves_ui.cpp`, `src/saves.cpp`): the chosen game's saves of
   the active profile on the left (Spielstand 1, 2, ..., the options last, each with when it was
   saved), the copies of the chosen one on the right: the game's own previous version (the SDK keeps

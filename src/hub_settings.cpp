@@ -59,7 +59,6 @@ HubSettings LoadHubSettings() {
   s.animations = IsOn(get("animations"), s.animations);
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
   s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
-  s.continue_tile = IsOn(get("continue_tile"), s.continue_tile);
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   return s;
 }
@@ -116,15 +115,6 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                                  "Der Hub f\xC3\xBCllt den Bildschirm, f\xC3\xBCr den Fernseher. F11 oder "
                                  "Alt+Enter schalten auch um.",
                                  settings.fullscreen));
-  page.settings.push_back(Switch(
-      "continue_tile", "Continue", "Weiterspielen",
-      "On: a tile at the top of the start screen (Up, then A) starts the game played last straight into its "
-      "last save, with the figure played last on the portal. Off: every game starts at its title screen, "
-      "for the nostalgia. Only for Swap Force so far.",
-      "An: Eine Kachel oben auf dem Startbildschirm (hoch, dann A) startet das zuletzt gespielte Spiel direkt "
-      "in seinen letzten Spielstand, mit der zuletzt benutzten Figur auf dem Portal. Aus: Jedes Spiel startet "
-      "mit seinem Titelbildschirm, f\xC3\xBCr die Nostalgie. Bisher nur f\xC3\xBCr Swap Force.",
-      settings.continue_tile));
   page.settings.push_back(Switch(
       "auto_backup", "Back up saves", "Spielst\xC3\xA4nde sichern",
       "When a game starts and ends and every 60 minutes while it runs, a copy of each of its saves that "

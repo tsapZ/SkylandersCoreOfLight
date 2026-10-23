@@ -170,7 +170,6 @@ void LauncherUi::CountAchievements() {
     last_saved_.push_back(i < found_.size() && !found_[i].exe.empty() ? LastSaved(ActiveProfile(), found_[i].exe)
                                                                         : 0);
   }
-  FindContinue();
 }
 
 void LauncherUi::UpdateImport() {
@@ -333,58 +332,7 @@ void* LauncherUi::TakeStartedProcess() {
   return p;
 }
 
-void LauncherUi::FindContinue() {
-  continue_ = {};
-  if (!hub_.continue_tile) return;
-  for (size_t i = 0; i < found_.size() && i < last_saved_.size() && i < AllGames().size(); ++i) {
-    if (found_[i].exe.empty() || !ContinueSupported(AllGames()[i]) || !last_saved_[i]) continue;
-    if (found_[i].disc.load() != DiscState::kMatches && found_[i].disc.load() != DiscState::kChecking) continue;
-    if (continue_.valid && last_saved_[i] <= continue_.saved) continue;
-    continue_.valid = true;
-    continue_.game = i;
-    continue_.saved = last_saved_[i];
-  }
-  if (!continue_.valid) return;
-  // The figure as the game picks it (skylanders-portal PlaceContinueFigure): the newest line of
-  // player 1's Recent list whose figures all come from this game or an earlier one.
-  std::ifstream in(ProfileFiguresDir(ActiveProfile()) / "portal_menu_recent_p1.txt");
-  std::string line;
-  while (std::getline(in, line)) {
-    std::vector<std::string> names;
-    bool usable = !line.empty();
-    uint16_t id = 0, variant = 0;
-    size_t start = 0;
-    while (usable && start <= line.size()) {
-      const size_t bar = line.find('|', start);
-      const std::string part = line.substr(start, bar == std::string::npos ? std::string::npos : bar - start);
-      start = bar == std::string::npos ? line.size() + 1 : bar + 1;
-      if (part.empty()) continue;
-      const auto data = sp::LoadFigureFile(ProfileFiguresDir(ActiveProfile()) / std::filesystem::path(std::u8string(part.begin(), part.end())));
-      const sp::SkylanderInfo* info = data ? sp::FindSkylander(sp::ReadFigureId(*data), sp::ReadFigureVariant(*data)) : nullptr;
-      size_t from_game = AllGames().size();
-      for (size_t g = 0; info && g < AllGames().size(); ++g) {
-        if (info->game == AllGames()[g].name_en) from_game = g;
-      }
-      if (!info || from_game > continue_.game) {
-        usable = false;
-        break;
-      }
-      if (names.empty()) {
-        id = info->id;
-        variant = info->variant;
-      }
-      const std::string base = sp::DisplayName(sp::SwapperBaseName(*info));
-      if (std::find(names.begin(), names.end(), base) == names.end()) names.push_back(base);
-    }
-    if (!usable || names.empty()) continue;
-    continue_.figure = names[0] + (names.size() > 1 ? " / " + names[1] : std::string());
-    continue_.id = id;
-    continue_.variant = variant;
-    break;
-  }
-}
-
-void LauncherUi::Start(size_t index, bool continue_game) {
+void LauncherUi::Start(size_t index) {
   if (index >= found_.size()) return;
   // A does what the card needs: a game without its disc opens the disc browser, one that isn't
   // installed or has another disc version says so (nothing could run).
@@ -437,7 +385,7 @@ void LauncherUi::Start(size_t index, bool continue_game) {
   std::wstring error;
   // The saves as they are before the game touches them (unchanged ones aren't copied again).
   if (hub_.auto_backup) AutoBackup(ActiveProfile(), AllGames()[index], found_[index].exe);
-  if (StartGame(found_[index], error, &process, continue_game ? L" --continue_game=true" : L"")) {
+  if (StartGame(found_[index], error, &process)) {
     started_ = process;
     starting_ = true;
     starting_game_ = index;
@@ -627,55 +575,6 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     dl->AddRectFilled(a, {a.x + gw, a.y + 44 * s}, kGoldDark, 22 * s);
     dl->AddRectFilled({a.x + 3 * s, a.y + 3 * s}, {a.x + gw - 3 * s, a.y + 41 * s}, kGold, 19 * s);
     Text(dl, bold_, go_size, {a.x + 30 * s, a.y + 8 * s}, Rgba(60, 35, 0), go);
-  }
-}
-
-// The "Weiterspielen" tile between the title and the profile: the figure's picture, the game, the
-// figure and how long ago it was saved; gold when chosen (Up from the cards), a click starts it.
-void LauncherUi::DrawContinueTile(float width, float u) {
-  if (!continue_.valid || continue_.game >= AllGames().size()) return;
-  ImDrawList* dl = ImGui::GetWindowDrawList();
-  const ImGuiIO& io = ImGui::GetIO();
-  const float x0 = 500 * u, x1 = width - 330 * u;
-  if (x1 - x0 < 300 * u) return;
-  const ImVec2 a{x0, 34 * u}, b{x1, 106 * u};
-  const bool hovered = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y;
-  if (hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) continue_focus_ = true;
-  dl->AddRectFilled(a, b, continue_focus_ ? Rgba(60, 70, 140, 240) : Rgba(24, 30, 70, 220), 18 * u);
-  dl->AddRect(a, b, continue_focus_ ? kGold : Rgba(90, 100, 150), 18 * u, 0, (continue_focus_ ? 3.0f : 1.5f) * u);
-  float tx = a.x + 18 * u;
-  if (continue_.id || continue_.variant) {
-    const ImTextureID picture = LoadTexture(FigurePicture(continue_.id, continue_.variant));
-    if (picture) {
-      dl->AddImageRounded(picture, {a.x + 8 * u, a.y + 6 * u}, {a.x + 68 * u, a.y + 66 * u}, {0, 0}, {1, 1},
-                          IM_COL32_WHITE, 12 * u);
-      tx = a.x + 80 * u;
-    }
-  }
-  Text(dl, bold_, 24 * u, {tx, a.y + 8 * u}, kGold, german_ ? "Weiterspielen" : "Continue");
-  const Game& game = AllGames()[continue_.game];
-  std::string line = german_ ? game.name_de : game.name_en;
-  if (!continue_.figure.empty()) line += (german_ ? "  \xC2\xB7  mit " : "  \xC2\xB7  with ") + continue_.figure;
-  FILETIME now_ft;
-  GetSystemTimeAsFileTime(&now_ft);
-  const uint64_t now = uint64_t(now_ft.dwHighDateTime) << 32 | now_ft.dwLowDateTime;
-  const uint64_t minutes = now > continue_.saved ? (now - continue_.saved) / 600000000ull : 0;
-  char ago[64];
-  if (minutes < 60) {
-    std::snprintf(ago, sizeof(ago), german_ ? "vor %llu Min." : "%llu min ago", static_cast<unsigned long long>(minutes));
-  } else if (minutes < 48 * 60) {
-    std::snprintf(ago, sizeof(ago), german_ ? "vor %llu Std." : "%llu h ago", static_cast<unsigned long long>(minutes / 60));
-  } else {
-    std::snprintf(ago, sizeof(ago), german_ ? "vor %llu Tagen" : "%llu days ago", static_cast<unsigned long long>(minutes / 1440));
-  }
-  line += std::string("  \xC2\xB7  ") + ago;
-  Text(dl, regular_, 18 * u, {tx, a.y + 40 * u}, kWhite, line.c_str());
-  if (continue_focus_) {
-    Hint(dl, bold_, 20 * u, {b.x - 54 * u, a.y + 24 * u}, "A", Rgba(70, 170, 70), "");
-  }
-  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    continue_focus_ = false;
-    Start(continue_.game, true);
   }
 }
 
@@ -1083,7 +982,6 @@ bool LauncherUi::DrawScreens(float width, float height) {
       hub_ = LoadHubSettings();
       ApplyHubSettings();
       LoadProfiles(german_);
-      FindContinue();
     }
     // "Problem melden": the report on the desktop, shown in Explorer.
     if (hub_screen_.TakeAction() == "report_problem") {
@@ -1127,7 +1025,6 @@ bool LauncherUi::DrawScreens(float width, float height) {
   Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, "SKYLANDERS");
   Text(dl, bold_, 56 * u, {46 * u, 56 * u}, kGold, "CORE OF LIGHT");
   const bool profile_clicked = DrawProfileBadge(width, u);
-  DrawContinueTile(width, u);
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();
@@ -1138,8 +1035,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
   float card_w = std::min((area_w - gap * (per_row - 1)) / per_row, 300 * u);
   float card_h = two_rows ? card_w * 1.25f : card_w * 1.9f;
   // On a window wider than 16:9 (ultrawide) or a tall one the width alone would make the cards
-  // taller than the room between the title row (with the Weiterspielen tile) and the hints at the
-  // bottom; there the height decides, the cards keep their shape.
+  // taller than the room between the title row and the hints at the bottom; there the height
+  // decides, the cards keep their shape.
   const float room_h = (height - 380 * u - (two_rows ? gap : 0.0f)) / (two_rows ? 2.0f : 1.0f);
   if (room_h > 0 && card_h > room_h) {
     card_w *= room_h / card_h;
@@ -1153,24 +1050,14 @@ bool LauncherUi::DrawScreens(float width, float height) {
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
   const bool up = pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp);
   const bool down = pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown);
-  if (!continue_.valid) continue_focus_ = false;
-  if (continue_focus_) {
-    // On the "Weiterspielen" tile: down (or left / right) goes back to the cards.
-    if (down || pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadLeft) ||
-        pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickLeft) || pressed(ImGuiKey_GamepadLStickRight)) {
-      continue_focus_ = false;
-    }
-  } else if (n) {
+  if (n) {
     if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft)) {
       selected_ = (selected_ + n - 1) % n;
     }
     if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight)) {
       selected_ = (selected_ + 1) % n;
     }
-    // Up from the (top row of the) cards: the tile.
-    if (up && continue_.valid && (!two_rows || selected_ < per_row)) {
-      continue_focus_ = true;
-    } else if (two_rows && (up || down)) {
+    if (two_rows && (up || down)) {
       selected_ = (selected_ + per_row) % n;
     }
   }
@@ -1189,18 +1076,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
       OpenSettings(i);
     }
     if (lift_.size() != n) lift_.assign(n, 0.0f);
-    const float target = i == selected_ && !continue_focus_ ? 1.0f : 0.0f;
+    const float target = i == selected_ ? 1.0f : 0.0f;
     lift_[i] = hub_.animations ? lift_[i] + (target - lift_[i]) * std::min(1.0f, io.DeltaTime * 12.0f) : target;
-    DrawCard(i, x, y - lift_[i] * 12 * u, card_w, card_h, i == selected_ && !continue_focus_);
+    DrawCard(i, x, y - lift_[i] * 12 * u, card_w, card_h, i == selected_);
   }
   if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
       ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
-    if (continue_focus_ && continue_.valid) {
-      continue_focus_ = false;
-      Start(continue_.game, true);
-    } else {
-      Start(selected_);
-    }
+    Start(selected_);
   }
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
     OpenSettings(selected_);
@@ -1318,8 +1200,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   float hx = 48 * u;
   const float hy = height - 52 * u;
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70),
-            continue_focus_ ? (german_ ? "Weiterspielen" : "Continue") : (german_ ? "Starten" : "Play"));
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Starten" : "Play");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings", "Tab");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc", "D");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");

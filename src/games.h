@@ -71,19 +71,9 @@ struct Found {
 // game's default.xex on a background thread.
 void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_dir);
 
-// Starts a game's exe in its own folder; false (and `error`) if Windows refused. `extra`: more of
-// the command line (" --continue_game=true").
-bool StartGame(const Found& game, std::wstring& error, void** process, const std::wstring& extra = {});
+// Starts a game's exe in its own folder; false (and `error`) if Windows refused.
+bool StartGame(const Found& game, std::wstring& error, void** process);
 
-// Whether "Weiterspielen" (#16, skylanders-portal continue_game) brings the game into its last
-// save: only where its save slot screen starts on the save played last. Swap Force's does (checked
-// with a real save 2026-10-23), SuperChargers' too (saves in slots 1 and 2, slot 2 played last: the
-// book opens on Speicherplatz 2, and Weiterspielen got into it). Trap Team's and Giants' start on
-// slot 1, but the game moves its cursor to the save played last first (continue_slot.cpp in
-// TrapTeamRecomp and GiantsRecomp). Spyro's Adventure and Imaginators start on slot 1 whichever
-// was played last (checked the same way), where A begins a new game in an empty slot or loads
-// the wrong save.
-bool ContinueSupported(const Game& game);
 
 // Installing a game from the launcher (the owner's wish, 2026-10-23): its own setup
 // (<Repo>Setup-<version>.exe), found in the launcher's games\ folder or, for a developer, in the

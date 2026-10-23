@@ -50,21 +50,7 @@ class LauncherUi {
   void ToggleFullscreen();
 
  private:
-  // `continue_game`: "Weiterspielen", into the save played last with the figure played last.
-  void Start(size_t index, bool continue_game = false);
-  // The "Weiterspielen" tile (#16): the game played last that ContinueSupported, the figure it
-  // would put on (player 1's newest Recent entry that game reads) and when it was saved.
-  struct ContinueTile {
-    bool valid = false;
-    size_t game = 0;
-    std::string figure;  // its name, empty if none
-    uint16_t id = 0, variant = 0;
-    uint64_t saved = 0;  // Windows file time
-  };
-  ContinueTile continue_;
-  bool continue_focus_ = false;  // the tile is chosen (Up from the cards)
-  void FindContinue();
-  void DrawContinueTile(float width, float u);
+  void Start(size_t index);
   void OpenSettings(size_t index);
   void DrawCard(size_t index, float x, float y, float w, float h, bool selected);
   // The active profile at the top right; true when clicked.

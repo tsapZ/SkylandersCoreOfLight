@@ -248,12 +248,7 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   }
 }
 
-bool ContinueSupported(const Game& game) {
-  const std::string_view key = game.key;
-  return key == "swapforce" || key == "superchargers" || key == "trapteam" || key == "giants";
-}
-
-bool StartGame(const Found& game, std::wstring& error, void** process, const std::wstring& extra) {
+bool StartGame(const Found& game, std::wstring& error, void** process) {
   STARTUPINFOW startup = {sizeof(startup)};
   PROCESS_INFORMATION info = {};
   // The active profile's own user data (profiles.h); nothing for the main profile. Started from
@@ -269,7 +264,6 @@ bool StartGame(const Found& game, std::wstring& error, void** process, const std
   while (keep > 0 && keep < name.size() && (static_cast<unsigned char>(name[keep]) & 0xC0) == 0x80) --keep;
   name.resize(keep);  // whole UTF-8 characters only
   if (!name.empty()) command += L" \"--user_name=" + Utf8Path(name).wstring() + L"\"";
-  command += extra;
   if (!CreateProcessW(game.exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
                       game.workdir.c_str(), &startup, &info)) {
     wchar_t text[256] = L"";
