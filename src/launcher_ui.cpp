@@ -1,6 +1,7 @@
 #include "launcher_ui.h"
 
 #include <windows.h>
+#include <shellapi.h>
 #include <shlobj.h>
 
 #include <algorithm>
@@ -14,6 +15,7 @@
 #include "imgui_internal.h"
 #include "nxe_art.h"
 #include "pad_state.h"
+#include "problem_report.h"
 #include "textures.h"
 
 namespace coreoflight {
@@ -896,6 +898,20 @@ bool LauncherUi::DrawScreens(float width, float height) {
       hub_ = LoadHubSettings();
       ApplyHubSettings();
       LoadProfiles(german_);
+    }
+    // "Problem melden": the ZIP on the desktop, shown in Explorer.
+    if (hub_screen_.TakeAction() == "report_problem") {
+      std::string error;
+      const std::filesystem::path zip = WriteProblemReport(found_, launcher_dir_, german_, error);
+      if (zip.empty()) {
+        hub_screen_.ShowMessage(error);
+      } else {
+        const std::u8string file = zip.filename().u8string();
+        hub_screen_.ShowMessage((german_ ? "Auf dem Desktop: " : "On the desktop: ") +
+                                std::string(file.begin(), file.end()));
+        const std::wstring select = L"/select,\"" + zip.wstring() + L"\"";
+        ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+      }
     }
     return true;
   }

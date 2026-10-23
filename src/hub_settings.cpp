@@ -114,6 +114,22 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                                  "Der Hub f\xC3\xBCllt den Bildschirm, f\xC3\xBCr den Fernseher. F11 oder "
                                  "Alt+Enter schalten auch um.",
                                  settings.fullscreen));
+  // A button: the report (problem_report.h), made by the launcher when A is pressed on it.
+  GameSetting report;
+  report.cvar = "report_problem";
+  report.en = "Report a problem";
+  report.de = "Problem melden";
+  report.help_en = "Packs the latest logs and settings of every game, of their setups and of the launcher, "
+                   "and a few facts about this PC (Windows, processor, memory, graphics card), into one ZIP "
+                   "on the desktop. Your Windows user name and the computer's name are taken out. Send it "
+                   "along with what happened.";
+  report.help_de = "Packt die letzten Logs und Einstellungen aller Spiele, ihrer Setups und des Hubs sowie "
+                   "ein paar Angaben zum PC (Windows, Prozessor, Arbeitsspeicher, Grafikkarte) in eine "
+                   "ZIP-Datei auf dem Desktop. Dein Windows-Benutzername und der Name des PCs werden "
+                   "entfernt. Schick sie mit und schreib dazu, was passiert ist.";
+  report.type = "action";
+  report.options = {{"", "Make ZIP", "ZIP erstellen"}};
+  page.settings.push_back(report);
   out->pages.push_back(std::move(page));
   return out;
 }

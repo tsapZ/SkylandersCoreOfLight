@@ -77,6 +77,13 @@ void SettingsScreen::Open(const std::string& title, SettingsLoader* loader, std:
 
 std::map<std::string, std::string> SettingsScreen::TakeSaved() { return std::exchange(saved_, {}); }
 
+std::string SettingsScreen::TakeAction() { return std::exchange(action_, {}); }
+
+void SettingsScreen::ShowMessage(const std::string& text) {
+  message_ = text;
+  message_until_ = ImGui::GetTime() + 6.0;
+}
+
 std::string SettingsScreen::ValueLabel(const GameSetting& s) const {
   for (const SettingChoice& o : s.options) {
     if (SameValue(o.value, s.value)) return german_ ? o.de : o.en;
@@ -91,6 +98,11 @@ void SettingsScreen::Step(int step) {
   auto& settings = edit_->pages[page_].settings;
   if (row_ >= int(settings.size())) return;
   GameSetting& s = settings[row_];
+  // A button row (type "action", the launcher's "Problem melden"): A runs it, left / right nothing.
+  if (s.type == "action") {
+    if (step > 0) action_ = s.cvar;
+    return;
+  }
   std::string next;
   if (!s.options.empty()) {
     int at = -1;
@@ -290,7 +302,7 @@ void SettingsScreen::Draw(float width, float height) {
     const float vw = TextWidth(bold_, vs, value.c_str());
     const float vx = b.x - 40 * u - vw;
     Text(dl, bold_, vs, {vx, y + 10 * u}, kGold, value);
-    if (chosen && (!s.options.empty() || s.type == "bool")) {
+    if (chosen && s.type != "action" && (!s.options.empty() || s.type == "bool")) {
       Text(dl, bold_, vs, {vx - 28 * u, y + 10 * u}, kDim, "<");
       Text(dl, bold_, vs, {b.x - 28 * u, y + 10 * u}, kDim, ">");
     }

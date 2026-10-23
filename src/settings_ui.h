@@ -26,6 +26,10 @@ class SettingsScreen {
   void Draw(float width, float height);
   // Settings saved since the last call (cvar -> value), for the card's summary.
   std::map<std::string, std::string> TakeSaved();
+  // The button row (type "action") A was pressed on since the last call: its cvar, or empty.
+  std::string TakeAction();
+  // A line next to the hints for a few seconds (what an action did).
+  void ShowMessage(const std::string& text);
 
  private:
   void Step(int step);
@@ -47,6 +51,7 @@ class SettingsScreen {
   };
   std::map<std::string, Pending> changes_;
   std::map<std::string, std::string> saved_;
+  std::string action_;
   bool confirm_discard_ = false;
   std::string message_;
   double message_until_ = 0;

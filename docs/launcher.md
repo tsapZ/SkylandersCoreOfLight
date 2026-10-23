@@ -103,6 +103,15 @@ exe and gets out of the way while the game runs; no game needs it.
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
   the title music, the animations.
+- **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A packs
+  one ZIP onto the desktop, `Skylanders-Problembericht-<date>.zip`, and shows it in Explorer:
+  `info.txt` (Windows version, processor, memory, graphics cards with driver, every game's exe,
+  version and disc state), each game's settings file and its newest log plus its three newest of
+  real sessions (the launcher's own short runs leave logs of a few hundred bytes; a log over 8 MB
+  only with its end), the setups' logs (`%TEMP%\CoreOfLight`) and the launcher's settings. The
+  profile folder, the Windows user name and the computer's name are replaced in every file
+  (`%USERPROFILE%`, `%USERNAME%`, `%COMPUTERNAME%`). A store-only ZIP writer of its own, no
+  library. Checked: 29 files, Explorer opens it, no user name left in it.
 - **Animations:** every screen slides in from the left and fades in (0.32 s), the start screen
   rises when it comes back; off with the setting.
 - **The profile's name in the games:** started from here, a game gets `--user_name=<profile name>`
