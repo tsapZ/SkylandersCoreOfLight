@@ -470,9 +470,10 @@ namespace {
 
 // A game built with the SDK's window_hidden (rexglue-sdk 67364df) never shows its window for an
 // export (checked: no visible window in 1115 polls, the export complete); older builds don't know
-// the setting, so it is only passed to an exe that mentions it.
+// the setting, so it is only passed where the game's runtime mentions it (the SDK's settings are
+// in rexruntime.dll next to the exe, not in the exe).
 std::wstring HiddenWindowFlag(const Found& found) {
-  return ExeMentions(found.exe, "window_hidden") ? L" --window_hidden=true" : L"";
+  return ExeMentions(found.exe.parent_path() / "rexruntime.dll", "window_hidden") ? L" --window_hidden=true" : L"";
 }
 
 // For the older builds: SW_HIDE in the start-up info hides only the first window a program shows;
