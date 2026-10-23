@@ -1,0 +1,54 @@
+name: Problem
+description: Something doesn't work as it should (a crash, a wrong picture, the portal, the launcher)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! The report from Core of Light helps most: **LB** (the launcher's settings) > **Problem melden**, or the question after a crash. It is one text file on your desktop, with your Windows user name taken out. Drag it into the last field.
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      options:
+        - Spyro's Adventure
+        - Giants
+        - Swap Force
+        - Trap Team
+        - SuperChargers
+        - Imaginators
+        - Core of Light (the launcher)
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of problem
+      options:
+        - Crash or freeze
+        - Picture / graphics
+        - Sound
+        - Controls
+        - Portal or figures
+        - Saves
+        - Installer or launcher
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Where in the game (level, menu), what you did just before, what you saw or heard.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The installer's version, e.g. 0.1.0-beta.4
+  - type: textarea
+    id: report
+    attributes:
+      label: Report file
+      description: Drag the Skylanders-Problembericht .txt file here (or paste its text).
