@@ -78,6 +78,10 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   hub_ = LoadHubSettings();
   ApplyHubSettings();
   Refresh();
+  // The first-run setup: on a first start with no game there (a friend's PC, not a developer's).
+  if (!hub_.setup_done && std::none_of(found_.begin(), found_.end(), [](const Found& f) { return !f.exe.empty(); })) {
+    setup_.Open();
+  }
 }
 
 void LauncherUi::ApplyHubSettings() {
@@ -88,6 +92,7 @@ void LauncherUi::ApplyHubSettings() {
   figures_screen_.Init(regular_, bold_, german_);
   profiles_screen_.Init(regular_, bold_, german_);
   achievements_screen_.Init(regular_, bold_, german_);
+  setup_.Init(regular_, bold_, german_);
 }
 
 void LauncherUi::Refresh() {
@@ -160,6 +165,22 @@ void LauncherUi::CountAchievements() {
     last_saved_.push_back(i < found_.size() && !found_[i].exe.empty() ? LastSaved(ActiveProfile(), found_[i].exe)
                                                                         : 0);
   }
+}
+
+void LauncherUi::UpdateImport() {
+  const DiscImport::Phase phase = import_.phase();
+  if (phase == import_seen_) return;
+  if (phase == DiscImport::Phase::kDone) {
+    const int game = import_.game();
+    Refresh();  // the disc check again
+    if (game >= 0) selected_ = size_t(game);
+    // Its title music again, now that the disc is there.
+    if (game >= 0 && size_t(game) < export_tried_.size()) export_tried_[size_t(game)] = false;
+  }
+  if (phase == DiscImport::Phase::kDone || phase == DiscImport::Phase::kFailed) {
+    import_shown_until_ = ImGui::GetTime() + 10.0;
+  }
+  import_seen_ = phase;
 }
 
 // A game's setup running from its card: when it ends, the games are looked for again; the card
@@ -545,6 +566,7 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
 bool LauncherUi::Draw(float width, float height) {
   // The screen this frame will draw, in DrawScreens' order.
   const char* window = starting_                       ? "starting"
+                       : setup_.is_open()              ? "setup"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
                        : browser_.is_open()             ? "files"
@@ -566,6 +588,7 @@ bool LauncherUi::Draw(float width, float height) {
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
   UpdateTitleMusicExport();
   UpdateInstall();
+  UpdateImport();
   {
     std::filesystem::path wanted;
     if (hub_.title_music && selected_ < found_.size() && !found_[selected_].exe.empty()) {
@@ -761,6 +784,42 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
 bool LauncherUi::DrawScreens(float width, float height) {
   const ImGuiIO& io = ImGui::GetIO();
   if (starting_) return DrawStarting(width, height);
+  if (setup_.is_open()) {
+    // X on its disc page: the file browser for an ISO the search didn't find, over the setup.
+    if (browser_.is_open()) {
+      browser_.Draw(width, height);
+      if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) setup_.AddIso(chosen);
+      return true;
+    }
+    setup_.Draw(width, height, {&found_, &setups_, install_process_ != nullptr, &import_});
+    // It says what comes next; the launcher's own install and disc import do it.
+    const SetupScreen::Job job = setup_.TakeJob();
+    if (job.kind == SetupScreen::Job::Kind::kInstall && !install_process_ && job.game < setups_.size()) {
+      if (StartGameInstall(job.game, setups_[job.game], german_, &install_process_)) {
+        install_game_ = job.game;
+        install_since_ = ImGui::GetTime();
+      } else {
+        install_process_ = nullptr;
+      }
+    } else if (job.kind == SetupScreen::Job::Kind::kImport && !import_.running()) {
+      import_.Start(job.iso, found_, german_);
+    } else if (job.kind == SetupScreen::Job::Kind::kCancel) {
+      import_.Cancel();
+    } else if (job.kind == SetupScreen::Job::Kind::kPickIso) {
+      browser_.Open();
+    }
+    if (const std::string language = setup_.TakeLanguage(); !language.empty()) {
+      hub_.language = language;
+      WriteGameSetting(HubSettingsFile(), "Hub", "language", "string", language);
+      ApplyHubSettings();
+      LoadProfiles(german_);
+    }
+    if (setup_.TakeFinished()) {
+      hub_.setup_done = true;
+      WriteGameSetting(HubSettingsFile(), "Hub", "setup_done", "bool", "true");
+    }
+    return true;
+  }
   if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (ask_update_ >= 0) return DrawUpdateConfirm(width, height);
   if (browser_.is_open()) {
@@ -977,20 +1036,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60),
             import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));
   // The disc being set up: what happens, and how far the unpacking is.
-  const DiscImport::Phase phase = import_.phase();
-  if (phase != import_seen_) {
-    if (phase == DiscImport::Phase::kDone) {
-      const int game = import_.game();
-      Refresh();  // the disc check again
-      if (game >= 0) selected_ = size_t(game);
-      // Its title music again, now that the disc is there.
-      if (game >= 0 && size_t(game) < export_tried_.size()) export_tried_[size_t(game)] = false;
-    }
-    if (phase == DiscImport::Phase::kDone || phase == DiscImport::Phase::kFailed) {
-      import_shown_until_ = ImGui::GetTime() + 10.0;
-    }
-    import_seen_ = phase;
-  }
+  const DiscImport::Phase phase = import_.phase();  // UpdateImport follows it
   if (import_.running() || (phase != DiscImport::Phase::kIdle && ImGui::GetTime() < import_shown_until_)) {
     const float bx = width * 0.5f, by = height - 100 * u, bw = width * 0.5f - 48 * u;
     std::string text = import_.message();

@@ -16,6 +16,7 @@
 #include "music.h"
 #include "profiles_ui.h"
 #include "settings_ui.h"
+#include "setup_ui.h"
 
 struct ImFont;
 
@@ -91,6 +92,7 @@ class LauncherUi {
   FiguresScreen figures_screen_;
   ProfilesScreen profiles_screen_;
   AchievementsScreen achievements_screen_;
+  SetupScreen setup_;  // the first-run setup
   std::vector<GameAchievements> achievements_;
   std::vector<uint64_t> last_saved_;  // per game, the active profile's (Windows file time)
   bool selection_made_ = false;       // the first card chosen (Refresh)
@@ -125,6 +127,8 @@ class LauncherUi {
   double install_since_ = 0;
   bool install_is_update_ = false;
   void UpdateInstall();
+  // A disc set up meanwhile: the games looked for again (its disc check), its card chosen.
+  void UpdateImport();
   // Updates: each game's installed version (empty when it wasn't installed by its setup), the
   // games whose update the owner put off this launch ("Erst spielen"), and the card whose A asks
   // "Update ... jetzt installieren?" (-1: none).

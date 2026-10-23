@@ -31,12 +31,14 @@ add_executable(coreoflight WIN32
   src/game_settings.cpp
   src/hub_settings.cpp
   src/disc_import.cpp
+  src/disc_search.cpp
   src/file_browser.cpp
   src/music.cpp
   src/figures_ui.cpp
   src/textures.cpp
   src/xiso.cpp
   src/settings_ui.cpp
+  src/setup_ui.cpp
   src/launcher_ui.cpp
   src/nxe_art.cpp
   src/profiles.cpp

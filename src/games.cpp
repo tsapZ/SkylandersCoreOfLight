@@ -279,6 +279,11 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
 
 void SetInstallDir(const fs::path& dir) { g_install_dir = dir; }
 
+fs::path InstallFolder(const Game& game) {
+  return (g_install_dir.empty() ? KnownFolder(FOLDERID_LocalAppData) / "Programs" : g_install_dir) /
+         Utf8Path(game.app_name);
+}
+
 std::string SetupVersion(const Game& game, const fs::path& setup) {
   const std::string name = setup.stem().string();
   const std::string prefix = std::string(game.repo) + "Setup-";

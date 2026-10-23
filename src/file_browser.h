@@ -6,14 +6,14 @@
 // the drives and the usual folders (Downloads, Desktop, Documents) one level above a drive.
 // "Discs suchen" (Y, or the first entry above the drives) looks for the owner's discs by itself:
 // the ISOs in the usual folders and on the drives, each read and known by its default.xex's
-// SHA-256 as when setting one up, listed by game.
+// SHA-256 as when setting one up, listed by game (disc_search.h).
 
-#include <atomic>
 #include <filesystem>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
+
+#include "disc_search.h"
 
 struct ImFont;
 
@@ -35,18 +35,6 @@ class FileBrowser {
     std::string label;
     std::filesystem::path path;
   };
-  // A disc the search found: the game (an index of AllGames(), -1 for another version of one
-  // of them) and the ISO.
-  struct FoundDisc {
-    int game;
-    std::filesystem::path iso;
-  };
-  struct Search {
-    std::atomic<bool> stop{false}, done{false};
-    std::atomic<int> folders{0}, isos{0};
-    std::mutex mutex;
-    std::vector<FoundDisc> found;
-  };
   void List(const std::filesystem::path& folder);  // an empty folder: the drives and places
   void Choose(const Entry& e);
   void StartSearch();
@@ -61,7 +49,7 @@ class FileBrowser {
   std::vector<Entry> entries_;
   int selected_ = 0;
   std::string message_;
-  std::shared_ptr<Search> search_;  // the running or last search; the list shows it while set
+  std::shared_ptr<DiscSearch> search_;  // the running or last search; the list shows it while set
   bool searching_view_ = false;
   size_t listed_found_ = 0;  // how many of the search's discs the entries show
 };

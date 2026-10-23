@@ -58,6 +58,7 @@ HubSettings LoadHubSettings() {
   s.title_music = IsOn(get("title_music"), s.title_music);
   s.animations = IsOn(get("animations"), s.animations);
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
+  s.setup_done = IsOn(get("setup_done"), s.setup_done);
   return s;
 }
 

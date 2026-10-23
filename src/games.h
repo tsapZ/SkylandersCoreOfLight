@@ -82,6 +82,9 @@ bool StartGame(const Found& game, std::wstring& error, void** process);
 // goes to <library>\<app name>, else to the setup's own default. The log is
 // %TEMP%\CoreOfLight\<key>-setup.log.
 void SetInstallDir(const std::filesystem::path& dir);
+// Where an install of `game` goes: <library>\<app name>, else the setup's default,
+// %LOCALAPPDATA%\Programs\<app name>.
+std::filesystem::path InstallFolder(const Game& game);
 // The setup with the highest version of the folders above (by its name's version, then its time).
 std::filesystem::path FindSetup(const Game& game, const std::filesystem::path& launcher_dir);
 // `update`: the game is installed already; its setup goes over it where it is (no /DIR), and,

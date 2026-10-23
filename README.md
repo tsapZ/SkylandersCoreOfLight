@@ -32,6 +32,9 @@ pictures of every figure.
 - **Finds the games** (where their installers put them, a path in `coreoflight.ini`, next to the
   launcher or a developer's build) and **checks each disc** against the version its port is made
   for.
+- **Sets everything up on a first start** (no game installed yet): the language, then your discs,
+  found by itself or chosen by hand, with the room they need and what is free, then each chosen
+  game installed and its disc set up, one after the other.
 - **Installs a game** that isn't there yet with A on its card: the game's own setup, silently,
   then its disc from your ISO. A newer setup for an installed game shows "Update verfügbar" on
   its card, and A asks: update now (silently; saves, figures, disc and settings stay) or play
