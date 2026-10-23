@@ -28,21 +28,27 @@ constexpr wchar_t kBuildDir[] = L"out\\build\\win-amd64-release";
 // Each repository pins its disc's default.xex in docs/game/default.xex.sha256.
 const std::vector<Game> kGames = {
     {"ssa", "Spyro's Adventure", "Spyro's Adventure", 2011, "ssarecompiled.exe", "SSARecomp",
-     "Spyro's Adventure Recompiled", "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b", 16, 0},
+     "Spyro's Adventure Recompiled", "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b", 16, 0,
+     "{2B356600-5297-425A-A646-8498A7AAC307}"},
     {"giants", "Giants", "Giants", 2012, "giantsrecompiled.exe", "GiantsRecomp", "Giants Recompiled",
-     "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e", 112, 4614},
+     "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e", 112, 4614,
+     "{1F12B332-CD84-471A-BE9F-7F3BFA614A6D}"},
     {"swapforce", "Swap Force", "Swap Force", 2013, "swapforcerecompiled.exe", "SwapForceRecomp",
-     "Swap Force Recompiled", "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7", 2015, 8192},
+     "Swap Force Recompiled", "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7", 2015, 8192,
+     "{C3E00C3F-6CE0-4100-BD9B-13F9B4A8CCBA}"},
     {"trapteam", "Trap Team", "Trap Team", 2014, "trapteamrecompiled.exe", "TrapTeamRecomp",
-     "Trap Team Recompiled", "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35", 462, 12288},
+     "Trap Team Recompiled", "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35", 462, 12288,
+     "{9A774956-7256-4E2C-A3D6-418903FC71B6}"},
     {"superchargers", "SuperChargers", "SuperChargers", 2015, "superchargersrecompiled.exe",
      "SuperChargersRecomp", "SuperChargers Recompiled",
      // The European English / German disc and the Spanish / Italian one (the same build).
      "02ff6672d460c9aaa54e69d584af67a7138c6c93cde5e04b0da4284207be7c61,"
-     "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc", 3412, 16640},
+     "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc", 3412, 16640,
+     "{44F04CDA-C049-4558-AAA6-25A6E7932D71}"},
     {"imaginators", "Imaginators", "Imaginators", 2016, "imaginatorsrecompiled.exe",
      "ImaginatorsRecomp", "Imaginators Recompiled",
-     "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029", 601, 20480},
+     "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029", 601, 20480,
+     "{3D80E212-E302-4422-9B7B-6AFAF712400E}"},
 };
 
 std::string Trim(std::string s) {
@@ -154,6 +160,23 @@ std::string Sha256(const fs::path& path) {
   return out;
 }
 
+// Where the game's installer put it: InstallLocation of its uninstall entry (per user, else for
+// everyone), wherever that is (a library folder, a folder chosen in the setup).
+fs::path InstalledByEntry(const Game& game) {
+  const std::wstring key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
+                           Utf8Path(game.app_id).wstring() + L"_is1";
+  for (HKEY root : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
+    wchar_t value[MAX_PATH * 2] = L"";
+    DWORD size = sizeof(value);
+    if (RegGetValueW(root, key.c_str(), L"InstallLocation", RRF_RT_REG_SZ, nullptr, value, &size) ==
+        ERROR_SUCCESS) {
+      const fs::path exe = fs::path(value) / game.exe;
+      if (IsFile(exe)) return exe;
+    }
+  }
+  return {};
+}
+
 fs::path FindExe(const Game& game, const fs::path& launcher_dir,
                  const std::unordered_map<std::string, std::string>& ini) {
   if (auto it = ini.find(game.key); it != ini.end() && !it->second.empty()) {
@@ -161,6 +184,7 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
     if (fs::is_directory(p)) p /= game.exe;
     if (IsFile(p)) return p;
   }
+  if (fs::path p = InstalledByEntry(game); !p.empty()) return p;
   const fs::path installed = KnownFolder(FOLDERID_LocalAppData) / "Programs" / game.app_name / game.exe;
   if (IsFile(installed)) return installed;
   for (const fs::path& p : {launcher_dir / game.exe, launcher_dir / game.repo / game.exe,
@@ -193,9 +217,12 @@ bool IsGameDisc(const Game& game, const std::string& sha256) {
   }
 }
 
+fs::path g_install_dir;  // --install_dir, or "library" in coreoflight.ini
+
 void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   const auto ini = ReadIni(launcher_dir / kConfigFile);
   if (auto it = ini.find("figures"); it != ini.end()) g_figures_dir = Utf8Path(it->second);
+  if (auto it = ini.find("library"); it != ini.end() && g_install_dir.empty()) g_install_dir = Utf8Path(it->second);
   found = std::vector<Found>(kGames.size());
   for (size_t i = 0; i < kGames.size(); ++i) {
     found[i].exe = FindExe(kGames[i], launcher_dir, ini);
@@ -245,6 +272,81 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
   CloseHandle(info.hThread);
   *process = info.hProcess;
   return true;
+}
+
+void SetInstallDir(const fs::path& dir) { g_install_dir = dir; }
+
+fs::path FindSetup(const Game& game, const fs::path& launcher_dir) {
+  // The newest <Repo>Setup-*.exe of a folder (by its time: the version is in the name).
+  auto newest = [&](const fs::path& dir) {
+    fs::path best;
+    fs::file_time_type best_time{};
+    std::error_code ec;
+    const std::string prefix = std::string(game.repo) + "Setup-";
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+      const std::string name = entry.path().filename().string();
+      if (!name.starts_with(prefix) || entry.path().extension() != ".exe") continue;
+      const auto t = entry.last_write_time(ec);
+      if (best.empty() || t > best_time) {
+        best = entry.path();
+        best_time = t;
+      }
+    }
+    return best;
+  };
+  if (fs::path p = newest(launcher_dir / "games"); !p.empty()) return p;
+  // A developer's layout: the repositories side by side, <repo>\<repo>\installer\Output.
+  for (fs::path dir = launcher_dir; !dir.empty(); dir = dir.parent_path()) {
+    if (fs::path p = newest(dir / game.repo / game.repo / "installer" / "Output"); !p.empty()) return p;
+    if (dir == dir.parent_path()) break;
+  }
+  return {};
+}
+
+namespace {
+
+fs::path SetupLog(size_t game) {
+  wchar_t temp[MAX_PATH] = L"";
+  GetTempPathW(MAX_PATH, temp);
+  return fs::path(temp) / "CoreOfLight" / (std::string(kGames[game].key) + "-setup.log");
+}
+
+}  // namespace
+
+bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** process) {
+  if (game >= kGames.size() || setup.empty()) return false;
+  const fs::path log = SetupLog(game);
+  std::error_code ec;
+  fs::create_directories(log.parent_path(), ec);
+  fs::remove(log, ec);
+  // The screen's own size for the game's window, its settings at 2x (the "Quality" preset).
+  const int w = GetSystemMetrics(SM_CXSCREEN), h = GetSystemMetrics(SM_CYSCREEN);
+  std::wstring command = L"\"" + setup.wstring() + L"\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL" +
+                         L" /NOROM=1 /PORTAL=software /SCALE=2 /LANGUAGE=" +
+                         (german ? L"german" : L"english") + L" /RESOLUTION=" + std::to_wstring(w) + L"x" +
+                         std::to_wstring(h) + L" \"/LOG=" + log.wstring() + L"\"";
+  if (!g_install_dir.empty()) {
+    command += L" \"/DIR=" + (g_install_dir / Utf8Path(kGames[game].app_name)).wstring() + L"\"";
+  }
+  STARTUPINFOW startup = {sizeof(startup)};
+  PROCESS_INFORMATION info = {};
+  if (!CreateProcessW(setup.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                      setup.parent_path().c_str(), &startup, &info)) {
+    return false;
+  }
+  CloseHandle(info.hThread);
+  *process = info.hProcess;
+  return true;
+}
+
+std::string GameInstallError(size_t game) {
+  if (game >= kGames.size()) return {};
+  std::ifstream in(SetupLog(game));
+  std::string line, found;
+  while (std::getline(in, line)) {
+    if (const size_t at = line.find("ROM: "); at != std::string::npos) found = line.substr(at + 5);
+  }
+  return found;
 }
 
 fs::path TitleMusicFile(size_t game) {

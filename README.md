@@ -29,8 +29,11 @@ pictures of every figure.
 
 ## What the launcher does
 
-- **Finds the games** (the installers' folders, a path in `coreoflight.ini`, next to the launcher
-  or a developer's build) and **checks each disc** against the version its port is made for.
+- **Finds the games** (where their installers put them, a path in `coreoflight.ini`, next to the
+  launcher or a developer's build) and **checks each disc** against the version its port is made
+  for.
+- **Installs a game** that isn't there yet with A on its card: the game's own setup, silently,
+  then its disc from your ISO.
 - **Sets up a disc from your ISO**: its own file browser, for the pad as well as the keyboard, or
   drop an ISO on the window. It recognises the game, unpacks the disc into that game's folder and
   leaves the ISO where it is.

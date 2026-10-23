@@ -212,6 +212,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       const std::wstring arg = argv[i];
       if (arg.starts_with(L"--documents=")) {
         coreoflight::SetDocumentsDir(arg.substr(12));
+      } else if (arg.starts_with(L"--install_dir=")) {
+        // A library folder for games installed from the launcher (games.h StartGameInstall).
+        coreoflight::SetInstallDir(arg.substr(14));
       } else if (iso.empty()) {
         iso = arg;
       }

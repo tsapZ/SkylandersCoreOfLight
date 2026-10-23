@@ -9,9 +9,21 @@ exe and gets out of the way while the game runs; no game needs it.
   1. a path in `coreoflight.ini` next to the launcher (`ssa = D:\Games\Spyro\ssarecompiled.exe`,
      keys `ssa`, `giants`, `swapforce`, `trapteam`, `superchargers`, `imaginators`; a folder works
      too);
-  2. the installer's folder, `%LOCALAPPDATA%\Programs\<Game> Recompiled\`;
-  3. next to the launcher (the exe itself, or a folder named like the repository or the app);
-  4. a developer's layout above the launcher: `<Repo>\<Repo>\out\build\win-amd64-release\<exe>`.
+  2. where its installer put it: `InstallLocation` of its uninstall entry (`<AppId>_is1`, each game
+     its own AppId), which also finds a game installed into another folder or a library folder;
+  3. the installer's default folder, `%LOCALAPPDATA%\Programs\<Game> Recompiled\`;
+  4. next to the launcher (the exe itself, or a folder named like the repository or the app);
+  5. a developer's layout above the launcher: `<Repo>\<Repo>\out\build\win-amd64-release\<exe>`.
+- **Installs a game** (the owner's wish, 2026-10-23): a card that says "Nicht installiert" shows
+  "Installieren" when the launcher has the game's setup (`<Repo>Setup-<version>.exe` in a `games\`
+  folder next to it, or for a developer in `<Repo>\<Repo>\installer\Output`). A runs that setup
+  hidden and silent with `/NOROM=1` (the game without its disc), the menus' language, the screen's
+  size and 2x scale for its settings file; after a few seconds the card asks for the disc, which the
+  launcher's own import then sets up. With a library folder (`library = <folder>` in
+  `coreoflight.ini`, or `--install_dir=<folder>`) the game goes to `<folder>\<Game> Recompiled`,
+  else to the setup's default. If the setup stops, its reason comes from its log
+  (`%TEMP%\CoreOfLight\<key>-setup.log`). The game stays an ordinary install: its own uninstall
+  entry, Start menu entry and uninstaller, and it runs without the launcher.
 - **Checks the disc:** the game looks for `rom\` in the folder it runs in (an installed game next
   to its exe, a developer's build three folders up), so the launcher looks there for
   `rom\default.xex` and compares its SHA-256 with the hash the game's repository pins

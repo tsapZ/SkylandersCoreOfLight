@@ -24,6 +24,7 @@ struct Game {
   // (SuperChargers runs two European discs).
   const char* xex_sha256;
   uint16_t hero_id, hero_variant;  // the game's hero, whose picture is on its card
+  const char* app_id;              // its installer's AppId: the uninstall entry "<AppId>_is1"
 };
 
 // The six games, in release order.
@@ -56,6 +57,20 @@ void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_
 
 // Starts a game's exe in its own folder; false (and `error`) if Windows refused.
 bool StartGame(const Found& game, std::wstring& error, void** process);
+
+// Installing a game from the launcher (the owner's wish, 2026-10-23): its own setup
+// (<Repo>Setup-<version>.exe), found in the launcher's games\ folder or, for a developer, in the
+// repository's installer\Output, started hidden with /VERYSILENT /NOROM=1 and the language, the
+// screen's size and 2x scale for its settings; the launcher then sets up the disc itself. With a
+// library folder (--install_dir=<folder>, or "library = <folder>" in coreoflight.ini) the game
+// goes to <library>\<app name>, else to the setup's own default. The log is
+// %TEMP%\CoreOfLight\<key>-setup.log.
+void SetInstallDir(const std::filesystem::path& dir);
+std::filesystem::path FindSetup(const Game& game, const std::filesystem::path& launcher_dir);
+bool StartGameInstall(size_t game, const std::filesystem::path& setup, bool german, void** process);
+// Why the last install of `game` stopped, from its setup log ("ROM: ..." lines and the like);
+// empty if the log says nothing.
+std::string GameInstallError(size_t game);
 // Where a game's title music is kept (Pictures\<game>\title_music.wav, next to the pictures the
 // games leave; each game also leaves it there on its first start), and a run that writes it: the
 // game with --export_title_music (skylanders-portal title_music.h) decodes it from its disc and

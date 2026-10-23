@@ -29,6 +29,14 @@ const ImU32 kDim = Rgba(180, 190, 215);
 const ImU32 kAccents[] = {Rgba(80, 170, 70), Rgba(230, 130, 40), Rgba(150, 90, 220),
                           Rgba(40, 150, 220), Rgba(220, 60, 60), Rgba(240, 180, 40)};
 
+std::wstring Wide(const std::string& s) {
+  if (s.empty()) return {};
+  const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), nullptr, 0);
+  std::wstring w(size_t(n), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), w.data(), n);
+  return w;
+}
+
 std::string Utf8(const std::wstring& w) {
   if (w.empty()) return {};
   const int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), int(w.size()), nullptr, 0, nullptr, nullptr);
@@ -83,6 +91,8 @@ void LauncherUi::ApplyHubSettings() {
 
 void LauncherUi::Refresh() {
   FindGames(found_, launcher_dir_);
+  setups_.clear();
+  for (const Game& game : AllGames()) setups_.push_back(FindSetup(game, launcher_dir_));
   LoadProfiles(german_);
   figures_ = CountFigures();
   CountAchievements();
@@ -136,6 +146,36 @@ void LauncherUi::CountAchievements() {
   }
 }
 
+// A game's setup running from its card: when it ends, the games are looked for again; the card
+// then asks for the disc ("Disc einlesen" on A). It copies about 100 MB, a few seconds.
+void LauncherUi::UpdateInstall() {
+  if (!install_process_) return;
+  const DWORD wait = WaitForSingleObject(install_process_, 0);
+  if (wait != WAIT_OBJECT_0 && ImGui::GetTime() - install_since_ < 300.0) return;
+  DWORD code = 3;
+  if (wait == WAIT_OBJECT_0) {
+    GetExitCodeProcess(install_process_, &code);
+  } else {
+    TerminateProcess(install_process_, 3);
+  }
+  CloseHandle(install_process_);
+  install_process_ = nullptr;
+  const size_t game = install_game_;
+  Refresh();
+  const std::string name = german_ ? AllGames()[game].name_de : AllGames()[game].name_en;
+  if (code == 0 && game < found_.size() && !found_[game].exe.empty()) {
+    selected_ = game;
+    error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
+  } else {
+    const std::string why = GameInstallError(game);
+    char text[256];
+    std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %lu)%s%s" : "%s: installation stopped (code %lu)%s%s",
+                  name.c_str(), code, why.empty() ? "" : ": ", why.c_str());
+    error_ = Wide(text);
+  }
+  error_until_ = ImGui::GetTime() + 8.0;
+}
+
 void LauncherUi::GameExitCode(unsigned long code) {
   starting_ = false;
   if (code == 0) return;
@@ -178,6 +218,22 @@ void LauncherUi::Start(size_t index) {
     error_until_ = ImGui::GetTime() + 6.0;
   };
   if (found_[index].exe.empty()) {
+    // Not installed: its setup, silently, when the launcher has one (games.h StartGameInstall);
+    // the disc comes after, with the launcher's own import.
+    if (install_process_) {
+      say(L"Ein Spiel wird gerade installiert", L"A game is being installed");
+      return;
+    }
+    if (index < setups_.size() && !setups_[index].empty()) {
+      if (StartGameInstall(index, setups_[index], german_, &install_process_)) {
+        install_game_ = index;
+        install_since_ = ImGui::GetTime();
+      } else {
+        install_process_ = nullptr;
+        say(L"Der Installer lie\x00DF sich nicht starten", L"Could not start the installer");
+      }
+      return;
+    }
     say(L"Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
         L"This game isn't installed (its installer from its project)");
     return;
@@ -193,7 +249,7 @@ void LauncherUi::Start(size_t index) {
           L"The game doesn't support this disc version (X: set up another disc)");
       return;
     default:
-      say(L"Die Disc wird noch gepr\x00FCft", L"The disc is still being checked");
+      say(L"Die Disc wird noch gepr\x00FC" L"ft", L"The disc is still being checked");
       return;
   }
   music_.Stop();
@@ -332,7 +388,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   const char* state = nullptr;
   ImU32 state_col = kDim;
   if (!installed) {
-    state = german_ ? "Nicht installiert" : "Not installed";
+    const bool installing = install_process_ && install_game_ == index;
+    state = installing ? (german_ ? "Wird installiert ..." : "Installing ...")
+                       : (german_ ? "Nicht installiert" : "Not installed");
   } else {
     switch (f.disc.load()) {
       case DiscState::kMatches:
@@ -361,9 +419,12 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     Text(dl, regular_, 16 * s, {x + 18 * s, y + h - 38 * s}, kDim, when.c_str(), w - 36 * s);
   }
   const DiscState disc_state = f.disc.load();
-  if (installed && selected && (disc_state == DiscState::kMatches || disc_state == DiscState::kMissing)) {
-    const char* go = disc_state == DiscState::kMissing ? (german_ ? "Disc einlesen" : "Add the disc")
-                                                       : (german_ ? "Starten" : "Play");
+  const bool can_install = !installed && !install_process_ && index < setups_.size() && !setups_[index].empty();
+  if (selected && (can_install || (installed && (disc_state == DiscState::kMatches ||
+                                                 disc_state == DiscState::kMissing)))) {
+    const char* go = can_install                         ? (german_ ? "Installieren" : "Install")
+                     : disc_state == DiscState::kMissing ? (german_ ? "Disc einlesen" : "Add the disc")
+                                                         : (german_ ? "Starten" : "Play");
     const float go_size = 24 * s;
     const float gw = TextWidth(bold_, go_size, go) + 60 * s;
     const ImVec2 a{x + (w - gw) * 0.5f, y + h - 112 * s};
@@ -431,6 +492,7 @@ bool LauncherUi::Draw(float width, float height) {
   const bool keep = DrawScreens(width, height);
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
   UpdateTitleMusicExport();
+  UpdateInstall();
   {
     std::filesystem::path wanted;
     if (hub_.title_music && selected_ < found_.size() && !found_[selected_].exe.empty()) {

@@ -113,6 +113,13 @@ class LauncherUi {
   // B / Esc on the start screen asks first (a pad user would otherwise quit by mistake): false
   // once A / Enter says quit.
   bool confirm_quit_ = false;
+  // Installing a game from its card (games.h StartGameInstall): each game's setup, found once per
+  // Refresh, and the one running (its process, which game, since when).
+  std::vector<std::filesystem::path> setups_;
+  void* install_process_ = nullptr;
+  size_t install_game_ = 0;
+  double install_since_ = 0;
+  void UpdateInstall();
   // A game was just started: its launch screen, until its window is up (main.cpp).
   bool starting_ = false;
   size_t starting_game_ = 0;
