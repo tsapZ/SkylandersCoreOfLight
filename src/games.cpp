@@ -234,13 +234,14 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   for (size_t i = 0; i < kGames.size(); ++i) {
     if (found[i].exe.empty()) continue;
     found[i].disc = DiscState::kChecking;
-    std::thread([&found, i] {
-      const fs::path xex = found[i].rom / "default.xex";
+    // The thread keeps its own copy of what it needs and of the result (the vector may be
+    // replaced meanwhile).
+    std::thread([result = found[i].disc.shared(), xex = found[i].rom / "default.xex", i] {
       if (!IsFile(xex)) {
-        found[i].disc = DiscState::kMissing;
+        result->store(DiscState::kMissing);
         return;
       }
-      found[i].disc = IsGameDisc(kGames[i], Sha256(xex)) ? DiscState::kMatches : DiscState::kOther;
+      result->store(IsGameDisc(kGames[i], Sha256(xex)) ? DiscState::kMatches : DiscState::kOther);
     }).detach();
   }
 }

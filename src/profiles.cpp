@@ -183,8 +183,15 @@ bool SaveProfile(const Profile& p) {
   return WriteIniValues(p.root / kProfileFile, {{"name", p.name}, {"picture", PictureText(p)}});
 }
 
-bool DeleteProfile(const Profile& p) {
+bool DeleteProfile(const Profile& p, bool to_recycle_bin) {
   if (IsMainProfile(p) || p.root.empty() || p.root.parent_path() != ProfilesDir()) return false;
+  if (!to_recycle_bin) {
+    std::error_code ec;
+    fs::remove_all(p.root, ec);
+    if (ec) return false;
+    if (ActiveProfile().id == p.id) WriteIniValues(ProfilesDir() / kListFile, {{"active", ""}});
+    return true;
+  }
   // SHFileOperation wants the paths ended by two null characters.
   std::wstring from = p.root.wstring();
   from.push_back(L'\0');

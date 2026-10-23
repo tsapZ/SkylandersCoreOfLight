@@ -249,7 +249,11 @@ void SettingsScreen::Draw(float width, float height) {
       ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
     Step(1);
   }
-  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_S, false)) Save();
+  // Y as the hint says; S as before.
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Y, false) ||
+      ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+    Save();
+  }
 
   // The rows on the left, the chosen one's explanation on the right.
   const float list_top = top + 66 * u;

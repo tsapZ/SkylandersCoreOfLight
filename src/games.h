@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -40,13 +41,28 @@ enum class DiscState {
   kMissing,    // no default.xex where the game looks for it
 };
 
+// The disc check's result, shared with the thread that hashes the disc: that thread may still run
+// after the launcher looked for the games anew and replaced the Found it was started for.
+class DiscResult {
+ public:
+  DiscState load() const { return state_->load(); }
+  DiscResult& operator=(DiscState state) {
+    state_->store(state);
+    return *this;
+  }
+  std::shared_ptr<std::atomic<DiscState>> shared() const { return state_; }
+
+ private:
+  std::shared_ptr<std::atomic<DiscState>> state_ = std::make_shared<std::atomic<DiscState>>(DiscState::kUnknown);
+};
+
 struct Found {
   std::filesystem::path exe;      // empty: not found
   std::filesystem::path rom;      // the folder with default.xex the game uses
   std::filesystem::path workdir;  // where the game starts: it looks for rom\ there
   // The game's own settings file next to its exe (<stem>.toml), key -> value, for the card.
   std::unordered_map<std::string, std::string> settings;
-  std::atomic<DiscState> disc{DiscState::kUnknown};
+  DiscResult disc;
 };
 
 // Looks for every game: a path in coreoflight.ini next to the launcher, the installer's folder

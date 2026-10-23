@@ -40,8 +40,12 @@ exe and gets out of the way while the game runs; no game needs it.
   src/xiso.cpp: a full Xbox 360 dump with the game partition 0xFD90000 into it, or a trimmed image),
   knows the game by its default.xex's SHA-256 (the hash each game pins) and unpacks the disc into
   the rom\ folder that game reads, with a progress bar; default.xex comes last, so a folder left
-  half done never counts as a disc, and B doesn't quit meanwhile. A disc that is set up already, a
-  game that isn't installed and an unknown disc each get their own message. A folder with an
+  half done never counts as a disc. B doesn't quit meanwhile: it asks, and a second B within a few
+  seconds stops the unpacking (an older disc's default.xex in the folder goes then, so the mix
+  never counts as a disc). The disc's `$SystemUpdate` folder (the console's, about 100 MB) is left
+  out, as the installers do, and a drive without room for the disc (plus 256 MB) gets a message
+  before anything is written. A disc that is set up already, a game that isn't installed and an
+  unknown disc each get their own message. A folder with an
   unpacked disc (default.xex in it) works the same way: O picks one with the Windows dialog, or
   drop it on the window; its files are copied into the rom folder. The ISO itself stays where it
   is.
@@ -93,7 +97,11 @@ exe and gets out of the way while the game runs; no game needs it.
   back. The marks are the profile's, `Skylanders\owned.txt` next to its figure folder (one
   `<id>\t<variant>` a line); the games never read it. An Imaginators creation crystal shows its
   Imaginator's name and battle class (kept on the figure, skylanders-portal
-  `FigureStats::creation_class`). The pictures
+  `FigureStats::creation_class`); a Trap Team trap the villain caught in it ("Gefangen: Chompy
+  Mage", skylanders-portal `ReadTrapVillain`); a figure with hero points has them ("64 / 100"),
+  and every played figure the consoles it has been on ("War auf: Xbox 360"). In the upgrade tree
+  the d-pad moves to the next upgrade in its direction as the tree is drawn: along a path, to the
+  path beside it, between the rows. The pictures
   are the games' own: each game, while it runs, leaves the figure pictures it reads from its disc
   in `Documents\Skylanders\Pictures\<game>` as `<id>-<variant>.png` (skylanders-portal
   `StartFigurePictureCache`), and the library takes each figure's picture from its own game (a Series 1 Spyro from Spyro's Adventure, a Series 2 one from Giants; the owner's wish, 2026-10-22), else the newest game's; a
@@ -119,15 +127,17 @@ exe and gets out of the way while the game runs; no game needs it.
   folder), and `--cache_root=Documents\<game>recomp\cache` keeps the main profile's shader
   cache, so a new profile doesn't build it again. A new profile can start with the current
   profile's figures made new (the same Skylanders back at the start, new serial numbers), with
-  copies of them as they are, or with none. In the figure library, Y (C) copies the chosen figure's
+  copies of them as they are, or with none (Y); B there gives the new profile up again. In the
+  figure library, Y (C) copies the chosen figure's
   file, as it is, into another profile's figure folder (the same sub-folder, "Name (2).dump" if the
   name is taken). X renames it with an on-screen keyboard (the pad moves over the keys, A types,
   X deletes, Y a space, LB capitals, Start done; a keyboard types straight in), Back deletes it into the
-  recycle bin. `Profiles\profiles.ini` remembers the active profile and the main profile's name
+  recycle bin after asking, with "Behalten" chosen first (left / right to "Löschen", then A). `Profiles\profiles.ini` remembers the active profile and the main profile's name
   and picture. The games themselves still call their player "User".
 - **Achievements** (RB / E, for the chosen game; LB / RB switch the game): the game's own list
   with its pictures, the active profile's unlocked ones bright with their date, how many and the
-  gamerscore; each card shows "Erfolge 2 / 46". The list comes from the game: while it runs it
+  gamerscore; each card shows "Erfolge 2 / 46". Up / down move a row, left / right between the
+  two columns. The list comes from the game: while it runs it
   leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
   picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
   `<game>recomp\achievements\<title id>.toml`, which the SDK keeps.

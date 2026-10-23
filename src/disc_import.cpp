@@ -4,8 +4,10 @@
 #include <shobjidl.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <thread>
 
 #include "xiso.h"
@@ -14,6 +16,43 @@ namespace coreoflight {
 namespace {
 
 namespace fs = std::filesystem;
+
+// The disc's system update folder: the console's, not the game's (the installers leave it out
+// too, extract-xiso -s); about 100 MB.
+const std::string kSystemUpdate = "$SystemUpdate";
+// Room left on the drive after the disc, so the PC isn't left with a full disk.
+constexpr uint64_t kSpareBytes = 256ull << 20;
+
+// Bytes free for this user on the drive `path` is on (its nearest existing folder), or nullopt.
+std::optional<uint64_t> FreeBytes(fs::path path) {
+  std::error_code ec;
+  while (!path.empty() && !fs::exists(path, ec)) {
+    if (path == path.parent_path()) break;
+    path = path.parent_path();
+  }
+  ULARGE_INTEGER free{};
+  if (!GetDiskFreeSpaceExW(path.c_str(), &free, nullptr, nullptr)) return std::nullopt;
+  return free.QuadPart;
+}
+
+// The bytes of the files under `folder` (an older disc there is overwritten in place).
+uint64_t FolderBytes(const fs::path& folder) {
+  uint64_t total = 0;
+  std::error_code ec;
+  for (fs::recursive_directory_iterator it(folder, ec), end; it != end; it.increment(ec)) {
+    if (ec) break;
+    if (it->is_regular_file(ec)) total += it->file_size(ec);
+  }
+  return total;
+}
+
+std::string Gigabytes(uint64_t bytes, bool german) {
+  char text[32];
+  std::snprintf(text, sizeof(text), "%.1f GB", double(bytes) / double(1ull << 30));
+  std::string out = text;
+  if (german) std::replace(out.begin(), out.end(), '.', ',');
+  return out;
+}
 
 }  // namespace
 
@@ -161,48 +200,79 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
         return;
       }
     }
-    std::string error;
-    bool ok = false;
+    // What will be written (the system update left out), and whether the drive has room for it.
+    std::vector<std::pair<fs::path, uintmax_t>> files;
+    uint64_t total = 0;
     if (folder) {
-      // The files copied, default.xex last (as when unpacking an ISO).
-      std::vector<std::pair<fs::path, uintmax_t>> files;
-      uintmax_t total = 0;
       for (fs::recursive_directory_iterator it(iso, ec), end; it != end; it.increment(ec)) {
         if (ec) break;
         if (!it->is_regular_file(ec)) continue;
+        const fs::path relative = fs::relative(it->path(), iso, ec);
+        const std::u8string u8 = relative.generic_u8string();
+        if (XisoImage::InFolder(std::string(u8.begin(), u8.end()), kSystemUpdate)) continue;
         const uintmax_t size = it->file_size(ec);
-        files.emplace_back(fs::relative(it->path(), iso, ec), size);
+        files.emplace_back(relative, size);
         total += size;
       }
+      // default.xex last (as when unpacking an ISO).
       std::stable_partition(files.begin(), files.end(), [](const auto& f) { return f.first != "default.xex"; });
-      shared->total = total;
+    } else {
+      total = image->total_size(kSystemUpdate);
+    }
+    const uint64_t existing = FolderBytes(rom);
+    const uint64_t needed = (total > existing ? total - existing : 0) + kSpareBytes;
+    if (const auto free = FreeBytes(rom); free && *free < needed) {
+      say(name + (german ? ": nicht genug Platz auf dem Laufwerk (" + Gigabytes(*free, true) + " frei, " +
+                               Gigabytes(needed, true) + " n\xC3\xB6tig)."
+                         : ": not enough room on the drive (" + Gigabytes(*free, false) + " free, " +
+                               Gigabytes(needed, false) + " needed)."),
+          Phase::kFailed);
+      return;
+    }
+    shared->total = total;
+    std::string error;
+    bool ok = false;
+    uint64_t written = 0;
+    if (folder) {
       say(name + (german ? ": die Disc wird in den rom-Ordner des Spiels kopiert ..."
                          : ": copying the disc into the game's rom folder ..."),
           Phase::kUnpacking);
-      uintmax_t done = 0;
       ok = true;
       for (const auto& [relative, size] : files) {
+        if (shared->cancel) {
+          error = "stopped";
+          ok = false;
+          break;
+        }
         fs::create_directories((rom / relative).parent_path(), ec);
         if (!fs::copy_file(iso / relative, rom / relative, fs::copy_options::overwrite_existing, ec)) {
           error = (german ? "kann nicht kopieren: " : "cannot copy: ") + relative.string();
           ok = false;
           break;
         }
-        done += size;
-        shared->done = done;
+        written += size;
+        shared->done = written;
       }
     } else {
-      shared->total = image->total_size();
       say(name + (german ? ": die Disc wird in den rom-Ordner des Spiels entpackt ..."
                          : ": unpacking the disc into the game's rom folder ..."),
           Phase::kUnpacking);
       ok = image->Extract(rom, [&](uint64_t done, uint64_t) {
-        shared->done = done;
-        return true;
-      }, error);
+        shared->done = written = done;
+        return !shared->cancel.load();
+      }, error, kSystemUpdate);
     }
     if (!ok) {
-      say(name + (german ? ": Entpacken fehlgeschlagen (" : ": unpacking failed (") + error + ")", Phase::kFailed);
+      // Files of this disc are in the folder now, so an older disc's default.xex there would make
+      // the mix look like a complete disc: without it the game and the launcher see none.
+      if (written) fs::remove(rom / "default.xex", ec);
+      if (shared->cancel) {
+        say(name + (german ? ": Einlesen abgebrochen, die Disc ist nicht eingerichtet."
+                           : ": stopped, the disc isn't set up."),
+            Phase::kFailed);
+      } else {
+        say(name + (german ? ": Entpacken fehlgeschlagen (" : ": unpacking failed (") + error + ")", Phase::kFailed);
+      }
       return;
     }
     say(name + (german ? ": Disc eingerichtet, bereit zum Spielen." : ": disc set up, ready to play."), Phase::kDone);

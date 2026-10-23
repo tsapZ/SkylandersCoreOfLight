@@ -26,15 +26,19 @@ class XisoImage {
   static std::unique_ptr<XisoImage> Open(const std::filesystem::path& path);
 
   const std::vector<Entry>& entries() const { return entries_; }
-  uint64_t total_size() const;
+  // The files' bytes, without those in the top folder `skip_folder` (any case) if one is given.
+  uint64_t total_size(const std::string& skip_folder = {}) const;
   const Entry* Find(const std::string& path) const;  // case-insensitive
   bool Read(const Entry& entry, std::vector<uint8_t>& out);
 
-  // Writes every file under `to` (made if missing), default.xex last. `progress(done, total)` is
-  // called now and then with the bytes written; returning false stops. False on an error or a
-  // stop.
+  // Writes every file under `to` (made if missing), default.xex last, without the top folder
+  // `skip_folder` if one is given. `progress(done, total)` is called now and then with the bytes
+  // written; returning false stops. False on an error or a stop.
   bool Extract(const std::filesystem::path& to, const std::function<bool(uint64_t, uint64_t)>& progress,
-               std::string& error);
+               std::string& error, const std::string& skip_folder = {});
+
+  // Whether `path` ("$SystemUpdate/su20076000_00000000") is in the top folder `folder`, any case.
+  static bool InFolder(const std::string& path, const std::string& folder);
 
  private:
   bool ReadAt(uint64_t offset, void* out, size_t size);

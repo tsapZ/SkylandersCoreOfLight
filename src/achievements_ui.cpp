@@ -142,15 +142,23 @@ void AchievementsScreen::Draw(float width, float height) {
                       kGreen, 7 * u);
 
     const int n = int(list_.items.size());
+    // Rows of two columns on a wide window: up / down move a row, left / right a column.
+    const int columns = width > 1100 * u ? 2 : 1;
     if (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
-      selected_ = std::max(0, selected_ - 1);
+      if (selected_ >= columns) selected_ -= columns;
     }
     if (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
+      selected_ = std::min(n - 1, selected_ + columns);
+    }
+    if (columns > 1 && (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) ||
+                        pressed(ImGuiKey_GamepadLStickLeft))) {
+      selected_ = std::max(0, selected_ - 1);
+    }
+    if (columns > 1 && (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) ||
+                        pressed(ImGuiKey_GamepadLStickRight))) {
       selected_ = std::min(n - 1, selected_ + 1);
     }
     if (io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * 3, 0, std::max(0, n - 1));
-    // Rows of two columns on a wide window.
-    const int columns = width > 1100 * u ? 2 : 1;
     const float gap = 16 * u;
     const float row_h = 84 * u;
     const float list_top = top + 44 * u;

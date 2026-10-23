@@ -361,6 +361,7 @@ void ProfilesScreen::Draw(float width, float height) {
         mode_ = Mode::kName;
       } else if (on_profile && selected_ > 0 &&
                  (act_delete || once(ImGuiKey_GamepadBack) || once(ImGuiKey_Delete))) {
+        delete_chosen_ = false;
         mode_ = Mode::kDelete;
       } else if (back) {
         open_ = false;
@@ -380,7 +381,7 @@ void ProfilesScreen::Draw(float width, float height) {
     }
     case Mode::kNewFigures: {
       const Profile& from = ActiveProfile();
-      draw_panel(250 * u);
+      draw_panel(290 * u);
       float y = panel.y + 22 * u;
       const float x = panel.x + 28 * u, w = panel_w - 56 * u;
       Text(dl, bold_, 28 * u, {x, y}, kGold,
@@ -396,10 +397,20 @@ void ProfilesScreen::Draw(float width, float height) {
       lx = Hint(dl, bold_, 22 * u, {x, y}, "X", Rgba(50, 120, 220),
                 german_ ? "Kopien, wie sie sind" : "Copies as they are");
       y += 40 * u;
-      lx = Hint(dl, bold_, 22 * u, {x, y}, "B", Rgba(200, 60, 60), german_ ? "Ohne Figuren" : "No figures");
+      lx = Hint(dl, bold_, 22 * u, {x, y}, "Y", Rgba(220, 180, 40), german_ ? "Ohne Figuren" : "No figures");
+      y += 40 * u;
+      lx = Hint(dl, bold_, 22 * u, {x, y}, "B", Rgba(200, 60, 60),
+                german_ ? "Abbrechen (kein neues Profil)" : "Cancel (no new profile)");
       (void)lx;
       const bool fresh = confirm, copies = once(ImGuiKey_GamepadFaceLeft) || once(ImGuiKey_X);
-      if (fresh || copies || back) {
+      const bool none = once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Y);
+      if (back) {
+        // The profile was made a moment ago and is still empty: it goes again, for good.
+        DeleteProfile(profiles_[selected_], false);
+        Load();
+        selected_ = profiles_.size();  // back on the "new profile" card
+        mode_ = Mode::kList;
+      } else if (fresh || copies || none) {
         if (fresh || copies) {
           const int copied = CopyFigures(from, profiles_[selected_], fresh);
           char text[160];
@@ -647,7 +658,7 @@ void ProfilesScreen::Draw(float width, float height) {
       break;
     }
     case Mode::kDelete: {
-      draw_panel(200 * u);
+      draw_panel(270 * u);
       const float x = panel.x + 28 * u, w = panel_w - 56 * u;
       const Profile& p = profiles_[selected_];
       Text(dl, bold_, 28 * u, {x, panel.y + 22 * u}, kGold,
@@ -657,7 +668,26 @@ void ProfilesScreen::Draw(float width, float height) {
                      "sie sich wiederherstellen)."
                    : "Its saves, achievements and figures go to the recycle bin (they can be restored from there).",
            w);
-      if (once(ImGuiKey_GamepadFaceDown) || once(ImGuiKey_Enter)) {
+      // Two buttons, "Behalten" chosen first (as the games' own yes/no questions): A on a reflex
+      // keeps the profile.
+      if (once(ImGuiKey_GamepadDpadLeft) || once(ImGuiKey_GamepadDpadRight) || once(ImGuiKey_GamepadLStickLeft) ||
+          once(ImGuiKey_GamepadLStickRight) || once(ImGuiKey_LeftArrow) || once(ImGuiKey_RightArrow)) {
+        delete_chosen_ = !delete_chosen_;
+      }
+      {
+        const float bw = 220 * u, bh = 52 * u, by = panel.y + 270 * u - bh - 22 * u;
+        for (int k = 0; k < 2; ++k) {
+          const bool is_delete = k == 1, on = is_delete == delete_chosen_;
+          const ImVec2 a{x + k * (bw + 20 * u), by}, b{a.x + bw, a.y + bh};
+          dl->AddRectFilled(a, b, on ? (is_delete ? Rgba(150, 50, 50) : Rgba(60, 80, 160)) : Rgba(30, 34, 60), 12 * u);
+          dl->AddRect(a, b, on ? kGold : kEdge, 12 * u, 0, (on ? 3.0f : 1.5f) * u);
+          const char* label = is_delete ? (german_ ? "L\xC3\xB6schen" : "Delete") : (german_ ? "Behalten" : "Keep it");
+          Text(dl, bold_, 22 * u, {a.x + (bw - TextWidth(bold_, 22 * u, label)) * 0.5f, a.y + 13 * u}, kWhite, label);
+        }
+      }
+      if ((once(ImGuiKey_GamepadFaceDown) || once(ImGuiKey_Enter)) && !delete_chosen_) {
+        mode_ = Mode::kList;
+      } else if (once(ImGuiKey_GamepadFaceDown) || once(ImGuiKey_Enter)) {
         const bool was_active = p.id == ActiveProfile().id;
         if (DeleteProfile(p)) {
           Message(german_ ? "Profil gel\xC3\xB6scht (im Papierkorb)" : "Profile deleted (in the recycle bin)");
@@ -672,7 +702,7 @@ void ProfilesScreen::Draw(float width, float height) {
       } else if (back) {
         mode_ = Mode::kList;
       }
-      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(200, 60, 60), german_ ? "L\xC3\xB6schen" : "Delete");
+      hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "W\xC3\xA4hlen" : "Choose");
       hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(80, 90, 140), german_ ? "Behalten" : "Keep it");
       break;
     }

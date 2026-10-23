@@ -707,7 +707,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
       selected_ = (selected_ + 1) % n;
     }
     if (two_rows && (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadUp) ||
-                     pressed(ImGuiKey_GamepadDpadDown))) {
+                     pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickUp) ||
+                     pressed(ImGuiKey_GamepadLStickDown))) {
       selected_ = (selected_ + per_row) % n;
     }
   }
@@ -790,9 +791,19 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (selected_ < loaders_.size() && !found_[selected_].exe.empty() && !loaders_[selected_].started()) {
     loaders_[selected_].Start(found_[selected_], AllGames()[selected_].key);
   }
-  // Not while a disc is being unpacked (it would stop half done).
-  const bool quit = !import_.running() && (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
-                                           ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false));
+  // B / Escape: quit (asks first), or while a disc is being set up, stop that: the first press
+  // asks, a second one within a few seconds stops it (an 8 GB unpack is easy to start by mistake).
+  const bool back = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+  const bool quit = back && !import_.running();
+  if (back && import_.running()) {
+    if (ImGui::GetTime() < cancel_import_until_) {
+      import_.Cancel();
+      cancel_import_until_ = 0;
+    } else {
+      cancel_import_until_ = ImGui::GetTime() + 4.0;
+    }
+  }
+  if (!import_.running()) cancel_import_until_ = 0;
 
   // The figure folder and the hints at the bottom.
   // The folder as Windows names it when it is the usual one, else its path (coreoflight.ini).
@@ -822,7 +833,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Hub" : "Hub");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Beenden" : "Quit");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60),
+            import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));
   // The disc being set up: what happens, and how far the unpacking is.
   const DiscImport::Phase phase = import_.phase();
   if (phase != import_seen_) {
@@ -840,7 +852,11 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   if (import_.running() || (phase != DiscImport::Phase::kIdle && ImGui::GetTime() < import_shown_until_)) {
     const float bx = width * 0.5f, by = height - 100 * u, bw = width * 0.5f - 48 * u;
-    const std::string text = import_.message();
+    std::string text = import_.message();
+    if (ImGui::GetTime() < cancel_import_until_) {
+      text = german_ ? "Noch einmal B: das Einlesen abbrechen (die Disc ist dann nicht eingerichtet)."
+                     : "B again: stop setting up the disc (it isn't set up then).";
+    }
     const ImU32 col = phase == DiscImport::Phase::kFailed ? Rgba(240, 110, 110)
                       : phase == DiscImport::Phase::kDone ? Rgba(110, 220, 110)
                                                           : kWhite;

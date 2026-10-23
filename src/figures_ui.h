@@ -15,6 +15,7 @@
 
 #include "portal/figure_info.h"
 #include "portal/figure_stats.h"
+#include "portal/trap_villain.h"
 #include "profiles.h"
 
 struct ImFont;
@@ -40,6 +41,7 @@ class FiguresScreen {
     bool owned = false;   // a figure file of it is in the folder, or the owner marked it
     bool marked = false;  // owned only by the owner's mark (no file of it in the folder)
     std::optional<skylanders::portal::FigureStats> stats;
+    std::optional<skylanders::portal::TrapContents> trap;  // a Trap Team trap: the villain inside
     std::filesystem::path file;
   };
   std::vector<const Figure*> Shown() const;

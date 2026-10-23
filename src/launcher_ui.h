@@ -128,6 +128,7 @@ class LauncherUi {
   bool DrawQuitConfirm(float width, float height);
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
   double import_shown_until_ = 0;
+  double cancel_import_until_ = 0;  // B pressed once while a disc is set up: a second one until then stops it
 };
 
 }  // namespace coreoflight

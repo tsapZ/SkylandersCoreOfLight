@@ -206,6 +206,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.file = it->path();
     f.owned = true;
     f.stats = sp::ParseFigureStats(*data);
+    f.trap = sp::ReadTrapVillain(*data);
     if (const sp::SkylanderInfo* info = sp::FindSkylander(f.id, f.variant)) {
       const std::string shown = sp::FigureDisplayName(*data);
       f.name = sp::DisplayName(shown.empty() ? info->name : shown);
@@ -402,15 +403,12 @@ void FiguresScreen::DrawTree(float width, float height, float u) {
     tree_ = false;
     return;
   }
-  auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
-  if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft) ||
-      pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
-    tree_index_ = std::max(0, tree_index_ - 1);
-  }
-  if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight) ||
-      pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
-    tree_index_ = std::min(int(all.size()) - 1, tree_index_ + 1);
-  }
+  // Where each drawn upgrade is, for moving through the tree as it looks (below).
+  struct Cell {
+    int index;
+    float x, y;
+  };
+  std::vector<Cell> cells;
   const float left = 48 * u, top = 124 * u, bottom = height - 80 * u;
   const float panel_w = std::min(380 * u, width * 0.3f);
   const float area_w = width - 2 * left - panel_w - 24 * u;
@@ -444,6 +442,7 @@ void FiguresScreen::DrawTree(float width, float height, float u) {
       const ImVec2 a{ix, y + 26 * u}, b{ix + icon, y + 26 * u + icon};
       const bool owned = Owned(tree_figure_, path, up);
       const bool chosen = index == tree_index_;
+      cells.push_back({index, a.x, a.y});
       if (io.MousePos.x >= a.x && io.MousePos.x < a.x + step && io.MousePos.y >= a.y && io.MousePos.y < b.y + 30 * u &&
           (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) {
         tree_index_ = index;
@@ -458,6 +457,48 @@ void FiguresScreen::DrawTree(float width, float height, float u) {
            Fit(regular_, 13 * u, up.name, step - 8 * u));
     }
     y += row_h;
+  }
+  // The d-pad moves to the nearest drawn upgrade in its direction: along a path, between the rows
+  // and across to the two paths on the right. An upgrade without room on screen isn't chosen.
+  if (!cells.empty()) {
+    auto at = [&](int index) -> const Cell* {
+      for (const Cell& c : cells) {
+        if (c.index == index) return &c;
+      }
+      return nullptr;
+    };
+    if (!at(tree_index_)) tree_index_ = cells.front().index;
+    // The nearest one on the same row (or column) first, so right goes along a path and on to
+    // the path beside it; else the nearest in that direction at all.
+    auto move = [&](float dx, float dy) {
+      const Cell* from = at(tree_index_);
+      const Cell* best = nullptr;
+      float best_score = 0;
+      for (int pass = 0; pass < 2 && !best; ++pass) {
+        for (const Cell& c : cells) {
+          const float ox = c.x - from->x, oy = c.y - from->y;
+          const float along = ox * dx + oy * dy, across = std::abs(ox * dy - oy * dx);
+          if (along < 1.0f || (pass == 0 && across > 8 * u)) continue;
+          const float score = along + 2.0f * across;
+          if (!best || score < best_score) {
+            best = &c;
+            best_score = score;
+          }
+        }
+      }
+      if (best) tree_index_ = best->index;
+    };
+    auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
+    if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft)) {
+      move(-1, 0);
+    }
+    if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight)) {
+      move(1, 0);
+    }
+    if (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) move(0, -1);
+    if (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
+      move(0, 1);
+    }
   }
   // The chosen upgrade: its picture, name, price, whether it is bought, what it does.
   const auto& [path, up] = all[size_t(std::clamp(tree_index_, 0, int(all.size()) - 1))];
@@ -544,7 +585,8 @@ void FiguresScreen::Draw(float width, float height) {
     tab_ = (tab_ + 1) % tabs;
     selected_ = 0;
   }
-  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_A, false)) {
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_X, false) ||
+      ImGui::IsKeyPressed(ImGuiKey_A, false)) {
     all_ = !all_;
     selected_ = 0;
   }
@@ -672,7 +714,8 @@ void FiguresScreen::Draw(float width, float height) {
 
   // Y / C: the chosen figure of the owner's into another profile.
   if (n && !shown[selected_]->file.empty() &&
-      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_C, false))) {
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Y, false) ||
+       ImGui::IsKeyPressed(ImGuiKey_C, false))) {
     copy_targets_.clear();
     for (const Profile& p : LoadProfiles(german_)) {
       if (p.id != ActiveProfile().id) copy_targets_.push_back(p);
@@ -690,7 +733,8 @@ void FiguresScreen::Draw(float width, float height) {
   // Y / C on a figure without a file: "I own it", or not any more. The lists are read again, so
   // nothing of this frame's is used after it.
   if (n && marks_enabled_ && shown[selected_]->file.empty() &&
-      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_C, false))) {
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Y, false) ||
+       ImGui::IsKeyPressed(ImGuiKey_C, false))) {
     ToggleMark(*shown[selected_]);
     ImGui::End();
     return;
@@ -730,6 +774,20 @@ void FiguresScreen::Draw(float width, float height) {
     Text(dl, regular_, 18 * u, {x, y}, kDim, Category(f.category, german_) + (f.badge.empty() ? "" : "  \xC2\xB7  " + Badge(f.badge, german_)),
          w);
     y += 40 * u;
+    // A trap: the villain caught in it (skylanders-portal trap_villain.h), as Trap Team shows it.
+    if (f.trap) {
+      const sp::TrapVillain* villain =
+          f.trap->villain_id ? sp::FindTrapVillain(f.trap->villain_id, f.trap->variant) : nullptr;
+      std::string line;
+      if (!villain) {
+        line = german_ ? "Leere Falle" : "Empty trap";
+      } else {
+        line = (german_ ? "Gefangen: " : "Caught: ") + std::string(villain->name);
+        if (f.trap->evolved) line += german_ ? " (entwickelt)" : " (evolved)";
+      }
+      Text(dl, bold_, 20 * u, {x, y}, villain ? Rgba(110, 220, 110) : kDim, line, w);
+      y += 36 * u;
+    }
     if (f.stats) {
       const sp::FigureStats& s = *f.stats;
       char text[96];
@@ -792,12 +850,26 @@ void FiguresScreen::Draw(float width, float height) {
           y += 52 * u;
         }
       }
+      // Hero points (Giants' and Swap Force's heroic challenges, 100 at most) and the consoles the
+      // figure has been on, as the figure keeps them.
+      if (s.hero_points) {
+        std::snprintf(text, sizeof(text), "%u / 100", unsigned(s.hero_points));
+        row(german_ ? "Heldenpunkte" : "Hero points", text);
+      }
+      if (s.platforms) {
+        std::string on;
+        static constexpr const char* kPlatforms[] = {"Wii", "Xbox 360", "PS3"};
+        for (int bit = 0; bit < 3; ++bit) {
+          if (s.platforms & (1 << bit)) on += (on.empty() ? "" : ", ") + std::string(kPlatforms[bit]);
+        }
+        if (!on.empty()) row(german_ ? "War auf" : "Played on", on);
+      }
       if (s.last_played) {
         std::snprintf(text, sizeof(text), "%02u.%02u.%04u", unsigned(s.last_played->day), unsigned(s.last_played->month),
                       unsigned(s.last_played->year));
         row(german_ ? "Zuletzt gespielt" : "Last played", text);
       }
-    } else {
+    } else if (!f.trap) {
       Text(dl, regular_, 18 * u, {x, y}, kDim,
            f.marked ? (german_ ? "Als \xE2\x80\x9E" "Hab ich\xE2\x80\x9C markiert; im Figurenordner ist keine Datei von ihm. "
                                  "Y nimmt die Markierung zur\xC3\xBC" "ck."

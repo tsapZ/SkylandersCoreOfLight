@@ -29,6 +29,10 @@ class DiscImport {
   // `found` are the launcher's games (where each reads its disc). Not while one is running.
   void Start(const std::filesystem::path& iso, const std::vector<Found>& found, bool german);
   bool running() const;
+  // Stops a running import after the file being written (the disc is then not set up).
+  void Cancel() {
+    if (shared_) shared_->cancel = true;
+  }
 
   Phase phase() const { return shared_ ? shared_->phase.load() : Phase::kIdle; }
   // 0..1 while unpacking.
@@ -42,6 +46,7 @@ class DiscImport {
     std::atomic<Phase> phase{Phase::kIdle};
     std::atomic<uint64_t> done{0}, total{0};
     std::atomic<int> game{-1};
+    std::atomic<bool> cancel{false};
     std::mutex mutex;
     std::string message;
   };

@@ -42,7 +42,8 @@ std::string CreateProfile(const std::string& name);
 // Name and picture written to its profile.ini (the main profile's to profiles.ini).
 bool SaveProfile(const Profile& p);
 // The profile's folder into the recycle bin (saves and figures with it); never the main one.
-bool DeleteProfile(const Profile& p);
+// `to_recycle_bin` false removes it for good: for a profile made a moment ago and given up.
+bool DeleteProfile(const Profile& p, bool to_recycle_bin = true);
 
 // The profile's figure folder and its games' picture folder (Skylanders\Pictures).
 std::filesystem::path ProfileFiguresDir(const Profile& p);

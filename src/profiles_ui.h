@@ -46,6 +46,7 @@ class ProfilesScreen {
   std::vector<uint32_t> gamerscores_;  // over every game whose list is known
   size_t selected_ = 0;  // profiles_.size() is the "new profile" card
   Mode mode_ = Mode::kList;
+  bool delete_chosen_ = false;  // kDelete: the delete button is chosen (the keep button is first)
   char name_[64] = {};
   bool focus_name_ = false;
   // The on-screen keyboard of kName: the key the pad is on, capitals (on for the first letter).

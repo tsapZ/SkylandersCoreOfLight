@@ -98,9 +98,15 @@ bool XisoImage::ReadDirectory(uint32_t sector, uint32_t size, const std::string&
   return true;
 }
 
-uint64_t XisoImage::total_size() const {
+bool XisoImage::InFolder(const std::string& path, const std::string& folder) {
+  if (folder.empty()) return false;
+  const std::string p = Lower(path), f = Lower(folder);
+  return p == f || (p.size() > f.size() && p.compare(0, f.size(), f) == 0 && p[f.size()] == '/');
+}
+
+uint64_t XisoImage::total_size(const std::string& skip_folder) const {
   uint64_t total = 0;
-  for (const Entry& e : entries_) total += e.directory ? 0 : e.size;
+  for (const Entry& e : entries_) total += e.directory || InFolder(e.path, skip_folder) ? 0 : e.size;
   return total;
 }
 
@@ -119,8 +125,8 @@ bool XisoImage::Read(const Entry& entry, std::vector<uint8_t>& out) {
 }
 
 bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, uint64_t)>& progress,
-                        std::string& error) {
-  const uint64_t total = total_size();
+                        std::string& error, const std::string& skip_folder) {
+  const uint64_t total = total_size(skip_folder);
   uint64_t done = 0;
   std::error_code ec;
   fs::create_directories(to, ec);
@@ -128,7 +134,9 @@ bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, u
   // default.xex last: the launcher and the game take a folder with it as a complete disc, so one
   // left half done (the launcher closed, the disk full) never looks ready.
   std::vector<const Entry*> order;
-  for (const Entry& e : entries_) order.push_back(&e);
+  for (const Entry& e : entries_) {
+    if (!InFolder(e.path, skip_folder)) order.push_back(&e);
+  }
   std::stable_partition(order.begin(), order.end(), [](const Entry* e) { return Lower(e->path) != "default.xex"; });
   for (const Entry* entry : order) {
     const Entry& e = *entry;
