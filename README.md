@@ -4,8 +4,6 @@ The hub for the recompiled Skylanders games. In the games the Core of Light hold
 together; here it ties the six Xbox 360 ports together: one launcher, a library of your
 Skylanders, profiles, and later online co-op with each player's own portal.
 
-![The launcher's start screen](docs/images/launcher.jpg)
-
 > **Unofficial fan project, work in progress.** Not affiliated with or endorsed by Activision,
 > Toys for Bob or Vicarious Visions. It ships **no game data and no artwork**: the pictures, texts
 > and music it shows come from your own discs, through the games themselves.
@@ -56,9 +54,8 @@ pictures of every figure.
 - **The launcher's own settings**: language (German / English), the library's defaults, title
   music, animations.
 
-| The figure library | Profiles | Achievements |
-|---|---|---|
-| ![The figure library](docs/images/figures.jpg) | ![Profiles](docs/images/profiles.jpg) | ![Achievements](docs/images/achievements.jpg) |
+Screenshots are left out of this repository on purpose: they would show the games' artwork,
+which belongs to Activision.
 
 Everything in detail: [docs/launcher.md](docs/launcher.md).
 
