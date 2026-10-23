@@ -78,7 +78,7 @@ exe and gets out of the way while the game runs; no game needs it.
   checks its disc. The chosen card's settings are read ahead. Left / right (A, a click) changes a
   setting, LB / RB (Q / E) switches the page, Y saves the changes into the game's settings file
   line by line as the game's menu does (comments and the rest stay), B goes back (with unsaved
-  changes, a second B throws them away). A preset (Leistung / Qualität / Beste) sets its
+  changes it asks: A saves, X throws them away, B goes on editing). A preset (Leistung / Qualität / Beste) sets its
   settings together. A game built before the flag existed isn't asked (the launcher looks for the
   flag's name in the exe first, so it never starts a whole game by mistake). Since these are set
   here before starting, a game started from the launcher gets `--started_by_launcher=true`: its F4

@@ -189,7 +189,9 @@ void SettingsScreen::Draw(float width, float height) {
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim, german_ ? "EINSTELLUNGEN" : "SETTINGS");
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold, title_);
 
-  auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
+  // While the "save the changes?" question is up (confirm_discard_), only it takes input.
+  const bool asking = confirm_discard_;
+  auto pressed = [asking](ImGuiKey k) { return !asking && ImGui::IsKeyPressed(k, true); };
   const bool back = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
   const float left = 48 * u, top = 120 * u, bottom = height - 80 * u;
   if (!edit_) {
@@ -223,7 +225,8 @@ void SettingsScreen::Draw(float width, float height) {
     const std::string& name = german_ ? pages[i].de : pages[i].en;
     const float w = TextWidth(bold_, tab_size, name.c_str()) + 36 * u;
     const ImVec2 a{tx, top}, b{tx + w, top + 44 * u};
-    const bool hovered = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y;
+    const bool hovered = !asking && io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y &&
+                         io.MousePos.y < b.y;
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
       page_ = i;
       row_ = 0;
@@ -246,12 +249,12 @@ void SettingsScreen::Draw(float width, float height) {
     Step(-1);
   }
   if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight) ||
-      ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
+      (!asking && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)))) {
     Step(1);
   }
   // Y as the hint says; S as before.
-  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Y, false) ||
-      ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+  if (!asking && (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Y, false) ||
+                  ImGui::IsKeyPressed(ImGuiKey_S, false))) {
     Save();
   }
 
@@ -265,7 +268,8 @@ void SettingsScreen::Draw(float width, float height) {
     const GameSetting& s = settings[i];
     const float y = list_top + (i - first) * row_h;
     const ImVec2 a{left, y}, b{left + list_w, y + row_h - 8 * u};
-    const bool hovered = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y;
+    const bool hovered = !asking && io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y &&
+                         io.MousePos.y < b.y;
     if (hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) row_ = i;
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
       row_ = i;
@@ -301,26 +305,53 @@ void SettingsScreen::Draw(float width, float height) {
     Text(dl, regular_, 20 * u, {px + 20 * u, list_top + 58 * u}, kDim, german_ ? s.help_de : s.help_en, pw - 40 * u);
   }
 
-  // Hints, a message, and B: back (with unsaved changes, a second B throws them away).
+  // Hints, a message, and B: back. With unsaved changes B asks: A saves and closes, X throws the
+  // changes away and closes, B goes on editing (a double B used to lose them).
   float hx = left;
   const float hy = height - 52 * u;
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x84ndern" : "Change");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Speichern" : "Save");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
-  if (back) {
-    if (!changes_.empty() && !confirm_discard_) {
-      confirm_discard_ = true;
-      message_ = german_ ? "Nicht gespeichert: Y speichert, B noch einmal verwirft die \xC3\x84nderungen"
-                         : "Not saved: Y saves, B again throws the changes away";
-      message_until_ = ImGui::GetTime() + 6.0;
-    } else {
+  if (!asking) {
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x84ndern" : "Change");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Speichern" : "Save");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+    if (back) {
+      if (!changes_.empty()) {
+        confirm_discard_ = true;
+      } else {
+        open_ = false;
+      }
+    }
+  } else {
+    const float pw = std::min(620 * u, width - 96 * u), ph = 200 * u;
+    const ImVec2 a{(width - pw) * 0.5f, (height - ph) * 0.5f}, b{a.x + pw, a.y + ph};
+    dl->AddRectFilled({0, 0}, {width, height}, Rgba(0, 0, 0, 140));
+    dl->AddRectFilled(a, b, Rgba(20, 26, 64, 250), 18 * u);
+    dl->AddRect(a, b, kGold, 18 * u, 0, 3 * u);
+    Text(dl, bold_, 28 * u, {a.x + 28 * u, a.y + 22 * u}, kGold,
+         german_ ? "\xC3\x84nderungen speichern?" : "Save the changes?");
+    char text[160];
+    std::snprintf(text, sizeof(text),
+                  german_ ? "%zu Einstellung(en) ge\xC3\xA4ndert, noch nicht gespeichert." : "%zu setting(s) changed, not saved yet.",
+                  changes_.size());
+    Text(dl, regular_, 20 * u, {a.x + 28 * u, a.y + 70 * u}, kWhite, text, pw - 56 * u);
+    float bx = a.x + 28 * u;
+    const float by = b.y - 52 * u;
+    bx = Hint(dl, bold_, 22 * u, {bx, by}, "A", Rgba(70, 170, 70), german_ ? "Speichern" : "Save");
+    bx = Hint(dl, bold_, 22 * u, {bx, by}, "X", Rgba(50, 120, 220), german_ ? "Verwerfen" : "Throw away");
+    bx = Hint(dl, bold_, 22 * u, {bx, by}, "B", Rgba(200, 60, 60), german_ ? "Weiter bearbeiten" : "Keep editing");
+    if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+      Save();
       open_ = false;
+    } else if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+      changes_.clear();
+      confirm_discard_ = false;
+      open_ = false;
+    } else if (back) {
+      confirm_discard_ = false;
     }
   }
   if (!message_.empty() && ImGui::GetTime() < message_until_) {
-    Text(dl, regular_, 20 * u, {hx + 10 * u, hy}, confirm_discard_ ? Rgba(240, 170, 60) : Rgba(110, 220, 110),
-         message_);
+    Text(dl, regular_, 20 * u, {hx + 10 * u, hy}, Rgba(110, 220, 110), message_);
   }
   const std::u8string file = edit_->config_file.u8string();
   Text(dl, regular_, 16 * u, {left, height - 82 * u}, Rgba(120, 130, 160),
