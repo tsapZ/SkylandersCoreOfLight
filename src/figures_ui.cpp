@@ -318,10 +318,16 @@ const fs::path* FiguresScreen::Picture(const Figure& f) {
     char name[32];
     std::snprintf(name, sizeof(name), "%u-%u.png", unsigned(f.id), unsigned(f.variant));
     std::error_code ec;
-    // The newest game first: it knows the most characters and has the newest pictures.
-    for (const fs::path& root : pictures_dirs_) {
-      for (size_t i = std::size(kGames); i-- > 0 && found.empty();) {
-        const fs::path p = root / fs::path(std::u8string(kGames[i].begin(), kGames[i].end())) / name;
+    // The figure's own game first (the owner's wish, 2026-10-22: each figure as its own game shows
+    // it, as games.cpp FigurePicture does for the cards), then the newest game, which knows the
+    // most characters.
+    std::vector<std::string_view> games;
+    if (const auto* info = skylanders::portal::FindSkylander(f.id, f.variant)) games.push_back(info->game);
+    for (size_t i = std::size(kGames); i-- > 0;) games.push_back(kGames[i]);
+    for (const std::string_view game : games) {
+      for (const fs::path& root : pictures_dirs_) {
+        if (!found.empty()) break;
+        const fs::path p = root / fs::path(std::u8string(game.begin(), game.end())) / name;
         if (fs::exists(p, ec)) found = p;
       }
     }
@@ -588,6 +594,13 @@ void FiguresScreen::Draw(float width, float height) {
       selected_ = std::min(n - 1, selected_ + cols);
     }
     if (io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * cols, 0, n - 1);
+    // LT / RT (Page Up / Down): a page at a time, for the ~600 tiles of "Alle Skylander".
+    if (pressed(ImGuiKey_GamepadL2) || pressed(ImGuiKey_PageUp)) {
+      selected_ = std::max(0, selected_ - cols * rows_visible);
+    }
+    if (pressed(ImGuiKey_GamepadR2) || pressed(ImGuiKey_PageDown)) {
+      selected_ = std::min(n - 1, selected_ + cols * rows_visible);
+    }
   }
   selected_ = std::clamp(selected_, 0, std::max(0, n - 1));
   const int selected_row = selected_ / cols;
@@ -820,6 +833,7 @@ void FiguresScreen::Draw(float width, float height) {
   float hx = left;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Spiel" : "Game");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LT/RT", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));
