@@ -8,22 +8,25 @@ Skylanders, profiles, and later online co-op with each player's own portal.
 > Toys for Bob or Vicarious Visions. It ships **no game data and no artwork**: the pictures, texts
 > and music it shows come from your own discs, through the games themselves.
 
-## About this project
+## Why this exists
 
-A personal project: I wanted to play the Xbox 360 Skylanders games on my PC with nothing but a
-controller, in a sharp picture and at 60 FPS. These ports are the result. They are public in case
-other people enjoy them too.
+I wanted to play the Xbox 360 Skylanders games on my PC with just a controller, no emulator, and
+with a nicer picture. That's really all it is: a private fan project. It's public in case someone
+else wants the same.
 
-**Made with AI.** Nearly all of the work, about 99 %, was done by Claude, an AI model by Anthropic,
-working in Claude Code: the reverse engineering of the game code, the hooks and fixes, the portal
-emulation and its menus, the launcher, the installers and these documents. My part was the idea,
-the decisions, and playing and testing the games.
+## How it was made
 
-Each of the six ports also runs on its own; this launcher brings them together. The ports: [Spyro's
-Adventure](https://github.com/tsapZ/SSARecomp), [Giants](https://github.com/tsapZ/GiantsRecomp),
-[Swap Force](https://github.com/tsapZ/SwapForceRecomp), [Trap
-Team](https://github.com/tsapZ/TrapTeamRecomp),
-[SuperChargers](https://github.com/tsapZ/SuperChargersRecomp) and
+To be upfront about it: almost all of the code here was written by [Claude](https://claude.ai) in
+Claude Code, the recompile setup, the fixes, the portal menu, the launcher and the installers, and
+most of the docs too. I decided what to build, said what was broken and played the games a lot. If
+AI-made projects aren't your thing, that's fair.
+
+The six ports also run on their own:
+[Spyro's Adventure](https://github.com/tsapZ/SSARecomp),
+[Giants](https://github.com/tsapZ/GiantsRecomp),
+[Swap Force](https://github.com/tsapZ/SwapForceRecomp),
+[Trap Team](https://github.com/tsapZ/TrapTeamRecomp),
+[SuperChargers](https://github.com/tsapZ/SuperChargersRecomp),
 [Imaginators](https://github.com/tsapZ/ImaginatorsRecomp).
 
 ## Play it
