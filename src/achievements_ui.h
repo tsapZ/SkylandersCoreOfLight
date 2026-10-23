@@ -9,8 +9,13 @@
 #include "achievements.h"
 
 struct ImFont;
+struct ImDrawList;
 
 namespace coreoflight {
+
+// The platinum trophy, a cup `size` high centred on (x, y): bright once every achievement of a game
+// is unlocked (GameAchievements::platinum), dim before.
+void DrawPlatinumTrophy(ImDrawList* dl, float x, float y, float size, bool earned);
 
 class AchievementsScreen {
  public:

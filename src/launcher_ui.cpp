@@ -103,7 +103,15 @@ void LauncherUi::Refresh() {
   update_put_off_.resize(AllGames().size(), false);
   LoadProfiles(german_);
   figures_ = CountFigures();
+  const std::vector<GameAchievements> before = achievements_;
   CountAchievements();
+  // A platinum trophy since the last look (a game ended with its last achievement): shown once.
+  for (size_t i = 0; i < before.size() && i < achievements_.size(); ++i) {
+    if (before[i].known && !before[i].platinum && achievements_[i].platinum) {
+      platinum_new_ = int(i);
+      platinum_until_ = -12.0;  // 12 s from the next frame on (Draw)
+    }
+  }
   // A game may have been rebuilt or set up meanwhile: its settings are read again when needed.
   loaders_.assign(found_.size(), SettingsLoader());
   FindArt();
@@ -199,7 +207,7 @@ void LauncherUi::GameExitCode(unsigned long code) {
                         : L"The game ended unexpectedly (code 0x%08lX); its log is in the game's logs folder",
                 code);
   error_ = text;
-  error_until_ = ImGui::GetTime() + 12.0;
+  error_until_ = -12.0;  // 12 s from the next frame on (Draw)
 }
 
 void LauncherUi::ToggleFullscreen() {
@@ -368,12 +376,15 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   // game's settings, which are on Y).
   if (installed) {
     std::vector<std::string> lines;
-    // The active profile's achievements, once the game left its list.
+    // The active profile's achievements, once the game left its list; with the platinum trophy
+    // behind them when every one is unlocked.
+    std::string achievements_line;
     if (index < achievements_.size() && achievements_[index].known) {
       char text[64];
       std::snprintf(text, sizeof(text), german_ ? "Erfolge %d / %zu" : "Achievements %d / %zu",
                     achievements_[index].unlocked, achievements_[index].items.size());
       lines.insert(lines.begin(), text);
+      if (achievements_[index].platinum) achievements_line = text;
     }
     // The active profile's time in it, as far as the launcher started it.
     if (index >= play_seconds_.size() || !play_seconds_[index]) {
@@ -400,6 +411,10 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     if (lines.size() > fit) lines.resize(fit);
     for (const std::string& line : lines) {
       Text(dl, regular_, 21 * s, {x + 22 * s, ly}, kDim, line.c_str(), w - 44 * s);
+      if (!achievements_line.empty() && line == achievements_line) {
+        DrawPlatinumTrophy(dl, x + 22 * s + TextWidth(regular_, 21 * s, line.c_str()) + 16 * s, ly + 11 * s, 22 * s,
+                           true);
+      }
       ly += 24 * s;
     }
   }
@@ -539,6 +554,10 @@ bool LauncherUi::Draw(float width, float height) {
                        : hub_screen_.is_open() || settings_.is_open() ? "settings"
                                                                       : "launcher";
   const double now = ImGui::GetTime();
+  // A message set when a game ended (a negative time: its length) counts from this frame on: no
+  // frames were drawn while the game ran, and ImGui's clock jumps ahead on the first one after it.
+  if (error_until_ < 0) error_until_ = now - error_until_;
+  if (platinum_until_ < 0) platinum_until_ = now - platinum_until_;
   if (window != shown_window_) {
     shown_window_ = window;
     shown_since_ = now;
@@ -997,6 +1016,25 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (!error_.empty() && ImGui::GetTime() < error_until_) {
     const std::string text = Utf8(error_);
     Text(dl, regular_, 20 * u, {48 * u, height - 124 * u}, Rgba(240, 110, 110), text.c_str(), width - 96 * u);
+  }
+  // A new platinum trophy: a banner at the top, fading in and out.
+  if (platinum_new_ >= 0 && size_t(platinum_new_) < AllGames().size() && ImGui::GetTime() < platinum_until_) {
+    const float left_s = float(platinum_until_ - ImGui::GetTime());
+    const float fade = std::clamp(std::min(left_s, 12.0f - left_s) * 2.0f, 0.0f, 1.0f);
+    const Game& game = AllGames()[size_t(platinum_new_)];
+    const std::string title = german_ ? "PLATIN-TROPH\xC3\x84" "E!" : "PLATINUM TROPHY!";
+    const std::string about = std::string(german_ ? game.name_de : game.name_en) +
+                              (german_ ? ": alle Erfolge freigeschaltet" : ": every achievement unlocked");
+    const float bw = std::max(TextWidth(bold_, 30 * u, title.c_str()), TextWidth(regular_, 20 * u, about.c_str())) +
+                     130 * u;
+    const ImVec2 a{(width - bw) * 0.5f, 26 * u}, b{a.x + bw, a.y + 92 * u};
+    dl->AddRectFilled(a, b, Rgba(20, 26, 60, int(240 * fade)), 18 * u);
+    dl->AddRect(a, b, Rgba(222, 232, 248, int(255 * fade)), 18 * u, 0, 2.5f * u);
+    if (fade > 0.5f) {
+      DrawPlatinumTrophy(dl, a.x + 52 * u, a.y + 46 * u, 62 * u, true);
+      Text(dl, bold_, 30 * u, {a.x + 100 * u, a.y + 14 * u}, Rgba(222, 232, 248), title.c_str());
+      Text(dl, regular_, 20 * u, {a.x + 100 * u, a.y + 54 * u}, kWhite, about.c_str());
+    }
   }
   ImGui::End();
   if (quit) confirm_quit_ = true;

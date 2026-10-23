@@ -164,6 +164,10 @@ exe and gets out of the way while the game runs; no game needs it.
   leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
   picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
   `<game>recomp\achievements\<title id>.toml`, which the SDK keeps.
+- **Platinum trophy** (the owner's wish, 2026-10-23): once every achievement of a game is
+  unlocked, its screen shows a platinum cup with the date of the last one in place of the bar, the
+  card a small cup behind "Erfolge 38 / 38" and the profile card one per such game. When a game
+  ends with its last achievement, a "PLATIN-TROPHÄE!" banner shows at the top for 12 s.
 - Each card also says when the active profile last saved the game (the newest file in its save
   folder, `<game>recomp\B13EBABEBABEBABE`).
 - **Play time** per game and profile, on the card ("Gespielt 3 Std. 12 Min."): the time from
@@ -209,6 +213,13 @@ and needs neither the SDK nor the games' sources.
   German names; with two of them unlocked in the copy's `trapteamrecomp\achievements\41560911.toml`
   the card said "Erfolge 2 / 46" and the screen "2 von 46 Erfolgen · 20 / 1000 G", the two bright
   with their dates.
+- Platinum (2026-10-23), on a copy with 37 of Spyro's Adventure's 38 achievements unlocked: a dim
+  cup before the bar; a game started from the launcher, the 38th written into the copy's unlock
+  file while it ran, the game closed: the banner "PLATINUM TROPHY! Spyro's Adventure: every
+  achievement unlocked" came up, the card showed "38 / 38" with the cup and the screen "PLATINUM
+  TROPHY · 2026-10-20". (Messages set when a game ends, such as "the game ended unexpectedly",
+  used to vanish at once: ImGui's clock jumps over the time the game ran. They count from the
+  first frame after it now.)
 
 - Play time, on a copy with `coreoflight.ini` pointing Giants at a stand-in exe that runs 61 s:
   after it ended, `playtime.txt` had the line "giants, a tab, 61" and the card "Gespielt 1 Min.".

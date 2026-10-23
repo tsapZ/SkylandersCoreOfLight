@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -103,6 +104,10 @@ GameAchievements LoadAchievements(const Game& game, const Profile& profile) {
       ++out.unlocked;
       out.gamerscore += a.gamerscore;
     }
+  }
+  out.platinum = !out.items.empty() && out.unlocked == int(out.items.size());
+  for (const Achievement& a : out.items) {
+    if (out.platinum) out.platinum_time = std::max(out.platinum_time, a.unlocked);
   }
   return out;
 }

@@ -71,6 +71,10 @@ class LauncherUi {
   int figures_ = 0;
   std::wstring error_;
   double error_until_ = 0;
+  // A game whose last achievement came with the game that just ended: its platinum trophy shown
+  // over the cards for a while (Refresh).
+  int platinum_new_ = -1;
+  double platinum_until_ = 0;
   void* started_ = nullptr;
   // The running game: its key, the profile it was started with and when (GetTickCount64).
   std::string running_key_;

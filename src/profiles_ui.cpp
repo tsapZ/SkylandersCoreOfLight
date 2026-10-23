@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "achievements.h"
+#include "achievements_ui.h"  // DrawPlatinumTrophy
 #include "imgui.h"
 #include "imgui_internal.h"  // ImTextCharToUtf8
 #include "portal/figure_file.h"
@@ -134,10 +135,17 @@ void ProfilesScreen::Load() {
   figure_counts_.clear();
   saves_.clear();
   gamerscores_.clear();
+  platinums_.clear();
   for (const Profile& p : profiles_) {
     uint32_t score = 0;
-    for (const Game& game : AllGames()) score += LoadAchievements(game, p).gamerscore;
+    int platinums = 0;
+    for (const Game& game : AllGames()) {
+      const GameAchievements a = LoadAchievements(game, p);
+      score += a.gamerscore;
+      platinums += a.platinum ? 1 : 0;
+    }
     gamerscores_.push_back(score);
+    platinums_.push_back(platinums);
     figure_counts_.push_back(int(FigureFiles(p).size()));
     std::string saves;
     for (size_t i = 0; found_ && i < found_->size() && i < AllGames().size(); ++i) {
@@ -216,10 +224,15 @@ void ProfilesScreen::DrawCard(size_t index, float x, float y, float w, float h, 
     Centered(dl, regular_, 17 * s, x, w, y + 244 * s, kDim,
              german_ ? "Deine Daten wie die Spiele sie kennen" : "Your data as the games keep it");
   }
-  char figures[64];
+  char figures[96];
   std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren  \xC2\xB7  %u G" : "%d figures  \xC2\xB7  %u G",
                 figure_counts_[index], gamerscores_[index]);
   Text(dl, regular_, 20 * s, {x + 22 * s, y + 280 * s}, kDim, figures);
+  // Its platinum trophies, as cups behind the gamerscore.
+  for (int t = 0; t < platinums_[index]; ++t) {
+    DrawPlatinumTrophy(dl, x + 22 * s + TextWidth(regular_, 20 * s, figures) + (18 + t * 22) * s, y + 291 * s,
+                       20 * s, true);
+  }
   const std::string saves =
       saves_[index].empty() ? (german_ ? "Noch keine Spielst\xC3\xA4nde" : "No saves yet")
                             : (german_ ? "Spielst\xC3\xA4nde: " : "Saves: ") + saves_[index];

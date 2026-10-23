@@ -1,6 +1,7 @@
 #include "achievements_ui.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -21,6 +22,7 @@ const ImU32 kDim = Rgba(180, 190, 215);
 const ImU32 kPanel = Rgba(24, 30, 70, 235);
 const ImU32 kEdge = Rgba(90, 100, 150);
 const ImU32 kGreen = Rgba(120, 200, 90);
+constexpr float kPi = 3.14159265f;
 
 float TextWidth(ImFont* font, float size, const std::string& text) {
   return font->CalcTextSizeA(size, FLT_MAX, 0.0f, text.c_str()).x;
@@ -54,6 +56,44 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
 }
 
 }  // namespace
+
+void DrawPlatinumTrophy(ImDrawList* dl, float x, float y, float size, bool earned) {
+  const ImU32 body = earned ? Rgba(222, 232, 248) : Rgba(62, 70, 104);
+  const ImU32 shade = earned ? Rgba(150, 168, 200) : Rgba(48, 54, 86);
+  const ImU32 edge = earned ? Rgba(110, 126, 166) : Rgba(96, 106, 146);
+  const float h = size, top = y - h * 0.5f;
+  const float r = h * 0.3f;  // the bowl: straight sides, a round bottom
+  const float line = std::max(1.0f, h * 0.05f);
+  // The handles behind the bowl.
+  dl->PathArcTo({x - r, top + h * 0.17f}, h * 0.11f, kPi * 0.5f, kPi * 1.5f);
+  dl->PathStroke(edge, 0, line);
+  dl->PathArcTo({x + r, top + h * 0.17f}, h * 0.11f, -kPi * 0.5f, kPi * 0.5f);
+  dl->PathStroke(edge, 0, line);
+  dl->PathLineTo({x - r, top});
+  dl->PathLineTo({x + r, top});
+  dl->PathArcTo({x, top + h * 0.12f}, r, 0.0f, kPi);
+  dl->PathFillConvex(body);
+  dl->PathLineTo({x - r, top});
+  dl->PathLineTo({x + r, top});
+  dl->PathArcTo({x, top + h * 0.12f}, r, 0.0f, kPi);
+  dl->PathStroke(edge, ImDrawFlags_Closed, line * 0.6f);
+  // Stem and base.
+  dl->AddRectFilled({x - h * 0.05f, top + h * 0.42f}, {x + h * 0.05f, top + h * 0.72f}, shade);
+  dl->AddRectFilled({x - h * 0.2f, top + h * 0.7f}, {x + h * 0.2f, top + h * 0.82f}, body, h * 0.03f);
+  dl->AddRectFilled({x - h * 0.27f, top + h * 0.82f}, {x + h * 0.27f, top + h}, shade, h * 0.04f);
+  // A star on the bowl and a shine on its left.
+  const ImVec2 c{x, top + h * 0.2f};
+  ImVec2 star[10];
+  for (int i = 0; i < 10; ++i) {
+    const float a = -kPi * 0.5f + i * kPi / 5.0f, rad = (i % 2 ? 0.045f : 0.11f) * h;
+    star[i] = {c.x + std::cos(a) * rad, c.y + std::sin(a) * rad};
+  }
+  dl->AddConcavePolyFilled(star, 10, earned ? Rgba(170, 190, 225) : shade);
+  if (earned) {
+    dl->AddRectFilled({x - r * 0.72f, top + h * 0.05f}, {x - r * 0.5f, top + h * 0.3f}, Rgba(255, 255, 255, 170),
+                      h * 0.04f);
+  }
+}
 
 void AchievementsScreen::Init(ImFont* regular, ImFont* bold, bool german) {
   regular_ = regular;
@@ -134,12 +174,21 @@ void AchievementsScreen::Draw(float width, float height) {
                   german_ ? "%d von %zu Erfolgen  \xC2\xB7  %u / %u G" : "%d of %zu achievements  \xC2\xB7  %u / %u G",
                   list_.unlocked, list_.items.size(), list_.gamerscore, list_.gamerscore_total);
     Text(dl, bold_, 24 * u, {left, top}, kWhite, summary);
-    // How far, as a bar.
+    // How far, as a bar, and the platinum trophy in front of it: bright with its date once every
+    // achievement is unlocked (then in place of the full bar).
     const float bar_w = std::min(420 * u, width - 2 * left);
-    const float done = list_.items.empty() ? 0.0f : float(list_.unlocked) / float(list_.items.size());
-    dl->AddRectFilled({width - left - bar_w, top + 8 * u}, {width - left, top + 22 * u}, Rgba(40, 50, 100), 7 * u);
-    dl->AddRectFilled({width - left - bar_w, top + 8 * u}, {width - left - bar_w + bar_w * done, top + 22 * u},
-                      kGreen, 7 * u);
+    const float bar_x = width - left - bar_w;
+    DrawPlatinumTrophy(dl, bar_x - 30 * u, top + 14 * u, 40 * u, list_.platinum);
+    if (list_.platinum) {
+      const std::string date = FileTimeDate(list_.platinum_time, german_);
+      const std::string label = (german_ ? "PLATIN-TROPH\xC3\x84" "E" : "PLATINUM TROPHY") +
+                                (date.empty() ? std::string() : "  \xC2\xB7  " + date);
+      Text(dl, bold_, 24 * u, {bar_x, top}, Rgba(222, 232, 248), label);
+    } else {
+      const float done = list_.items.empty() ? 0.0f : float(list_.unlocked) / float(list_.items.size());
+      dl->AddRectFilled({bar_x, top + 8 * u}, {width - left, top + 22 * u}, Rgba(40, 50, 100), 7 * u);
+      dl->AddRectFilled({bar_x, top + 8 * u}, {bar_x + bar_w * done, top + 22 * u}, kGreen, 7 * u);
+    }
 
     const int n = int(list_.items.size());
     // Rows of two columns on a wide window: up / down move a row, left / right a column.

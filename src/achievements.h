@@ -29,6 +29,10 @@ struct GameAchievements {
   std::vector<Achievement> items;
   int unlocked = 0;
   uint32_t gamerscore = 0, gamerscore_total = 0;
+  // Every one unlocked: the launcher's platinum trophy (achievements_ui.h DrawPlatinumTrophy), from
+  // the time of the last one.
+  bool platinum = false;
+  uint64_t platinum_time = 0;
 };
 
 GameAchievements LoadAchievements(const Game& game, const Profile& profile);
