@@ -468,11 +468,18 @@ bool ExeMentions(const fs::path& exe, std::string_view text) {
 
 namespace {
 
-// SW_HIDE in the start-up info hides only the first window a program shows; the games show theirs
-// themselves once the picture is set up, so an export could come up as a tiny window with the
-// game's intro (seen on a colleague's PC after a disc import, and closed as a strange pop-up). So
-// the launcher hides every window of the export's process as soon as it is visible, for as long
-// as the process runs (polled every 20 ms; it may flash for a moment).
+// A game built with the SDK's window_hidden (rexglue-sdk 67364df) never shows its window for an
+// export (checked: no visible window in 1115 polls, the export complete); older builds don't know
+// the setting, so it is only passed to an exe that mentions it.
+std::wstring HiddenWindowFlag(const Found& found) {
+  return ExeMentions(found.exe, "window_hidden") ? L" --window_hidden=true" : L"";
+}
+
+// For the older builds: SW_HIDE in the start-up info hides only the first window a program shows;
+// the games show theirs themselves once the picture is set up, so an export could come up as a
+// tiny window with the game's intro (seen on a colleague's PC after a disc import, and closed as a
+// strange pop-up). So the launcher hides every window of the export's process as soon as it is
+// visible, for as long as the process runs (polled every 20 ms; it may flash for a moment).
 void KeepWindowsHidden(HANDLE process) {
   HANDLE own = nullptr;
   if (!DuplicateHandle(GetCurrentProcess(), process, GetCurrentProcess(), &own, SYNCHRONIZE, FALSE, 0)) return;
@@ -501,7 +508,7 @@ bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
   const fs::path data = fs::path(temp) / "CoreOfLight" / "title_music" / Utf8Path(UserDataName(found.exe));
   const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_title_music=" +
                                TitleMusicFile(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
-                               L"\" --started_by_launcher=true";
+                               L"\" --started_by_launcher=true" + HiddenWindowFlag(found);
   STARTUPINFOW startup = {sizeof(startup)};
   startup.dwFlags = STARTF_USESHOWWINDOW;
   startup.wShowWindow = SW_HIDE;
@@ -525,7 +532,7 @@ bool StartPictureExport(size_t game, const Found& found, void** process) {
   const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_pictures=" +
                                PicturesDir(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
                                L"\" --audio_mute=true --fullscreen=false --window_width=320 --window_height=180"
-                               L" --portal_mode=software --started_by_launcher=true";
+                               L" --portal_mode=software --started_by_launcher=true" + HiddenWindowFlag(found);
   STARTUPINFOW startup = {sizeof(startup)};
   startup.dwFlags = STARTF_USESHOWWINDOW;
   startup.wShowWindow = SW_HIDE;
