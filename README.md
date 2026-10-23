@@ -42,11 +42,15 @@ You need:
 Then:
 
 1. Download `CoreOfLightSetup-<version>.exe` from the [Releases](https://github.com/tsapZ/SkylandersCoreOfLight/releases)
-   page and run it. It installs the launcher together with the six games' installers (no admin
-   rights needed; uninstall through Windows' Apps list).
+   page and run it. It installs just the launcher, about 3 MB (no admin rights needed).
 2. Start Core of Light. The first-run setup asks for your ISOs, one per game (it finds the
-   others in the same folder by itself), checks them and installs the games.
+   others in the same folder by itself), checks them, then downloads each game from its Releases
+   page and installs it. Its "Games folder" row picks the drive the games go to, for example a
+   bigger one than the launcher's.
 3. Choose a game and play. When the game asks for a Skylander, the portal menu opens by itself.
+
+Uninstalling goes through Windows' Apps list; it asks whether the games, your saves and your
+figures should go too.
 
 ## The games
 
@@ -73,10 +77,12 @@ pictures of every figure.
 - **Sets everything up on a first start** (no game installed yet): the language, then your discs,
   found by itself or chosen by hand, with the room they need and what is free, then each chosen
   game installed and its disc set up, one after the other.
-- **Installs a game** that isn't there yet with A on its card: the game's own setup, silently,
-  then its disc from your ISO. A newer setup for an installed game shows "Update verfügbar" on
-  its card, and A asks: update now (silently; saves, figures, disc and settings stay) or play
-  first.
+- **Installs a game** that isn't there yet with A on its card: the newest setup from the game's
+  Releases page, run silently, then its disc from your ISO.
+- **Keeps itself and the games up to date** from GitHub Releases (checked once a day, or by hand
+  in its settings). A game with a newer version says "update available" on its card, and A asks:
+  update now (silently; saves, figures, disc and settings stay) or play first. A newer launcher
+  is offered at start and restarts itself after the update.
 - **Sets up a disc from your ISO**: its own file browser, for the pad as well as the keyboard, or
   drop an ISO on the window; Y in it finds your discs by itself (the ISOs in Downloads, Desktop,
   Documents and on the drives, each listed by its game). It recognises the game, unpacks the disc into that game's folder and
@@ -87,8 +93,8 @@ pictures of every figure.
 - **Each game's settings** before starting, the same pages as the game's own F4 menu.
 - **The figure library**: every figure in `Documents\Skylanders\Figures` with its level, gold,
   play time, hat, upgrade tree and nickname, by game, each card in its element's colour; a tab
-  for the magic items and adventure packs; "Hab ich" marks for figures on your shelf without a
-  file.
+  for the magic items and adventure packs; "I own it" marks for figures on your shelf without a
+  file; a leaderboard of your figures.
 - **Profiles** like Xbox accounts: create, rename, pick a picture, delete (with a confirmation);
   each profile has its own saves, figures and achievements, and the games show its name.
 - **The launcher's own settings**: language (German / English), the library's defaults, title
@@ -117,8 +123,7 @@ Everything in detail: [docs/launcher.md](docs/launcher.md).
 
 | Part | Issues |
 |---|---|
-| An installer for the launcher, with a library folder for the games | |
-| A native renderer for a cleaner picture at high resolutions (the games' D3D layer on D3D12 instead of the emulated GPU; research) | [docs/roadmap.md](docs/roadmap.md) |
+| HD textures made on your own PC: the launcher upscales a game's textures, can be stopped and picked up again, says how much room they take | [SwapForceRecomp#62](https://github.com/tsapZ/SwapForceRecomp/issues/62) |
 | Online co-op with each player's own real portal (proposal) | #1, #2, #3, [docs/online-coop.md](docs/online-coop.md) |
 
 The order and what is next: [docs/roadmap.md](docs/roadmap.md).
@@ -140,6 +145,18 @@ Windows, Visual Studio 2022 (C++), CMake and Ninja, from the **x64 Native Tools 
     cd SkylandersCoreOfLight
     cmake --preset release
     cmake --build --preset release
+
+## Credits
+
+- **[skylanders-portal](https://github.com/TheBiemGamer/skylanders-portal)** by TheBiemGamer: the
+  portal library the launcher shares with the games (figure catalog and figure files), here in a
+  fork with the shared menus on top. Submodule; keeps its own license.
+- **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut draws the launcher. Submodule
+  (MIT).
+- Figure save-data decoding builds on public reverse-engineering of the Skylanders NFC format,
+  among others **[SkyReader](https://github.com/reedstrm/SkyReader)**.
+- Reading the Xbox discs follows the XDVDFS format as [extract-xiso](https://github.com/XboxDev/extract-xiso)
+  and [Xenia](https://xenia.jp) read it.
 
 ## License
 
