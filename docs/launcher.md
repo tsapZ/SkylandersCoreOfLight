@@ -100,7 +100,7 @@ exe and gets out of the way while the game runs; no game needs it.
   and a note at the bottom right says that the game reads its pictures in the background and ends
   by itself. So the figure library, the cards' heroes and the achievements are complete right after
   a disc is set up, before the game was ever played. Both exports run without a window: a game
-  built with rexglue-sdk 67364df gets `--window_hidden=true` (it never shows its window); for older
+  built with rexglue-sdk 1ac58ab gets `--window_hidden=true` (it never shows its window); for older
   builds the launcher hides the export's windows as soon as they show (SW_HIDE alone didn't hold:
   on a colleague's PC the picture export came up as a tiny window, which he closed as a pop-up).
 - **Hints for the input in use** (`src/hints.cpp`): the button hints at the bottom of every screen
