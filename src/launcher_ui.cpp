@@ -511,6 +511,19 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     }
     px = a.x - 8 * u;
   }
+  // DirectInput pads (pad_state.h) have no XInput slot: a small pad shape for each.
+  for (const GenericPad& pad : g_generic_pads) {
+    if (!pad.connected || pad.skip) continue;
+    const float w = 40 * u, h = 30 * u;
+    const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
+    dl->AddRectFilled(a, b, Rgba(40, 50, 100, 230), 10 * u);
+    dl->AddRect(a, b, Rgba(90, 100, 150), 10 * u, 0, 1.5f * u);
+    const ImVec2 m{(a.x + b.x) * 0.5f, c.y};
+    dl->AddRectFilled({m.x - 12 * u, m.y - 6 * u}, {m.x + 12 * u, m.y + 6 * u}, kWhite, 6 * u);
+    dl->AddCircleFilled({m.x - 6 * u, m.y}, 2.5f * u, Rgba(40, 50, 100));
+    dl->AddCircleFilled({m.x + 6 * u, m.y}, 2.5f * u, Rgba(40, 50, 100));
+    px = a.x - 8 * u;
+  }
   return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 }
 
