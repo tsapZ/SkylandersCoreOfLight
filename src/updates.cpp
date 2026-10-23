@@ -1,5 +1,7 @@
 #include "updates.h"
 
+#include "games.h"  // VersionLess
+
 #include <windows.h>
 #include <shlobj.h>
 #include <winhttp.h>
@@ -305,11 +307,14 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
   }
   Json releases;
   if (!JsonParser(body).Parse(releases) || releases.kind != Json::Kind::kArray) return std::nullopt;
+  // The highest version with its setup, not the first in the list: GitHub sorts the list by the
+  // tag as text there, so v0.1.0-beta.10 came after beta.7 and the launcher (beta.9) never saw it.
+  std::optional<Release> best;
   for (const Json& r : releases.items) {
     if (const Json* draft = r.Get("draft"); draft && draft->flag) continue;
     std::string version = r.String("tag_name");
     if (version.starts_with("v")) version.erase(0, 1);
-    if (version.empty()) continue;
+    if (version.empty() || (best && !VersionLess(best->version, version))) continue;
     const std::string wanted = asset_prefix + "-" + version + ".exe";
     const Json* assets = r.Get("assets");
     for (size_t i = 0; assets && i < assets->items.size(); ++i) {
@@ -319,12 +324,10 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
       if (const Json* size = a.Get("size"); size && size->kind == Json::Kind::kNumber) {
         release.size = std::strtoull(size->text.c_str(), nullptr, 10);
       }
-      if (!release.url.empty()) return release;
+      if (!release.url.empty()) best = release;
     }
-    // The newest release decides: an older one with a setup isn't an update.
-    return std::nullopt;
   }
-  return std::nullopt;
+  return best;
 }
 
 std::vector<Release> LoadKnownReleases(uint64_t* checked) {
