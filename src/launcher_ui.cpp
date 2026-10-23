@@ -73,7 +73,16 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
            const char* label, const char* key = nullptr) {
   const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
+  HintClickArea({pos.x - size * 0.2f, pos.y - size * 0.25f}, {x + TextWidth(font, size, label) + size * 0.3f, pos.y + size * 1.3f},
+                button);  // a click on it presses the button (hints.h)
   return x + TextWidth(font, size, label) + size * 1.2f;
+}
+
+// The same inside a dialog's button, which takes its own clicks (no second press from the hint).
+void ButtonHint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
+                const char* label) {
+  const float x = pos.x + HintGlyph(dl, font, size, pos, button, col) + size * 0.4f;
+  Text(dl, font, size, {x, pos.y}, kWhite, label);
 }
 
 }  // namespace
@@ -103,6 +112,7 @@ void LauncherUi::ApplyHubSettings() {
   settings_.Init(regular_, bold_, german_);
   hub_screen_.Init(regular_, bold_, german_);
   browser_.Init(regular_, bold_, german_);
+  folder_browser_.Init(regular_, bold_, german_, true);
   figures_screen_.Init(regular_, bold_, german_);
   profiles_screen_.Init(regular_, bold_, german_);
   achievements_screen_.Init(regular_, bold_, german_);
@@ -226,6 +236,7 @@ void LauncherUi::UpdateInstall() {
       error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
     }
   } else {
+    if (update_total_ && update) update_failed_.push_back(name);  // "Alle aktualisieren" sums it up
     const std::string why = GameInstallError(game);
     char text[256];
     std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %lu)%s%s" : "%s: installation stopped (code %lu)%s%s",
@@ -280,7 +291,7 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
     const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
     dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
     const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
-    Hint(dl, bold_, 24 * u, {p.x + (270 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    ButtonHint(dl, bold_, 24 * u, {p.x + (270 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
     return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   };
   const bool yes = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Problem melden" : "Report it");
@@ -305,7 +316,8 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
 }
 
 void LauncherUi::ToggleFullscreen() {
-  hub_.fullscreen = !hub_.fullscreen;
+  hub_.fullscreen = !fullscreen();
+  fullscreen_forced_ = false;
   WriteGameSetting(HubSettingsFile(), "Hub", "fullscreen", "bool", hub_.fullscreen ? "true" : "false");
 }
 
@@ -368,6 +380,11 @@ void LauncherUi::Start(size_t index) {
     }
     say(L"Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
         L"This game isn't installed (its installer from its project)");
+    return;
+  }
+  // Its update running or queued ("Alle aktualisieren"): not while its files are being replaced.
+  if (BeingUpdated(index)) {
+    say(L"Dieses Spiel wird gerade aktualisiert", L"This game is being updated");
     return;
   }
   // A newer setup than the installed game: ask first (once a launch; "Erst spielen" plays).
@@ -539,14 +556,20 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   // The disc's state.
   const char* state = nullptr;
   ImU32 state_col = kDim;
+  const bool installing = install_process_ && install_game_ == index;
+  static char downloading[64];
+  std::snprintf(downloading, sizeof(downloading), german_ ? "L\xC3\xA4" "dt herunter ... %d %%" : "Downloading ... %d %%",
+                int(DownloadProgress() * 100.0f));
   if (!installed) {
-    const bool installing = install_process_ && install_game_ == index;
-    static char downloading[64];
-    std::snprintf(downloading, sizeof(downloading), german_ ? "L\xC3\xA4" "dt herunter ... %d %%" : "Downloading ... %d %%",
-                  int(DownloadProgress() * 100.0f));
     state = DownloadingFor(index) ? downloading
             : installing          ? (german_ ? "Wird installiert ..." : "Installing ...")
                                   : (german_ ? "Nicht installiert" : "Not installed");
+  } else if (BeingUpdated(index)) {
+    // Its update: downloading, its setup running, or waiting its turn ("Alle aktualisieren").
+    state = DownloadingFor(index) ? downloading
+            : installing          ? (german_ ? "Wird aktualisiert ..." : "Updating ...")
+                                  : (german_ ? "Update wartet ..." : "Update waiting ...");
+    state_col = kGold;
   } else {
     switch (f.disc.load()) {
       case DiscState::kMatches:
@@ -577,8 +600,8 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
   const DiscState disc_state = f.disc.load();
   const bool can_install = !installed && !install_process_ && index < setups_.size() && !setups_[index].empty();
-  if (selected && (can_install || (installed && (disc_state == DiscState::kMatches ||
-                                                 disc_state == DiscState::kMissing)))) {
+  if (selected && !BeingUpdated(index) &&
+      (can_install || (installed && (disc_state == DiscState::kMatches || disc_state == DiscState::kMissing)))) {
     const char* go = can_install                         ? (german_ ? "Installieren" : "Install")
                      : disc_state == DiscState::kMissing ? (german_ ? "Disc einlesen" : "Add the disc")
                                                          : (german_ ? "Starten" : "Play");
@@ -661,6 +684,7 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     dl->AddCircleFilled({m.x + 6 * u, m.y}, 2.5f * u, Rgba(40, 50, 100));
     px = a.x - 8 * u;
   }
+  badge_left_ = px;  // DrawUpdateAll keeps left of it
   return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 }
 
@@ -668,6 +692,8 @@ bool LauncherUi::Draw(float width, float height) {
   // The screen this frame will draw, in DrawScreens' order.
   const char* window = starting_                       ? "starting"
                        : hub_update_ && !hub_update_put_off_ ? "hubupdate"
+                       : ask_updates_found_ && !install_process_ ? "updatesfound"
+                       : folder_browser_.is_open()     ? "files"
                        : setup_.is_open()              ? "setup"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
@@ -689,18 +715,21 @@ bool LauncherUi::Draw(float width, float height) {
     shown_since_ = now;
   }
   const bool keep = DrawScreens(width, height);
+  DrawToast(width, height, std::string_view(window) == "launcher");
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
   UpdateTitleMusicExport();
   UpdatePictureExport();
   UpdateInstall();
   UpdateReleases();
   UpdateDownload();
+  UpdateQueue();
   UpdateImport();
   {
     std::filesystem::path wanted;
     if (hub_.title_music && selected_ < found_.size() && !found_[selected_].exe.empty()) {
       wanted = TitleMusicFile(selected_);
     }
+    music_.SetLoudness(float(hub_.music_volume) / 100.0f);
     music_.Play(wanted);
     music_.Update(ImGui::GetIO().DeltaTime);
   }
@@ -837,7 +866,7 @@ bool LauncherUi::DrawQuitConfirm(float width, float height) {
     const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
     dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
     const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
-    Hint(dl, bold_, 24 * u, {p.x + (220 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    ButtonHint(dl, bold_, 24 * u, {p.x + (220 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
     return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   };
   const bool yes = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Beenden" : "Quit");
@@ -853,10 +882,11 @@ bool LauncherUi::DrawQuitConfirm(float width, float height) {
 }
 
 bool LauncherUi::UpdateAvailable(size_t index) const {
-  if (index >= installed_versions_.size() || installed_versions_[index].empty() || index >= setups_.size() ||
-      setups_[index].empty()) {
-    return false;
-  }
+  if (index >= installed_versions_.size() || index >= setups_.size() || setups_[index].empty()) return false;
+  // A game copied into the games folder has no known version (no uninstall entry): the newest
+  // setup is offered once, and its entry knows the version afterwards. A developer's build (no
+  // version either, not copied) is left alone.
+  if (installed_versions_[index].empty()) return index < found_.size() && found_[index].copied;
   return VersionLess(installed_versions_[index], SetupVersion(AllGames()[index], setups_[index]));
 }
 
@@ -880,7 +910,9 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
   const Game& game = AllGames()[index];
   const std::string title = (german_ ? "Update f\xC3\xBCr " : "Update for ") + std::string(german_ ? game.name_de : game.name_en);
   Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
-  const std::string versions = (german_ ? "Installiert: " : "Installed: ") + installed_versions_[index] +
+  const std::string installed = !installed_versions_[index].empty() ? installed_versions_[index]
+                                                                    : (german_ ? "unbekannt (kopiert)" : "unknown (copied)");
+  const std::string versions = (german_ ? "Installiert: " : "Installed: ") + installed +
                                (german_ ? "   \xC2\xB7   Neu: " : "   \xC2\xB7   New: ") +
                                SetupVersion(game, setups_[index]);
   Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, versions.c_str())) * 0.5f, a.y + 84 * u}, kWhite,
@@ -894,7 +926,7 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
     const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
     dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
     const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
-    Hint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    ButtonHint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
     return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   };
   const bool yes = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Aktualisieren" : "Update");
@@ -969,31 +1001,137 @@ void LauncherUi::UpdateReleases() {
   const bool manual = std::exchange(manual_check_, false);
   if (found.empty()) {
     if (manual) {
-      error_ = german_ ? L"Keine Verbindung zu GitHub: Updates lassen sich gerade nicht pr\x00FC" L"fen"
-                       : L"No connection to GitHub: updates can't be checked right now";
-      error_until_ = ImGui::GetTime() + 8.0;
+      ShowToast(german_ ? "Keine Verbindung zu GitHub: Updates lassen sich gerade nicht pr\xC3\xBC" "fen"
+                        : "No connection to GitHub: updates can't be checked right now",
+                8.0);
     }
     return;
   }
   releases_ = std::move(found);
   if (!install_process_ && !Downloading()) Refresh();
   if (manual) {
+    // A newer launcher: its own question comes up (DrawHubUpdate); the games' updates: asked here.
     hub_update_put_off_ = false;
-    std::string games;
-    for (size_t i = 0; i < AllGames().size(); ++i) {
-      if (!UpdateAvailable(i)) continue;
-      if (!games.empty()) games += ", ";
-      games += german_ ? AllGames()[i].name_de : AllGames()[i].name_en;
+    bool games = false;
+    for (size_t i = 0; i < found_.size(); ++i) {
+      games = games || (!found_[i].exe.empty() && UpdateAvailable(i) && !BeingUpdated(i));
     }
-    const std::string text = hub_update_  ? std::string()
-                             : !games.empty() ? (german_ ? "Updates auf den Karten: " : "Updates on the cards: ") + games
-                                              : (german_ ? "Alles ist aktuell (Core of Light " COREOFLIGHT_VERSION ")"
-                                                         : "Everything is up to date (Core of Light " COREOFLIGHT_VERSION ")");
-    if (!text.empty()) {
-      error_ = Wide(text);
-      error_until_ = ImGui::GetTime() + 8.0;
+    if (hub_update_) {
+      ShowToast((german_ ? "Neue Version von Core of Light: " : "A new Core of Light: ") + hub_update_->version);
+    } else if (games) {
+      ask_updates_found_ = true;
+    } else {
+      ShowToast(german_ ? "Kein neues Update: alles ist auf dem neuesten Stand (Core of Light " COREOFLIGHT_VERSION ")"
+                        : "No new update: everything is up to date (Core of Light " COREOFLIGHT_VERSION ")");
     }
   }
+}
+
+void LauncherUi::ShowToast(const std::string& text, double seconds) {
+  toast_ = text;
+  toast_until_ = ImGui::GetTime() + seconds;
+}
+
+// The note at the bottom right, over every screen: the manual check while it runs, what it found
+// (ShowToast), and "Alle aktualisieren" with its progress where the start screen's button isn't.
+void LauncherUi::DrawToast(float width, float height, bool start_screen) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  std::string text;
+  float progress = -1.0f;  // a bar under the text when 0..1
+  bool spinning = false;
+  if (manual_check_ && work_->checking.load()) {
+    text = german_ ? "Suche nach Updates ..." : "Looking for updates ...";
+    spinning = true;
+  } else if (update_total_ && !start_screen) {
+    const size_t done = update_total_ - update_queue_.size();
+    const size_t game = install_process_ ? install_game_ : work_->game;
+    char line[200];
+    std::snprintf(line, sizeof(line), german_ ? "Aktualisiere %zu von %zu: %s" : "Updating %zu of %zu: %s", done,
+                  update_total_, game < AllGames().size() ? (german_ ? AllGames()[game].name_de : AllGames()[game].name_en) : "");
+    text = line;
+    spinning = true;
+    if (Downloading()) progress = DownloadProgress();
+  } else if (!toast_.empty() && ImGui::GetTime() < toast_until_) {
+    text = toast_;
+  }
+  if (text.empty()) return;
+  ImDrawList* dl = ImGui::GetForegroundDrawList();
+  const float size = 20 * u;
+  const float pad = 18 * u, icon = spinning ? 28 * u : 0.0f;
+  const float w = std::min(width - 96 * u, TextWidth(regular_, size, text.c_str()) + 2 * pad + icon);
+  const float h = (progress >= 0 ? 66 : 48) * u;
+  const ImVec2 b{width - 48 * u, height - 96 * u}, a{b.x - w, b.y - h};
+  dl->AddRectFilled(a, b, Rgba(20, 26, 64, 245), 16 * u);
+  dl->AddRect(a, b, kGold, 16 * u, 0, 2 * u);
+  if (spinning) {
+    const ImVec2 c{a.x + pad + 8 * u, a.y + 24 * u};
+    const float a0 = float(ImGui::GetTime()) * 5.0f;
+    dl->PathArcTo(c, 8 * u, a0, a0 + 4.2f, 24);
+    dl->PathStroke(kGold, 0, 2.5f * u);
+  }
+  Text(dl, regular_, size, {a.x + pad + icon, a.y + 12 * u}, kWhite, text.c_str(), w - 2 * pad - icon + 8 * u);
+  if (progress >= 0) {
+    const ImVec2 p{a.x + pad, a.y + 46 * u}, q{b.x - pad, a.y + 54 * u};
+    dl->AddRectFilled(p, q, Rgba(40, 50, 100), 4 * u);
+    dl->AddRectFilled(p, {p.x + (q.x - p.x) * std::clamp(progress, 0.0f, 1.0f), q.y}, kGold, 4 * u);
+  }
+}
+
+// "Updates gefunden" after a manual check: each game with its versions; A downloads and installs
+// them one after the other ("Alle aktualisieren"), B leaves them on the cards.
+bool LauncherUi::DrawUpdatesFound(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("updatesfound", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, std::filesystem::path());
+  std::vector<std::string> lines;
+  for (size_t i = 0; i < found_.size(); ++i) {
+    if (found_[i].exe.empty() || !UpdateAvailable(i) || BeingUpdated(i)) continue;
+    const Game& game = AllGames()[i];
+    const std::string from = !installed_versions_[i].empty() ? installed_versions_[i] : (german_ ? "kopiert" : "copied");
+    lines.push_back(std::string(german_ ? game.name_de : game.name_en) + ":  " + from + "  \xC2\xBB  " +
+                    SetupVersion(game, setups_[i]));  // the fonts have Latin-1 only (no arrow)
+  }
+  const float bw = 680 * u, bh = (200 + 30 * float(lines.size())) * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Updates gefunden" : "Updates found";
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title)) * 0.5f, a.y + 28 * u}, kGold, title);
+  float y = a.y + 80 * u;
+  for (const std::string& line : lines) {
+    Text(dl, regular_, 21 * u, {a.x + 60 * u, y}, kWhite, line.c_str());
+    y += 30 * u;
+  }
+  const char* keeps = german_ ? "Spielst\xC3\xA4nde, Figuren, Discs und Einstellungen bleiben."
+                              : "Saves, figures, the discs and the settings stay.";
+  Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, keeps)) * 0.5f, y + 8 * u}, kDim, keeps);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, b.y - 74 * u}, q{x + 260 * u, b.y - 22 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    ButtonHint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 60 * u, "A", Rgba(70, 170, 70), german_ ? "Herunterladen" : "Download");
+  const bool no = button(b.x - 320 * u, "B", Rgba(200, 60, 60), german_ ? "Sp\xC3\xA4ter" : "Later");
+  ImGui::End();
+  if (lines.empty()) {
+    ask_updates_found_ = false;
+  } else if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    ask_updates_found_ = false;
+    StartUpdateAll();
+  } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_updates_found_ = false;
+  }
+  return true;
 }
 
 void LauncherUi::ApplyReleases() {
@@ -1024,6 +1162,131 @@ bool LauncherUi::DownloadingFor(size_t game) const { return Downloading() && !wo
 
 float LauncherUi::DownloadProgress() const { return work_ ? work_->progress.load() : 0.0f; }
 
+bool LauncherUi::UpdateQueued(size_t index) const {
+  return std::find(update_queue_.begin(), update_queue_.end(), index) != update_queue_.end();
+}
+
+bool LauncherUi::BeingUpdated(size_t index) const {
+  const bool installed = index < found_.size() && !found_[index].exe.empty();
+  return installed && (UpdateQueued(index) || DownloadingFor(index) || (install_process_ && install_game_ == index));
+}
+
+// "Alle aktualisieren": every installed game with an update, in the cards' order.
+void LauncherUi::StartUpdateAll() {
+  if (update_total_) return;  // running already
+  update_queue_.clear();
+  update_failed_.clear();
+  for (size_t i = 0; i < found_.size(); ++i) {
+    if (!found_[i].exe.empty() && UpdateAvailable(i) && !BeingUpdated(i)) update_queue_.push_back(i);
+  }
+  update_total_ = update_queue_.size();
+}
+
+// One game at a time: the next one once no download and no setup is running; at the end what
+// came of it, and a newer launcher offered again (it restarts, so it comes last).
+void LauncherUi::UpdateQueue() {
+  if (!update_total_ || install_process_ || work_->download.load() != 0) return;
+  while (!update_queue_.empty()) {
+    const size_t game = update_queue_.front();
+    if (!running_key_.empty() && running_game_ == game) return;  // after it has ended
+    update_queue_.erase(update_queue_.begin());
+    if (!UpdateAvailable(game)) continue;  // updated meanwhile
+    if (BeginInstall(game, true)) return;
+    update_failed_.push_back(german_ ? AllGames()[game].name_de : AllGames()[game].name_en);
+  }
+  std::string text;
+  if (update_failed_.empty()) {
+    text = german_ ? "Alle Spiele sind aktualisiert" : "All games are updated";
+  } else {
+    text = german_ ? "Nicht aktualisiert: " : "Not updated: ";
+    for (size_t i = 0; i < update_failed_.size(); ++i) text += (i ? ", " : "") + update_failed_[i];
+  }
+  error_ = Wide(text);
+  error_until_ = ImGui::GetTime() + 8.0;
+  update_total_ = 0;
+  update_failed_.clear();
+  if (hub_update_) hub_update_put_off_ = false;
+}
+
+// The button on the start screen while there are updates (click, LT or U), and while they run
+// which game is on and how far.
+void LauncherUi::DrawUpdateAll(float width, float u) {
+  size_t count = 0;
+  for (size_t i = 0; i < found_.size(); ++i) {
+    if (!found_[i].exe.empty() && UpdateAvailable(i) && !BeingUpdated(i)) ++count;
+  }
+  if (!update_total_ && !count) return;
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImGuiIO& io = ImGui::GetIO();
+  const float size = 22 * u, h = 46 * u;
+  std::string label;
+  if (update_total_) {
+    const size_t done = update_total_ - update_queue_.size();
+    const size_t game = install_process_ ? install_game_ : work_->game;
+    char line[200];
+    std::snprintf(line, sizeof(line), german_ ? "Aktualisiere %zu von %zu: %s" : "Updating %zu of %zu: %s", done,
+                  update_total_, game < AllGames().size() ? (german_ ? AllGames()[game].name_de : AllGames()[game].name_en) : "");
+    label = line;
+    if (Downloading()) label += "  " + std::to_string(int(DownloadProgress() * 100.0f)) + " %";
+  } else {
+    label = (german_ ? "Alle aktualisieren (" : "Update all (") + std::to_string(count) + ")";
+  }
+  const float glyph = update_total_ ? 30 * u : HintGlyphWidth(bold_, size, "LT", "U") + size * 0.4f;
+  const float w = 36 * u + glyph + TextWidth(bold_, size, label.c_str());
+  // Between the title and the profile badge; below the title where that is too narrow.
+  const float title_right = 46 * u + TextWidth(bold_, 56 * u, "CORE OF LIGHT") + 30 * u;
+  ImVec2 a{(title_right + badge_left_ - w) * 0.5f, 47 * u};
+  if (a.x < title_right || a.x + w > badge_left_ - 12 * u) a = {48 * u, 116 * u};
+  const ImVec2 b{a.x + w, a.y + h};
+  const bool over = !update_total_ && io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y &&
+                    io.MousePos.y < b.y;
+  dl->AddRectFilled(a, b, over ? Rgba(70, 80, 150, 245) : Rgba(24, 30, 70, 235), h * 0.5f);
+  dl->AddRect(a, b, kGold, h * 0.5f, 0, 2.5f * u);
+  float x = a.x + 18 * u;
+  if (update_total_) {
+    // A turning arc while it works.
+    const ImVec2 c{x + 8 * u, a.y + h * 0.5f};
+    const float a0 = float(ImGui::GetTime()) * 5.0f;
+    dl->PathArcTo(c, 8 * u, a0, a0 + 4.2f, 24);
+    dl->PathStroke(kGold, 0, 2.5f * u);
+    x += glyph;
+  } else {
+    x += HintGlyph(dl, bold_, size, {x, a.y + 11 * u}, "LT", Rgba(80, 90, 140), "U") + size * 0.4f;
+  }
+  Text(dl, bold_, size, {x, a.y + 11 * u}, update_total_ ? kWhite : kGold, label.c_str());
+  if (!update_total_ && ((over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ||
+                         ImGui::IsKeyPressed(ImGuiKey_GamepadL2, false) || ImGui::IsKeyPressed(ImGuiKey_U, false))) {
+    StartUpdateAll();
+  }
+}
+
+// The games folder chosen in the folder browser: set, saved, the games looked for there.
+void LauncherUi::ApplyGamesFolder(const std::filesystem::path& dir) {
+  SetInstallDir(dir);
+  std::error_code ec;
+  std::filesystem::create_directories(HubSettingsFile().parent_path(), ec);  // a first start: not there yet
+  const std::u8string u8 = dir.u8string();
+  hub_.games_dir = std::string(u8.begin(), u8.end());
+  WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", hub_.games_dir);
+  if (!install_process_ && !Downloading()) Refresh();
+  size_t found = 0;
+  for (const Found& f : found_) {
+    if (!f.exe.empty() && f.exe.native().starts_with(dir.native())) ++found;
+  }
+  char line[160];
+  std::snprintf(line, sizeof(line), german_ ? "%zu Spiel(e) in diesem Ordner gefunden" : "%zu game(s) found in this folder", found);
+  if (setup_.is_open()) setup_.UseGamesFolder(dir);
+  if (hub_screen_.is_open()) {
+    std::string en, de;
+    GamesFolderLabels(en, de);
+    hub_screen_.SetActionLabel("choose_games_dir", en, de);
+    hub_screen_.ShowMessage(line);
+  } else {
+    error_ = Wide(line);
+    error_until_ = ImGui::GetTime() + 8.0;
+  }
+}
+
 void LauncherUi::StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update,
                                bool hub) {
   work_->game = game;
@@ -1046,7 +1309,10 @@ bool LauncherUi::BeginInstall(size_t game, bool update) {
     StartDownload(setup_urls_[game], setups_[game], game, update, false);
     return true;
   }
-  if (!StartGameInstall(game, setups_[game], german_, &install_process_, update)) {
+  // An update goes into the folder the game is in (a copied one has no entry that would say so).
+  const std::filesystem::path dir =
+      update && game < found_.size() && !found_[game].exe.empty() ? found_[game].exe.parent_path() : std::filesystem::path();
+  if (!StartGameInstall(game, setups_[game], german_, &install_process_, update, dir)) {
     install_process_ = nullptr;
     return false;
   }
@@ -1064,6 +1330,7 @@ void LauncherUi::UpdateDownload() {
   const size_t game = work_->game;
   const std::string name = german_ ? AllGames()[game].name_de : AllGames()[game].name_en;
   if (state == 3 || !BeginInstall(game, work_->update)) {
+    if (update_total_ && work_->update) update_failed_.push_back(name);
     error_ = Wide(name + (german_ ? ": Der Download ist fehlgeschlagen" : ": the download failed"));
     error_until_ = ImGui::GetTime() + 8.0;
   }
@@ -1131,7 +1398,7 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
     const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
     dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
     const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
-    Hint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    ButtonHint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
     return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   };
   const bool yes = button(a.x + 60 * u, "A", Rgba(70, 170, 70), german_ ? "Jetzt aktualisieren" : "Update now");
@@ -1155,6 +1422,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
       !import_.running()) {
     return DrawHubUpdate(width, height);
   }
+  if (ask_updates_found_ && !install_process_) return DrawUpdatesFound(width, height);
+  // The games folder's browser, over the first-run setup or the hub's settings it came from.
+  if (folder_browser_.is_open()) {
+    folder_browser_.Draw(width, height);
+    if (const std::filesystem::path chosen = folder_browser_.TakeChosen(); !chosen.empty()) ApplyGamesFolder(chosen);
+    return true;
+  }
   if (setup_.is_open()) {
     // X on its disc page: the file browser for an ISO the search didn't find, over the setup.
     if (browser_.is_open()) {
@@ -1173,6 +1447,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
       import_.Cancel();
     } else if (job.kind == SetupScreen::Job::Kind::kPickIso) {
       browser_.Open();
+    } else if (job.kind == SetupScreen::Job::Kind::kPickFolder) {
+      folder_browser_.Open(GamesFolderChosen() ? GamesFolder() : std::filesystem::path());
     }
     if (const std::string language = setup_.TakeLanguage(); !language.empty()) {
       hub_.language = language;
@@ -1229,10 +1505,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
     }
     // "Problem melden": the report on the desktop, shown in Explorer.
     const std::string action = hub_screen_.TakeAction();
-    if (action == "check_updates") {
-      StartUpdateCheck(true);
-      hub_screen_.ShowMessage(german_ ? "Suche nach Updates ..." : "Looking for updates ...");
+    if (action == "choose_games_dir") {
+      folder_browser_.Open(GamesFolderChosen() ? GamesFolder() : std::filesystem::path());
     }
+    if (action == "check_updates") StartUpdateCheck(true);  // DrawToast shows it and what it finds
     if (action == "report_problem") {
       std::string error;
       const std::filesystem::path report = WriteProblemReport(found_, launcher_dir_, german_, error);
@@ -1274,6 +1550,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, "SKYLANDERS");
   Text(dl, bold_, 56 * u, {46 * u, 56 * u}, kGold, "CORE OF LIGHT");
   const bool profile_clicked = DrawProfileBadge(width, u);
+  DrawUpdateAll(width, u);  // "Alle aktualisieren", while there are updates
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();

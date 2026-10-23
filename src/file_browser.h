@@ -19,10 +19,13 @@ struct ImFont;
 
 namespace coreoflight {
 
+// The other use: choosing the games folder (a colleague's wish, 2026-10-23, playing on SteamOS with
+// the games on another drive): folders only, "Diesen Ordner nehmen" in each, and under Proton the
+// Linux home folder among the places (Wine's Z: drive is the Linux root).
 class FileBrowser {
  public:
-  void Init(ImFont* regular, ImFont* bold, bool german);
-  // Opens in `folder` (the last one used if empty, else Downloads).
+  void Init(ImFont* regular, ImFont* bold, bool german, bool folders_only = false);
+  // Opens in `folder` (the last one used if empty, else Downloads, or Documents for folders).
   void Open(const std::filesystem::path& folder = {});
   bool is_open() const { return open_; }
   void Draw(float width, float height);
@@ -36,7 +39,7 @@ class FileBrowser {
     std::filesystem::path path;
   };
   void List(const std::filesystem::path& folder);  // an empty folder: the drives and places
-  void Choose(const Entry& e);
+  void Choose(Entry e);  // a copy (List clears the entries)
   void StartSearch();
   void ListSearch();  // the search's results as the entries
   void StopSearch();
@@ -44,10 +47,12 @@ class FileBrowser {
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;
   bool german_ = false;
+  bool folders_only_ = false;  // choosing a folder (the games folder), not a disc
   bool open_ = false;
   std::filesystem::path folder_, last_folder_, chosen_;
   std::vector<Entry> entries_;
   int selected_ = 0;
+  int scroll_ = 0;  // the first entry shown; follows the chosen one only when it leaves the view
   std::string message_;
   std::shared_ptr<DiscSearch> search_;  // the running or last search; the list shows it while set
   bool searching_view_ = false;

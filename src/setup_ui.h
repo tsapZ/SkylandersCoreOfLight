@@ -37,10 +37,11 @@ class SetupScreen {
   void Draw(float width, float height, const Launcher& launcher);
 
   // The next step for the launcher to start, once: a game's setup or a disc, stopping the disc
-  // being set up (B while it unpacks), or the file browser for an ISO the search didn't find (X).
-  // The ISO chosen there comes back with AddIso.
+  // being set up (B while it unpacks), the file browser for an ISO the search didn't find (X), or
+  // the folder browser for the games folder (A on its row). The ISO chosen there comes back with
+  // AddIso, the folder with UseGamesFolder.
   struct Job {
-    enum class Kind { kNone, kInstall, kImport, kCancel, kPickIso } kind = Kind::kNone;
+    enum class Kind { kNone, kInstall, kImport, kCancel, kPickIso, kPickFolder } kind = Kind::kNone;
     size_t game = 0;
     std::filesystem::path iso;
   };
@@ -49,6 +50,9 @@ class SetupScreen {
   std::string TakeLanguage();
   // An ISO chosen by hand: known by its default.xex like the search's, it takes its game's row.
   void AddIso(const std::filesystem::path& iso);
+  // A games folder chosen in the folder browser (the launcher has set and saved it): shown and
+  // kept among the row's choices.
+  void UseGamesFolder(const std::filesystem::path& dir);
   // Closed (done or skipped), once: the launcher remembers it and doesn't open it again.
   bool TakeFinished();
 

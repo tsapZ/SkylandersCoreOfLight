@@ -47,8 +47,16 @@ void MusicPlayer::Close() {
 
 void MusicPlayer::SetVolume(float v) {
   // MCI's volume is 0..1000; the ear follows its square better than its line.
-  const int level = int(std::lround(1000.0f * v * v * kLevel));
+  const float loud = v * loudness_;  // the fade times the owner's setting
+  const int level = int(std::lround(1000.0f * loud * loud * kLevel));
   Mci(std::wstring(L"setaudio ") + kAlias + L" volume to " + std::to_wstring(level));
+}
+
+void MusicPlayer::SetLoudness(float loudness) {
+  loudness = std::clamp(loudness, 0.0f, 1.0f);
+  if (loudness == loudness_) return;
+  loudness_ = loudness;
+  if (open_) SetVolume(volume_);  // a change heard at once
 }
 
 void MusicPlayer::Update(float dt) {

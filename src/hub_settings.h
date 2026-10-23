@@ -18,11 +18,12 @@ struct HubSettings {
   bool figures_only_mine = true;  // the figure library opens on the owner's figures, not all
   bool figures_marks = true;      // Y marks a figure without a file as owned ("Hab ich")
   bool title_music = true;        // a game's title music while its card is chosen
+  int music_volume = 60;          // its loudness in percent, 10..100 (a colleague found it loud, 2026-10-23)
   bool animations = true;         // screens slide and fade in
   bool fullscreen = false;        // the window fills the screen (F11 / Alt+Enter switch it too)
   bool auto_backup = true;        // the saves copied at a game's start, end and every 60 minutes
   bool setup_done = false;        // the first-run setup (setup_ui.h) finished or skipped
-  std::string games_dir;          // where new games go (chosen in the setup); empty: %LOCALAPPDATA%\Programs
+  std::string games_dir;          // where the games are and new ones go (the setup or "Spiele-Ordner"); empty: %LOCALAPPDATA%\Programs
 };
 
 std::filesystem::path HubSettingsFile();
@@ -31,5 +32,7 @@ HubSettings LoadHubSettings();
 bool HubGerman(const HubSettings& settings);
 // The settings as pages for SettingsScreen (one page, the current values).
 std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings);
+// What the "Spiele-Ordner" row shows: the games folder, "Standard: ..." while none is chosen.
+void GamesFolderLabels(std::string& en, std::string& de);
 
 }  // namespace coreoflight

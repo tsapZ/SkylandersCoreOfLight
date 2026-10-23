@@ -18,6 +18,8 @@ class MusicPlayer {
   void Update(float dt);
   // At once, no fade (a game starts).
   void Stop();
+  // The hub's "Musik-Lautstärke", 0..1: the loudest the music gets.
+  void SetLoudness(float loudness);
 
  private:
   void Open(const std::filesystem::path& file);
@@ -26,7 +28,8 @@ class MusicPlayer {
 
   std::filesystem::path playing_, wanted_;
   bool open_ = false;
-  float volume_ = 0.0f;  // 0..1
+  float volume_ = 0.0f;  // 0..1, the fade
+  float loudness_ = 0.6f;  // 0..1, the setting
 };
 
 }  // namespace coreoflight

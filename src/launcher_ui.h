@@ -49,8 +49,10 @@ class LauncherUi {
   void GameExitCode(unsigned long code);
   // Fullscreen (hub setting, F11 / Alt+Enter): what main.cpp should show, and a switch that
   // saves the setting.
-  bool fullscreen() const { return hub_.fullscreen; }
+  bool fullscreen() const { return hub_.fullscreen || fullscreen_forced_; }
   void ToggleFullscreen();
+  // --fullscreen: fullscreen for this start, the setting left as it is (F11 then saves as usual).
+  void StartFullscreen() { fullscreen_forced_ = true; }
 
  private:
   void Start(size_t index);
@@ -141,6 +143,7 @@ class LauncherUi {
   // B / Esc on the start screen asks first (a pad user would otherwise quit by mistake): false
   // once A / Enter says quit.
   bool confirm_quit_ = false;
+  bool fullscreen_forced_ = false;  // --fullscreen (StartFullscreen), until F11 / Alt+Enter
   // Installing a game from its card (games.h StartGameInstall): each game's setup, found once per
   // Refresh, and the one running (its process, which game, since when).
   std::vector<std::filesystem::path> setups_;
@@ -183,6 +186,35 @@ class LauncherUi {
   int ask_update_ = -1;
   bool UpdateAvailable(size_t index) const;
   bool DrawUpdateConfirm(float width, float height);
+  // "Alle aktualisieren" (a colleague's wish, 2026-10-23: six cards one by one was too much):
+  // every game with an update, one after the other (download, silent setup); a game that is
+  // running waits until it has ended, and a queued game can't be started meanwhile. The games
+  // still to go, how many there were, the ones that failed, and the button on the start screen
+  // (between the title and the profile badge, whose left edge DrawProfileBadge leaves).
+  std::vector<size_t> update_queue_;
+  size_t update_total_ = 0;
+  std::vector<std::string> update_failed_;
+  float badge_left_ = 0;
+  // "Nach Updates suchen" (a colleague: it seemed to search for ever, the result went to the start
+  // screen behind the settings): a note at the bottom right on every screen while it looks and with
+  // what it found, "Updates gefunden" asking to download them, and the downloads' progress there
+  // while another screen is open.
+  std::string toast_;
+  double toast_until_ = 0;
+  bool ask_updates_found_ = false;
+  void ShowToast(const std::string& text, double seconds = 6.0);
+  void DrawToast(float width, float height, bool start_screen);
+  bool DrawUpdatesFound(float width, float height);
+  bool UpdateQueued(size_t index) const;
+  bool BeingUpdated(size_t index) const;  // queued, downloading or its setup running
+  void StartUpdateAll();
+  void UpdateQueue();
+  void DrawUpdateAll(float width, float u);
+  // The games folder (games.h GamesFolder), chosen in a folder browser of its own: from the hub's
+  // settings ("Spiele-Ordner") or the first-run setup's row. Set, saved, and the games looked for
+  // there at once.
+  FileBrowser folder_browser_;
+  void ApplyGamesFolder(const std::filesystem::path& dir);
   // A game was just started: its launch screen, until its window is up (main.cpp).
   bool starting_ = false;
   size_t starting_game_ = 0;

@@ -18,4 +18,15 @@ void UpdateHintInput();
 float HintGlyph(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
                 const char* key = nullptr);
 
+// The width HintGlyph draws this frame, without drawing (to centre a button before it is drawn).
+float HintGlyphWidth(ImFont* font, float size, const char* button, const char* key = nullptr);
+
+// A hint's area (its glyph and label) and its controller button ("A", "LB/RB", ...): a click there
+// next frame presses that button for one frame, as the controller would (UpdateHintInput). Every
+// screen's Hint() leaves its area; a button that handles its own clicks doesn't.
+void HintClickArea(ImVec2 a, ImVec2 b, const char* button);
+// Before ImGui::NewFrame, after the pads (UpdatePads): keeps a click's press from being cleared
+// when no controller is connected.
+void KeepClickedButton(ImGuiIO& io);
+
 }  // namespace coreoflight

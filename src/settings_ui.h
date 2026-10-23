@@ -30,11 +30,16 @@ class SettingsScreen {
   std::string TakeAction();
   // A line next to the hints for a few seconds (what an action did).
   void ShowMessage(const std::string& text);
+  // What a button row shows as its value (the games folder after choosing one).
+  void SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de);
 
  private:
   void Step(int step);
   void Save();
   std::string ValueLabel(const GameSetting& s) const;
+  // Whether a row can be changed: its enabled_by setting is on (as edited so far), or it has none.
+  // `needs`: that setting, for the explanation.
+  bool Enabled(const GameSetting& s, const GameSetting** needs = nullptr) const;
 
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;
@@ -45,6 +50,10 @@ class SettingsScreen {
   SettingsLoader* loader_ = nullptr;
   std::shared_ptr<GameSettings> edit_;  // a copy that the changes go into
   int page_ = 0, row_ = 0;
+  // The first row shown: it follows the chosen row only when that leaves the view (a list centred
+  // on it jumped under a resting mouse). The wheel's turns not yet a whole row (a touchpad's).
+  int scroll_ = 0;
+  float wheel_ = 0.0f;
   // Changed settings: cvar -> (category, type, value).
   struct Pending {
     std::string category, type, value;

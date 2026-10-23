@@ -108,6 +108,7 @@ class FiguresScreen {
   bool board_ = false;
   int board_list_ = 0;
   int board_scroll_ = 0;
+  int grid_scroll_ = 0;  // the grid's first row shown (follows the chosen tile only when it leaves the view)
   bool copying_ = false;
   std::vector<Profile> copy_targets_;
   int copy_target_ = 0;

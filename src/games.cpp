@@ -179,14 +179,45 @@ fs::path InstalledByEntry(const Game& game) {
   return {};
 }
 
+// The game in the games folder: <folder>\<app name>, <folder>\<repo>, the folder itself, then any
+// folder up to two levels down that holds its exe (folders named as the owner likes).
+fs::path FindInGamesFolder(const Game& game, const fs::path& folder) {
+  for (const fs::path& p : {folder / Utf8Path(game.app_name) / game.exe, folder / game.repo / game.exe, folder / game.exe}) {
+    if (IsFile(p)) return p;
+  }
+  std::error_code ec;
+  for (fs::directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec), end; it != end;
+       it.increment(ec)) {
+    if (ec) break;
+    std::error_code type_ec;
+    if (!it->is_directory(type_ec)) continue;
+    if (IsFile(it->path() / game.exe)) return it->path() / game.exe;
+    for (fs::directory_iterator inner(it->path(), fs::directory_options::skip_permission_denied, type_ec), stop;
+         inner != stop; inner.increment(type_ec)) {
+      if (type_ec) break;
+      std::error_code inner_ec;
+      if (inner->is_directory(inner_ec) && IsFile(inner->path() / game.exe)) return inner->path() / game.exe;
+    }
+  }
+  return {};
+}
+
 fs::path FindExe(const Game& game, const fs::path& launcher_dir,
-                 const std::unordered_map<std::string, std::string>& ini) {
+                 const std::unordered_map<std::string, std::string>& ini, const fs::path& games_folder,
+                 bool& copied) {
+  copied = false;
   if (auto it = ini.find(game.key); it != ini.end() && !it->second.empty()) {
     fs::path p = Utf8Path(it->second);
     if (fs::is_directory(p)) p /= game.exe;
     if (IsFile(p)) return p;
   }
   if (fs::path p = InstalledByEntry(game); !p.empty()) return p;
+  if (!games_folder.empty()) {
+    if (fs::path p = FindInGamesFolder(game, games_folder); !p.empty()) {
+      copied = true;  // no uninstall entry points there (InstalledByEntry came first)
+      return p;
+    }
+  }
   const fs::path installed = KnownFolder(FOLDERID_LocalAppData) / "Programs" / game.app_name / game.exe;
   if (IsFile(installed)) return installed;
   for (const fs::path& p : {launcher_dir / game.exe, launcher_dir / game.repo / game.exe,
@@ -227,7 +258,7 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   if (auto it = ini.find("library"); it != ini.end() && g_install_dir.empty()) g_install_dir = Utf8Path(it->second);
   found = std::vector<Found>(kGames.size());
   for (size_t i = 0; i < kGames.size(); ++i) {
-    found[i].exe = FindExe(kGames[i], launcher_dir, ini);
+    found[i].exe = FindExe(kGames[i], launcher_dir, ini, g_install_dir, found[i].copied);
     if (found[i].exe.empty()) continue;
     FindRom(found[i].exe, found[i].workdir, found[i].rom);
     // ssarecompiled.exe reads ssarecomp.toml next to it.
@@ -398,7 +429,8 @@ fs::path SetupLog(size_t game) {
 
 }  // namespace
 
-bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** process, bool update) {
+bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** process, bool update,
+                      const fs::path& dir) {
   if (game >= kGames.size() || setup.empty()) return false;
   const fs::path log = SetupLog(game);
   std::error_code ec;
@@ -410,8 +442,11 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
                          L" /NOROM=1 /PORTAL=software /SCALE=2 /LANGUAGE=" +
                          (german ? L"german" : L"english") + L" /RESOLUTION=" + std::to_wstring(w) + L"x" +
                          std::to_wstring(h) + L" \"/LOG=" + log.wstring() + L"\"";
-  // An update goes where the game is (the setup knows it from its AppId's entry).
-  if (!g_install_dir.empty() && !update) {
+  // An update goes where the game is (its exe's folder: the setup's entry would know it, a copied
+  // game has none); a new install into the games folder when one is set.
+  if (update && !dir.empty()) {
+    command += L" \"/DIR=" + dir.wstring() + L"\"";
+  } else if (!g_install_dir.empty() && !update) {
     command += L" \"/DIR=" + (g_install_dir / Utf8Path(kGames[game].app_name)).wstring() + L"\"";
   }
   STARTUPINFOW startup = {sizeof(startup)};

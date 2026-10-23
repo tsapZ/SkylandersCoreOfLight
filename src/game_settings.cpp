@@ -193,6 +193,10 @@ std::shared_ptr<GameSettings> FromJson(const Json& root) {
       g.value = s.Bool("preset") ? s.Str("current") : s.Str("value");
       g.restart = s.Bool("restart");
       g.buttons = s.Bool("buttons");
+      g.enabled_by = s.Str("enabled_by");
+      // Games built before the schema named it: the keyboard's player means something only with
+      // the keyboard on (a colleague's wish, 2026-10-23).
+      if (g.enabled_by.empty() && g.cvar == "keyboard_player") g.enabled_by = "mnk_mode";
       if (const Json* options = s.Get("options")) {
         for (const Json& o : options->items) g.options.push_back({o.Str("value"), o.Str("en"), o.Str("de")});
       }

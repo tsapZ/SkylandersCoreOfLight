@@ -93,6 +93,8 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
            const char* label, const char* key = nullptr) {
   const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
+  HintClickArea({pos.x - size * 0.2f, pos.y - size * 0.25f}, {x + TextWidth(font, size, label) + size * 0.3f, pos.y + size * 1.3f},
+                button);  // a click on it presses the button (hints.h)
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
 
@@ -661,8 +663,14 @@ void FiguresScreen::Draw(float width, float height) {
     }
   }
   selected_ = std::clamp(selected_, 0, std::max(0, n - 1));
+  // The rows shown follow the chosen tile only when it leaves them (worked out from the chosen row
+  // alone, they jumped under a mouse resting on an upper row: another tile under it, chosen, the
+  // rows moved again).
   const int selected_row = selected_ / cols;
-  const int first_row = std::max(0, selected_row - rows_visible + 1);
+  if (selected_row < grid_scroll_) grid_scroll_ = selected_row;
+  if (selected_row >= grid_scroll_ + rows_visible) grid_scroll_ = selected_row - rows_visible + 1;
+  grid_scroll_ = std::clamp(grid_scroll_, 0, std::max(0, (n + cols - 1) / cols - rows_visible));
+  const int first_row = grid_scroll_;
   if (!n) {
     Text(dl, regular_, 22 * u, {left, grid_top + 10 * u}, kDim,
          all_ ? (german_ ? "Keine Skylander." : "No Skylanders.")

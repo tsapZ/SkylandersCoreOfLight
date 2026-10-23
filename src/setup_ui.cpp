@@ -62,6 +62,8 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
            const std::string& label, const char* key = nullptr) {
   const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
+  HintClickArea({pos.x - size * 0.2f, pos.y - size * 0.25f}, {x + TextWidth(font, size, label) + size * 0.3f, pos.y + size * 1.3f},
+                button);  // a click on it presses the button (hints.h)
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
 
@@ -151,7 +153,17 @@ void SetupScreen::FindGameFolders() {
     if (!(drives & (1u << d))) continue;
     const std::wstring root = std::wstring(1, wchar_t(L'A' + d)) + L":\\";
     if (GetDriveTypeW(root.c_str()) != DRIVE_FIXED || root.substr(0, 2) == system_drive) continue;
-    folders_.push_back(std::filesystem::path(root) / L"Skylanders Recompiled");
+    const std::filesystem::path dir = std::filesystem::path(root) / L"Skylanders Recompiled";
+    // Only a drive the folder can go on: under Wine / Proton Z: is the Linux root, not writable.
+    std::error_code ec;
+    if (!std::filesystem::is_directory(dir, ec)) {
+      const std::wstring probe = root + L"coreoflight-probe.tmp";
+      const HANDLE file = CreateFileW(probe.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                      FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+      if (file == INVALID_HANDLE_VALUE) continue;
+      CloseHandle(file);
+    }
+    folders_.push_back(dir);
   }
   // One set before (an earlier setup, coreoflight.ini, --install_dir) is chosen, and kept.
   if (GamesFolderChosen()) {
@@ -170,6 +182,12 @@ void SetupScreen::ChooseGameFolder(int choice) {
   std::filesystem::create_directories(HubSettingsFile().parent_path(), ec);  // a first start: not there yet
   const std::u8string u8 = dir.u8string();
   WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", std::string(u8.begin(), u8.end()));
+}
+
+void SetupScreen::UseGamesFolder(const std::filesystem::path& dir) {
+  auto it = std::find(folders_.begin(), folders_.end(), dir);
+  if (it == folders_.end()) it = folders_.insert(folders_.end(), dir);
+  folder_ = int(it - folders_.begin());
 }
 
 SetupScreen::Job SetupScreen::TakeJob() { return std::exchange(job_, Job{}); }
@@ -470,7 +488,7 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
   if (selected_ == n && (Left() || Right())) ChooseGameFolder(folder_ + (Left() ? -1 : 1));
   if (Accept()) {
     if (selected_ == n) {
-      ChooseGameFolder(folder_ + 1);
+      job_ = {Job::Kind::kPickFolder, 0, {}};  // any folder (left / right: the suggestions)
     } else if (selected_ < n) {
       if (rows_[size_t(selected_)].state != State::kReady) {
         job_ = {Job::Kind::kPickIso, size_t(selected_), {}};

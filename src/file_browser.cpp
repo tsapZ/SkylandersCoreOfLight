@@ -52,6 +52,8 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
            const char* label, const char* key = nullptr) {
   const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
+  HintClickArea({pos.x - size * 0.2f, pos.y - size * 0.25f}, {x + TextWidth(font, size, label) + size * 0.3f, pos.y + size * 1.3f},
+                button);  // a click on it presses the button (hints.h)
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
 
@@ -109,10 +111,11 @@ void FileBrowser::ListSearch() {
   }
 }
 
-void FileBrowser::Init(ImFont* regular, ImFont* bold, bool german) {
+void FileBrowser::Init(ImFont* regular, ImFont* bold, bool german, bool folders_only) {
   regular_ = regular;
   bold_ = bold;
   german_ = german;
+  folders_only_ = folders_only;
 }
 
 void FileBrowser::Open(const fs::path& folder) {
@@ -123,7 +126,9 @@ void FileBrowser::Open(const fs::path& folder) {
   searching_view_ = false;
   fs::path start = folder;
   if (start.empty()) start = last_folder_;
-  if (start.empty()) start = Known(FOLDERID_Downloads);
+  if (start.empty()) start = Known(folders_only_ ? FOLDERID_Documents : FOLDERID_Downloads);
+  std::error_code ec;
+  if (!start.empty() && !fs::is_directory(start, ec)) start = fs::path();  // gone: the drives and places
   List(start);
 }
 
@@ -131,14 +136,29 @@ fs::path FileBrowser::TakeChosen() { return std::exchange(chosen_, {}); }
 
 void FileBrowser::List(const fs::path& folder) {
   entries_.clear();
-  selected_ = 0;
+  selected_ = scroll_ = 0;
   folder_ = folder;
   if (folder.empty()) {
     // The disc search first, then the usual places, then every drive.
-    entries_.push_back({Entry::Kind::kSearch,
-                        german_ ? "Discs suchen (Downloads, Desktop, Dokumente und die Laufwerke)"
-                                : "Find my discs (Downloads, Desktop, Documents and the drives)",
-                        {}});
+    if (!folders_only_) {
+      entries_.push_back({Entry::Kind::kSearch,
+                          german_ ? "Discs suchen (Downloads, Desktop, Dokumente und die Laufwerke)"
+                                  : "Find my discs (Downloads, Desktop, Documents and the drives)",
+                          {}});
+    }
+    // Under Wine / Proton (SteamOS) the Linux home folder: WINEHOMEDIR is "\??\Z:\home\<user>".
+    if (folders_only_) {
+      wchar_t home[MAX_PATH] = L"";
+      const DWORD length = GetEnvironmentVariableW(L"WINEHOMEDIR", home, MAX_PATH);
+      std::wstring path(home, length < MAX_PATH ? length : 0);
+      if (path.starts_with(L"\\??\\")) path = path.substr(4);
+      std::error_code ec;
+      if (!path.empty() && fs::is_directory(path, ec)) {
+        entries_.push_back({Entry::Kind::kPlace, german_ ? "Linux: Pers\xC3\xB6nlicher Ordner  " + Utf8(fs::path(path))
+                                                         : "Linux: home folder  " + Utf8(fs::path(path)),
+                            fs::path(path)});
+      }
+    }
     const std::pair<REFKNOWNFOLDERID, const char*> places[] = {
         {FOLDERID_Downloads, german_ ? "Downloads" : "Downloads"},
         {FOLDERID_Desktop, german_ ? "Desktop" : "Desktop"},
@@ -161,8 +181,13 @@ void FileBrowser::List(const fs::path& folder) {
     return;
   }
   entries_.push_back({Entry::Kind::kUp, german_ ? ".. (eine Ebene h\xC3\xB6her)" : ".. (one level up)", {}});
+  // Choosing the games folder: this one, as the second entry in every folder.
+  if (folders_only_) {
+    entries_.push_back({Entry::Kind::kThisFolder,
+                        german_ ? "Diesen Ordner f\xC3\xBCr die Spiele nehmen" : "Use this folder for the games", folder});
+  }
   // A folder with an unpacked disc can be taken as it is.
-  if (IsFile(folder / "default.xex")) {
+  if (!folders_only_ && IsFile(folder / "default.xex")) {
     entries_.push_back({Entry::Kind::kThisFolder,
                         german_ ? "Diesen Ordner einlesen (entpackte Disc)" : "Take this folder (an unpacked disc)",
                         folder});
@@ -183,7 +208,7 @@ void FileBrowser::List(const fs::path& folder) {
     } else {
       std::wstring ext = p.extension().wstring();
       std::transform(ext.begin(), ext.end(), ext.begin(), [](wchar_t c) { return wchar_t(std::towlower(c)); });
-      if (ext == L".iso") isos.emplace_back(name, p);
+      if (ext == L".iso" && !folders_only_) isos.emplace_back(name, p);
     }
   }
   auto by_name = [](const auto& a, const auto& b) { return LessNoCase(a.first, b.first); };
@@ -192,11 +217,18 @@ void FileBrowser::List(const fs::path& folder) {
   // The discs first: what the owner is looking for.
   for (const auto& [name, p] : isos) entries_.push_back({Entry::Kind::kIso, Utf8(fs::path(name)), p});
   for (const auto& [name, p] : folders) entries_.push_back({Entry::Kind::kFolder, Utf8(fs::path(name)), p});
-  // The first disc chosen (the unpacked one here, else the first ISO).
-  if (!isos.empty() || (entries_.size() > 1 && entries_[1].kind == Entry::Kind::kThisFolder)) selected_ = 1;
+  // The first disc chosen (the unpacked one here, else the first ISO); for a folder the first one
+  // in it, or "this folder" when it has none.
+  if (folders_only_) {
+    selected_ = entries_.size() > 2 ? 2 : 1;
+  } else if (!isos.empty() || (entries_.size() > 1 && entries_[1].kind == Entry::Kind::kThisFolder)) {
+    selected_ = 1;
+  }
 }
 
-void FileBrowser::Choose(const Entry& e) {
+// `e` is a copy: List() clears entries_, which a reference into it would point into (opening a
+// folder then listed the drives instead, now and then).
+void FileBrowser::Choose(Entry e) {
   switch (e.kind) {
     case Entry::Kind::kUp: {
       const fs::path parent = folder_.parent_path();
@@ -233,9 +265,15 @@ void FileBrowser::Draw(float width, float height) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = std::min(width / 1280.0f, height / 720.0f);
   DrawBackdrop(dl, width, height, {}, true);
-  Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, german_ ? "DISC EINLESEN" : "ADD A DISC");
-  Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
-       german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO");
+  if (folders_only_) {
+    Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, german_ ? "SPIELE-ORDNER" : "GAMES FOLDER");
+    Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
+         german_ ? "Wo liegen deine Spiele?" : "Where are your games?");
+  } else {
+    Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, german_ ? "DISC EINLESEN" : "ADD A DISC");
+    Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
+         german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO");
+  }
   const float left = 48 * u, top = 128 * u;
   std::string where = folder_.empty() ? (german_ ? "Dieser PC" : "This PC") : Utf8(folder_);
   if (searching_view_ && search_) {
@@ -271,7 +309,12 @@ void FileBrowser::Draw(float width, float height) {
   if (pressed(ImGuiKey_PageUp) || pressed(ImGuiKey_GamepadL1)) selected_ = std::max(0, selected_ - rows);
   if (pressed(ImGuiKey_PageDown) || pressed(ImGuiKey_GamepadR1)) selected_ = std::min(n - 1, selected_ + rows);
   if (io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * 3, 0, std::max(0, n - 1));
-  const int first = std::clamp(selected_ - rows / 2, 0, std::max(0, n - rows));
+  // The view follows the chosen entry only when it leaves it (centred on it, the list jumped under
+  // a resting mouse).
+  if (selected_ < scroll_) scroll_ = selected_;
+  if (selected_ >= scroll_ + rows) scroll_ = selected_ - rows + 1;
+  scroll_ = std::clamp(scroll_, 0, std::max(0, n - rows));
+  const int first = scroll_;
   int clicked = -1;
   for (int i = first; i < std::min(n, first + rows); ++i) {
     const Entry& e = entries_[i];
@@ -310,13 +353,14 @@ void FileBrowser::Draw(float width, float height) {
              ? (german_ ? "Keine Skylanders-Disc gefunden. B: selbst einen Ordner w\xC3\xA4hlen."
                         : "No Skylanders disc found. B: choose a folder yourself.")
              : (german_ ? "Einen Moment ..." : "One moment ..."));
-  } else if (n <= 1 && !folder_.empty()) {
-    Text(dl, regular_, 19 * u, {left, list_top + row_h * 1.2f}, kDim,
-         german_ ? "Hier sind keine ISO-Dateien und keine Ordner." : "No ISO files and no folders here.");
+  } else if (n <= (folders_only_ ? 2 : 1) && !folder_.empty()) {
+    Text(dl, regular_, 19 * u, {left, list_top + row_h * (folders_only_ ? 2.2f : 1.2f)}, kDim,
+         folders_only_ ? (german_ ? "Hier sind keine Ordner." : "No folders here.")
+                       : (german_ ? "Hier sind keine ISO-Dateien und keine Ordner." : "No ISO files and no folders here."));
   }
   if (n && (clicked >= 0 || once(ImGuiKey_Enter) || once(ImGuiKey_GamepadFaceDown))) {
     Choose(entries_[clicked >= 0 ? clicked : selected_]);
-  } else if (once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Y)) {
+  } else if (!folders_only_ && (once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Y))) {
     StartSearch();  // Y: look for the discs from anywhere
   } else if (searching_view_ && (once(ImGuiKey_Backspace) || once(ImGuiKey_GamepadFaceRight))) {
     // B in the results: back to the drives and places.
@@ -337,13 +381,22 @@ void FileBrowser::Draw(float width, float height) {
   }
   float hx = left;
   const float hy = height - 52 * u;
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x96" "ffnen / einlesen" : "Open / add");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Discs suchen" : "Find my discs");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
-  Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
-       german_ ? "Die ISO wird in den rom-Ordner des Spiels entpackt; sie selbst bleibt, wo sie ist."
-               : "The ISO is unpacked into the game's rom folder; the file itself stays where it is.");
+  if (folders_only_) {
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x96" "ffnen / nehmen" : "Open / use");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
+    Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
+         german_ ? "Spiele in diesem Ordner und seinen Unterordnern werden gefunden, mit ihrer Disc; neue kommen hierher."
+                 : "Games in this folder and its subfolders are found, with their disc; new ones go here.");
+  } else {
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x96" "ffnen / einlesen" : "Open / add");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Discs suchen" : "Find my discs");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
+    Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
+         german_ ? "Die ISO wird in den rom-Ordner des Spiels entpackt; sie selbst bleibt, wo sie ist."
+                 : "The ISO is unpacked into the game's rom folder; the file itself stays where it is.");
+  }
   ImGui::End();
 }
 

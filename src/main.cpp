@@ -12,6 +12,7 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "hints.h"
+#include "hub_settings.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
 #include "textures.h"
@@ -197,9 +198,40 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   wc.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
                                              GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
   RegisterClassExW(&wc);
+  // --documents=<folder>: that folder in place of Documents (figures, pictures, profiles, the
+  // games' user data), to try the launcher on a copy. An ISO dragged onto coreoflight.exe (or
+  // named on its command line) is set up at once. Read before the window: --documents decides
+  // which settings file says whether it starts in fullscreen.
+  std::wstring iso;
+  bool fullscreen_arg = false;
+  int argc = 0;
+  if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
+    for (int i = 1; i < argc; ++i) {
+      const std::wstring arg = argv[i];
+      if (arg.starts_with(L"--documents=")) {
+        coreoflight::SetDocumentsDir(arg.substr(12));
+      } else if (arg.starts_with(L"--install_dir=")) {
+        // A library folder for games installed from the launcher (games.h StartGameInstall).
+        coreoflight::SetInstallDir(arg.substr(14));
+      } else if (arg == L"--no_game_art") {
+        // Screenshots to show: none of the games' pictures (textures.h).
+        coreoflight::SetNoGameArt(true);
+      } else if (arg == L"--fullscreen") {
+        // Fullscreen for this start, whatever the setting says (Steam's launch options on a
+        // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
+        fullscreen_arg = true;
+      } else if (iso.empty()) {
+        iso = arg;
+      }
+    }
+    LocalFree(argv);
+  }
   const float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
   HWND hwnd = CreateWindowW(wc.lpszClassName, L"Skylanders: Core of Light", WS_OVERLAPPEDWINDOW, 100, 100,
                             int(1280 * dpi), int(720 * dpi), nullptr, nullptr, instance, nullptr);
+  // In fullscreen from the first frame (the setting, or --fullscreen), not a window that jumps.
+  const bool start_fullscreen = fullscreen_arg || coreoflight::LoadHubSettings().fullscreen;
+  if (start_fullscreen) SetFullscreen(hwnd, true);
   if (!CreateDevice(hwnd)) {
     ReleaseDevice();
     UnregisterClassW(wc.lpszClassName, instance);
@@ -221,30 +253,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   if (!bold) bold = regular;
 
   coreoflight::SetTextureDevice(g_device);
-  // --documents=<folder>: that folder in place of Documents (figures, pictures, profiles, the
-  // games' user data), to try the launcher on a copy. An ISO dragged onto coreoflight.exe (or
-  // named on its command line) is set up at once.
-  std::wstring iso;
-  int argc = 0;
-  if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
-    for (int i = 1; i < argc; ++i) {
-      const std::wstring arg = argv[i];
-      if (arg.starts_with(L"--documents=")) {
-        coreoflight::SetDocumentsDir(arg.substr(12));
-      } else if (arg.starts_with(L"--install_dir=")) {
-        // A library folder for games installed from the launcher (games.h StartGameInstall).
-        coreoflight::SetInstallDir(arg.substr(14));
-      } else if (arg == L"--no_game_art") {
-        // Screenshots to show: none of the games' pictures (textures.h).
-        coreoflight::SetNoGameArt(true);
-      } else if (iso.empty()) {
-        iso = arg;
-      }
-    }
-    LocalFree(argv);
-  }
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
+  if (fullscreen_arg) ui.StartFullscreen();
   g_ui = &ui;
   if (!iso.empty()) ui.AddDisc(iso);
   DragAcceptFiles(hwnd, TRUE);
@@ -316,6 +327,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     coreoflight::UpdatePads(io);
+    coreoflight::KeepClickedButton(io);  // a hint clicked last frame: its button counts without a pad
     SetFullscreen(hwnd, ui.fullscreen());
     ImGui::NewFrame();
     coreoflight::UpdateHintInput();

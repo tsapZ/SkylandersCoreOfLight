@@ -31,11 +31,24 @@ void Text(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 col, const
   dl->AddText(font, size, pos, col, text.c_str(), nullptr, wrap);
 }
 
+// `text` cut at its start ("...") to fit `width`: a long folder keeps its end, where its name is.
+std::string FitStart(ImFont* font, float size, std::string text, float width) {
+  if (TextWidth(font, size, text.c_str()) <= width) return text;
+  while (text.size() > 4 && TextWidth(font, size, ("..." + text).c_str()) > width) {
+    size_t cut = 1;
+    while (cut < text.size() && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80) ++cut;
+    text.erase(0, cut);
+  }
+  return "..." + text;
+}
+
 // A hint: the controller button or the keyboard key (hints.h), and what it does.
 float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
            const char* label, const char* key = nullptr) {
   const float x = pos.x + HintGlyph(dl, font, size, pos, button, col, key) + size * 0.4f;
   Text(dl, font, size, {x, pos.y}, kWhite, label);
+  HintClickArea({pos.x - size * 0.2f, pos.y - size * 0.25f}, {x + TextWidth(font, size, label) + size * 0.3f, pos.y + size * 1.3f},
+                button);  // a click on it presses the button (hints.h)
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
 
@@ -66,7 +79,8 @@ void SettingsScreen::Open(const std::string& title, SettingsLoader* loader, std:
   background_ = std::move(background);
   loader_ = loader;
   edit_.reset();
-  page_ = row_ = 0;
+  page_ = row_ = scroll_ = 0;
+  wheel_ = 0.0f;
   changes_.clear();
   confirm_discard_ = false;
   message_.clear();
@@ -81,6 +95,17 @@ void SettingsScreen::ShowMessage(const std::string& text) {
   message_until_ = ImGui::GetTime() + 6.0;
 }
 
+void SettingsScreen::SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de) {
+  if (!edit_) return;
+  for (GameSettingsPage& page : edit_->pages) {
+    for (GameSetting& s : page.settings) {
+      if (s.cvar != cvar || s.type != "action" || s.options.empty()) continue;
+      s.options[0].en = en;
+      s.options[0].de = de;
+    }
+  }
+}
+
 std::string SettingsScreen::ValueLabel(const GameSetting& s) const {
   for (const SettingChoice& o : s.options) {
     if (SameValue(o.value, s.value)) return german_ ? o.de : o.en;
@@ -90,11 +115,24 @@ std::string SettingsScreen::ValueLabel(const GameSetting& s) const {
   return s.value;
 }
 
+bool SettingsScreen::Enabled(const GameSetting& s, const GameSetting** needs) const {
+  if (s.enabled_by.empty() || !edit_) return true;
+  for (const GameSettingsPage& page : edit_->pages) {
+    for (const GameSetting& other : page.settings) {
+      if (other.cvar != s.enabled_by) continue;
+      if (needs) *needs = &other;
+      return IsOn(other.value);
+    }
+  }
+  return true;  // the game doesn't show that setting: nothing to depend on
+}
+
 void SettingsScreen::Step(int step) {
   if (!edit_ || page_ >= int(edit_->pages.size())) return;
   auto& settings = edit_->pages[page_].settings;
   if (row_ >= int(settings.size())) return;
   GameSetting& s = settings[row_];
+  if (!Enabled(s)) return;  // greyed: its enabled_by setting is off
   // A button row (type "action", the launcher's "Problem melden"): A runs it, left / right nothing.
   if (s.type == "action") {
     if (step > 0) action_ = s.cvar;
@@ -272,7 +310,17 @@ void SettingsScreen::Draw(float width, float height) {
   const float list_w = std::min(width * 0.58f, 760 * u);
   const float row_h = 50 * u;
   const int visible = std::max(1, int((bottom - list_top - 20 * u) / row_h));
-  const int first = std::clamp(row_ - visible / 2, 0, std::max(0, n - visible));
+  // The mouse wheel moves the choice a row per notch (and the view with it).
+  if (!asking) {
+    wheel_ += io.MouseWheel;
+    const int steps = int(wheel_);
+    wheel_ -= float(steps);
+    if (steps) row_ = std::clamp(row_ - steps, 0, n - 1);
+  }
+  if (row_ < scroll_) scroll_ = row_;
+  if (row_ >= scroll_ + visible) scroll_ = row_ - visible + 1;
+  scroll_ = std::clamp(scroll_, 0, std::max(0, n - visible));
+  const int first = scroll_;
   for (int i = first; i < std::min(n, first + visible); ++i) {
     const GameSetting& s = settings[i];
     const float y = list_top + (i - first) * row_h;
@@ -289,17 +337,21 @@ void SettingsScreen::Draw(float width, float height) {
       Step(-1);
     }
     const bool chosen = i == row_;
+    const bool enabled = Enabled(s);
     dl->AddRectFilled(a, b, chosen ? Rgba(60, 70, 140, 240) : kPanel, 16 * u);
-    if (chosen) dl->AddRect(a, b, kGold, 16 * u, 0, 3 * u);
+    if (chosen) dl->AddRect(a, b, enabled ? kGold : kEdge, 16 * u, 0, 3 * u);
     const bool changed = !s.cvar.empty() && changes_.count(s.cvar);
     const std::string& label = german_ ? s.de : s.en;
-    Text(dl, regular_, 22 * u, {a.x + 18 * u, y + 9 * u}, changed ? kGold : kWhite, label);
-    const std::string value = ValueLabel(s);
+    const ImU32 greyed = Rgba(110, 118, 150);
+    Text(dl, regular_, 22 * u, {a.x + 18 * u, y + 9 * u}, !enabled ? greyed : changed ? kGold : kWhite, label);
     const float vs = 21 * u;
+    // The value keeps clear of the label (a folder's path is long).
+    const float room = list_w - TextWidth(regular_, 22 * u, label.c_str()) - 120 * u;
+    const std::string value = FitStart(bold_, vs, ValueLabel(s), std::max(room, 80 * u));
     const float vw = TextWidth(bold_, vs, value.c_str());
     const float vx = b.x - 40 * u - vw;
-    Text(dl, bold_, vs, {vx, y + 10 * u}, kGold, value);
-    if (chosen && s.type != "action" && (!s.options.empty() || s.type == "bool")) {
+    Text(dl, bold_, vs, {vx, y + 10 * u}, enabled ? kGold : greyed, value);
+    if (chosen && enabled && s.type != "action" && (!s.options.empty() || s.type == "bool")) {
       Text(dl, bold_, vs, {vx - 28 * u, y + 10 * u}, kDim, "<");
       Text(dl, bold_, vs, {b.x - 28 * u, y + 10 * u}, kDim, ">");
     }
@@ -311,7 +363,11 @@ void SettingsScreen::Draw(float width, float height) {
     dl->AddRectFilled({px, list_top}, {px + pw, bottom - 10 * u}, kPanel, 18 * u);
     dl->AddRect({px, list_top}, {px + pw, bottom - 10 * u}, kEdge, 18 * u, 0, 2 * u);
     Text(dl, bold_, 24 * u, {px + 20 * u, list_top + 16 * u}, kWhite, german_ ? s.de : s.en, pw - 40 * u);
-    Text(dl, regular_, 20 * u, {px + 20 * u, list_top + 58 * u}, kDim, german_ ? s.help_de : s.help_en, pw - 40 * u);
+    std::string help = german_ ? s.help_de : s.help_en;
+    if (const GameSetting* needs = nullptr; !Enabled(s, &needs) && needs) {
+      help = (german_ ? "Nur mit \xE2\x80\x9E" + needs->de + "\xE2\x80\x9C an. " : "Only with \"" + needs->en + "\" on. ") + help;
+    }
+    Text(dl, regular_, 20 * u, {px + 20 * u, list_top + 58 * u}, kDim, help, pw - 40 * u);
   }
 
   // Hints, a message, and B: back. With unsaved changes B asks: A saves and closes, X throws the

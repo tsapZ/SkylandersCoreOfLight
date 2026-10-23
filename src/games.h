@@ -63,9 +63,15 @@ struct Found {
   // The game's own settings file next to its exe (<stem>.toml), key -> value, for the card.
   std::unordered_map<std::string, std::string> settings;
   DiscResult disc;
+  // Found in the games folder without its setup's uninstall entry: copied there (another drive, a
+  // network drive, a Linux folder under Proton). Its version isn't known, so the newest setup is
+  // offered once; it goes into that folder, and its entry knows the version from then on.
+  bool copied = false;
 };
 
-// Looks for every game: a path in coreoflight.ini next to the launcher, the installer's folder
+// Looks for every game: a path in coreoflight.ini next to the launcher, where its setup put it
+// (its uninstall entry), the games folder (GamesFolder: <folder>\<app name>, the folder itself, or
+// any folder up to two levels down that holds the game's exe), the installer's default folder
 // (%LOCALAPPDATA%\Programs\<app name>), a folder next to the launcher, and the repositories'
 // build folders (<repo>\<repo>\out\build\win-amd64-release) above it. Then checks each found
 // game's default.xex on a background thread.
@@ -93,10 +99,11 @@ bool GamesFolderChosen();
 std::filesystem::path InstallFolder(const Game& game);
 // The setup with the highest version of the folders above (by its name's version, then its time).
 std::filesystem::path FindSetup(const Game& game, const std::filesystem::path& launcher_dir);
-// `update`: the game is installed already; its setup goes over it where it is (no /DIR), and,
-// as for an install, skips the disc page and keeps the settings file.
+// `update`: the game is installed already; its setup goes over it where it is (`dir`, the folder of
+// the game's exe, also for a copied game without an uninstall entry), and, as for an install,
+// skips the disc page and keeps the settings file.
 bool StartGameInstall(size_t game, const std::filesystem::path& setup, bool german, void** process,
-                      bool update = false);
+                      bool update = false, const std::filesystem::path& dir = {});
 // Updates: the version the game's setup put at `exe` (DisplayVersion of its uninstall entry, when
 // that entry's InstallLocation holds this exe), empty for a game not installed by its setup (a
 // developer's build); a setup's version from its name (<Repo>Setup-<version>.exe); and whether

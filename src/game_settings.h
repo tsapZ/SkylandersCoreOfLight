@@ -28,6 +28,9 @@ struct GameSetting {
   std::string value;     // as the game would start with it
   bool restart = false;
   bool buttons = false;  // the options are controller button combinations
+  // A bool setting this one needs on (its cvar), else it is greyed and can't be changed: the
+  // keyboard's player with the keyboard off. Empty: always.
+  std::string enabled_by;
   std::vector<SettingChoice> options;
   // A preset: what each option sets, (cvar, value, category, type).
   struct Assignment {

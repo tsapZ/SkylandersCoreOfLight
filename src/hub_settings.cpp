@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <algorithm>
+#include <cctype>
 #include <unordered_map>
 
 #include "games.h"
@@ -56,6 +58,9 @@ HubSettings LoadHubSettings() {
   s.figures_only_mine = IsOn(get("figures_only_mine"), s.figures_only_mine);
   s.figures_marks = IsOn(get("figures_marks"), s.figures_marks);
   s.title_music = IsOn(get("title_music"), s.title_music);
+  if (const std::string v = get("music_volume"); !v.empty() && std::all_of(v.begin(), v.end(), ::isdigit) && v.size() < 4) {
+    s.music_volume = std::clamp(std::stoi(v), 10, 100);
+  }
   s.animations = IsOn(get("animations"), s.animations);
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
   s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
@@ -68,6 +73,13 @@ bool HubGerman(const HubSettings& s) {
   if (s.language == "german") return true;
   if (s.language == "english") return false;
   return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_GERMAN;
+}
+
+void GamesFolderLabels(std::string& en, std::string& de) {
+  const std::u8string u8 = GamesFolder().u8string();
+  const std::string path(u8.begin(), u8.end());
+  en = GamesFolderChosen() ? path : "Default: " + path;
+  de = GamesFolderChosen() ? path : "Standard: " + path;
 }
 
 std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
@@ -108,13 +120,33 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
       "Die Titelmusik eines Spiels, solange seine Karte gew\xC3\xA4hlt ist, direkt von der Disc des "
       "Spiels.",
       settings.title_music));
+  {
+    GameSetting volume;
+    volume.cvar = "music_volume";
+    volume.en = "Music volume";
+    volume.de = "Musik-Lautst\xC3\xA4rke";
+    volume.help_en = "How loud the title music plays in the launcher (the games' own volume is in their settings).";
+    volume.help_de = "Wie laut die Titelmusik im Hub spielt (die Lautst\xC3\xA4rke der Spiele steht in ihren "
+                     "Einstellungen).";
+    volume.type = "int";
+    volume.category = kCategory;
+    volume.value = std::to_string(settings.music_volume);
+    for (int percent = 10; percent <= 100; percent += 10) {
+      const std::string label = std::to_string(percent) + " %";
+      volume.options.push_back({std::to_string(percent), label, label});
+    }
+    page.settings.push_back(std::move(volume));
+  }
   page.settings.push_back(Switch("animations", "Animations", "Animationen",
                                  "Screens slide and fade in.", "Bildschirme gleiten und blenden ein.",
                                  settings.animations));
-  page.settings.push_back(Switch("fullscreen", "Fullscreen", "Vollbild",
-                                 "The launcher fills the screen, for the TV. F11 or Alt+Enter switch it too.",
-                                 "Der Hub f\xC3\xBCllt den Bildschirm, f\xC3\xBCr den Fernseher. F11 oder "
-                                 "Alt+Enter schalten auch um.",
+  page.settings.push_back(Switch("fullscreen", "Fullscreen (also at start)", "Vollbild (auch beim Start)",
+                                 "The launcher fills the screen and starts that way, for the TV or a handheld. F11 or "
+                                 "Alt+Enter switch it too; --fullscreen on its command line (Steam's launch options) "
+                                 "starts it in fullscreen whatever this says.",
+                                 "Der Hub f\xC3\xBCllt den Bildschirm und startet auch so, f\xC3\xBCr den Fernseher "
+                                 "oder einen Handheld. F11 oder Alt+Enter schalten auch um; --fullscreen in seiner "
+                                 "Befehlszeile (Steams Startoptionen) startet ihn immer im Vollbild.",
                                  settings.fullscreen));
   page.settings.push_back(Switch(
       "auto_backup", "Back up saves", "Spielst\xC3\xA4nde sichern",
@@ -124,6 +156,28 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
       "Spielstands, der sich ge\xC3\xA4ndert hat (je etwa 100 KB; die neuesten 10 bleiben). RT auf einer "
       "Karte zeigt sie und holt einen zur\xC3\xBC" "ck.",
       settings.auto_backup));
+  // A button: the games folder (games.h GamesFolder), chosen in the launcher's folder browser; the
+  // games are looked for there again at once (copied ones too: another drive, a network drive, a
+  // Linux folder under Proton).
+  GameSetting folder;
+  folder.cvar = "choose_games_dir";
+  folder.en = "Games folder";
+  folder.de = "Spiele-Ordner";
+  folder.help_en = "Where your games are and where new ones go. The launcher finds the games in this folder and "
+                   "in its subfolders, with their disc, also ones copied there from another PC (another drive, a "
+                   "network drive, a Linux folder when it runs with Proton). A game installed somewhere else stays "
+                   "where it is.";
+  folder.help_de = "Wo deine Spiele liegen und wohin neue kommen. Der Hub findet die Spiele in diesem Ordner und "
+                   "seinen Unterordnern, mit ihrer Disc, auch von einem anderen PC dorthin kopierte (ein anderes "
+                   "Laufwerk, ein Netzlaufwerk, ein Linux-Ordner, wenn er mit Proton l\xC3\xA4uft). Ein woanders "
+                   "installiertes Spiel bleibt, wo es ist.";
+  folder.type = "action";
+  {
+    std::string en, de;
+    GamesFolderLabels(en, de);
+    folder.options = {{"", en, de}};
+  }
+  page.settings.push_back(std::move(folder));
   // A button: the updates from GitHub (updates.h), looked for when A is pressed on it.
   GameSetting updates;
   updates.cvar = "check_updates";
