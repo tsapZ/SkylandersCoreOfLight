@@ -43,4 +43,9 @@ bool DownloadFile(const std::string& url, const std::filesystem::path& file, std
 // Where downloaded setups go: %TEMP%\CoreOfLight\downloads.
 std::filesystem::path DownloadsDir();
 
+// --offline: no releases at all, neither the ones kept nor a check, so nothing gets downloaded or
+// installed from GitHub (scripted tests of the launcher: a test once installed two real games).
+void SetOffline(bool offline);
+bool Offline();
+
 }  // namespace coreoflight

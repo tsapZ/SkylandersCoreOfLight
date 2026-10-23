@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "hub_log.h"
 #include "imgui.h"
 
 namespace coreoflight {
@@ -190,7 +191,11 @@ inline void UpdatePads(ImGuiIO& io) {
   for (DWORD pad = 0; get_state && pad < XUSER_MAX_COUNT; ++pad) {
     if (!connected[pad] && !recheck) continue;
     XINPUT_STATE state = {};
+    const bool was = connected[pad];
     connected[pad] = get_state(pad, &state) == ERROR_SUCCESS;
+    if (connected[pad] != was) {
+      HubLog("pads: XInput slot " + std::to_string(pad) + (connected[pad] ? " connected" : " gone"));
+    }
     if (connected[pad]) merge(state.Gamepad);
   }
   // The DirectInput pads, merged the same way.

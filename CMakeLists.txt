@@ -45,6 +45,7 @@ add_executable(coreoflight WIN32
   src/setup_ui.cpp
   src/launcher_ui.cpp
   src/hints.cpp
+  src/hub_log.cpp
   src/updates.cpp
   src/nxe_art.cpp
   src/profiles.cpp

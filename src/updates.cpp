@@ -399,4 +399,11 @@ fs::path DownloadsDir() {
   return fs::path(temp) / "CoreOfLight" / "downloads";
 }
 
+namespace {
+bool g_offline = false;
+}  // namespace
+
+void SetOffline(bool offline) { g_offline = offline; }
+bool Offline() { return g_offline; }
+
 }  // namespace coreoflight

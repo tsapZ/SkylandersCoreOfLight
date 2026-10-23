@@ -94,9 +94,9 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   hub_ = LoadHubSettings();
   ApplyHubSettings();
   work_ = std::make_shared<UpdateWork>();
-  releases_ = LoadKnownReleases();
+  if (!Offline()) releases_ = LoadKnownReleases();  // --offline: no release, nothing to download
   Refresh();
-  if (UpdateCheckDue()) StartUpdateCheck(false);
+  if (!Offline() && UpdateCheckDue()) StartUpdateCheck(false);
   // The first-run setup: on a first start with no game there (a friend's PC, not a developer's).
   if (!hub_.setup_done && std::none_of(found_.begin(), found_.end(), [](const Found& f) { return !f.exe.empty(); })) {
     setup_.Open();
@@ -970,6 +970,10 @@ struct LauncherUi::UpdateWork {
 };
 
 void LauncherUi::StartUpdateCheck(bool manual) {
+  if (Offline()) {
+    if (manual) ShowToast(german_ ? "Offline gestartet (--offline): keine Updates" : "Started offline (--offline): no updates");
+    return;
+  }
   if (manual) manual_check_ = true;
   if (work_->checking.exchange(true)) return;
   std::vector<std::pair<std::string, std::string>> repos = {{"SkylandersCoreOfLight", "CoreOfLightSetup"}};

@@ -12,6 +12,7 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "hints.h"
+#include "hub_log.h"
 #include "hub_settings.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
@@ -136,6 +137,13 @@ void ReleaseDevice() {
 }
 
 LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+  // The window's focus in the log (a report from a PC where the pad stopped after a game).
+  if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_ACTIVATEAPP) {
+    coreoflight::HubLog(msg == WM_SETFOCUS    ? "window: focus"
+                        : msg == WM_KILLFOCUS ? "window: focus lost"
+                        : wparam              ? "window: app active"
+                                              : "window: app inactive");
+  }
   if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) return true;
   switch (msg) {
     case WM_SIZE:
@@ -216,6 +224,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       } else if (arg == L"--no_game_art") {
         // Screenshots to show: none of the games' pictures (textures.h).
         coreoflight::SetNoGameArt(true);
+      } else if (arg == L"--offline") {
+        // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
+        coreoflight::SetOffline(true);
       } else if (arg == L"--fullscreen") {
         // Fullscreen for this start, whatever the setting says (Steam's launch options on a
         // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
@@ -253,6 +264,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   if (!bold) bold = regular;
 
   coreoflight::SetTextureDevice(g_device);
+  {
+    const std::string wine = coreoflight::WineVersion();
+    coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION + (wine.empty() ? std::string(", Windows") : ", Wine " + wine) +
+                        (start_fullscreen ? ", fullscreen" : ", window"));
+  }
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
   if (fullscreen_arg) ui.StartFullscreen();
@@ -264,6 +280,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   HANDLE game = nullptr;
   bool game_shown = false;  // the game's window is up and the launcher hidden
   ULONGLONG took_back_until = 0;  // after a game: until then a pad press brings the launcher to the front
+  bool input_logged = true;       // the first press after a game went into the log
   while (running) {
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -280,18 +297,37 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
           WaitForSingleObject(game, 0) == WAIT_OBJECT_0) {
         since = 0;
         game_shown = true;
+        coreoflight::HubLog(HasVisibleWindow(GetProcessId(game)) ? "game: window up, launcher hidden"
+                                                                  : "game: no window after 30 s (or ended at once)");
         ui.GameWindowShown();
         ShowWindow(hwnd, SW_HIDE);
       }
     }
     if (game && game_shown) {
-      // A game is running: the launcher waits hidden and comes back when it ends.
-      if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) {
-        ui.GameRunning();
-        continue;
-      }
+      // A game is running: the launcher waits hidden and comes back when it ends, or when its
+      // window has been gone for 5 s while its process stays (under Wine a game can hang on its
+      // way out: the launcher waited for it, took no input, and had to be started again).
       DWORD code = 0;
-      GetExitCodeProcess(game, &code);
+      if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) {
+        static ULONGLONG gone_since = 0;
+        if (HasVisibleWindow(GetProcessId(game))) {
+          gone_since = 0;
+          ui.GameRunning();
+          continue;
+        }
+        if (!gone_since) gone_since = GetTickCount64();
+        if (GetTickCount64() - gone_since < 5000) {
+          ui.GameRunning();
+          continue;
+        }
+        gone_since = 0;
+        coreoflight::HubLog("game: its window is gone, its process still runs after 5 s: back to the launcher");
+      } else {
+        GetExitCodeProcess(game, &code);
+        char line[64];
+        std::snprintf(line, sizeof(line), "game: ended, exit code 0x%08lX", code);
+        coreoflight::HubLog(line);
+      }
       CloseHandle(game);
       game = nullptr;
       game_shown = false;
@@ -299,7 +335,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       ui.GameExitCode(code);
       ui.Refresh();
       ShowWindow(hwnd, SW_SHOW);
+      if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
       TakeForeground(hwnd);
+      coreoflight::HubLog(std::string("launcher: shown again, in front ") + (GetForegroundWindow() == hwnd ? "yes" : "no") +
+                          ", focus " + (GetFocus() == hwnd ? "yes" : "no") + ", minimized " +
+                          (IsIconic(hwnd) ? "yes" : "no"));
+      input_logged = false;
       took_back_until = GetTickCount64() + 15000;
       // A button still held from the game (the press that left it) must not count as a press here
       // (A would start the game again, B ask to quit): wait until the pads' buttons and Enter,
@@ -313,6 +354,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (took_back_until && GetTickCount64() < took_back_until && GetForegroundWindow() != hwnd &&
         coreoflight::InputHeld()) {
       TakeForeground(hwnd);
+    }
+    // The first press after a game, once: whether the launcher hears the pads again (the log).
+    if (!input_logged && took_back_until && coreoflight::InputHeld()) {
+      input_logged = true;
+      coreoflight::HubLog(std::string("launcher: first input after the game, in front ") +
+                          (GetForegroundWindow() == hwnd ? "yes" : "no"));
     }
     if (IsIconic(hwnd)) {
       Sleep(50);
@@ -341,6 +388,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (void* started = ui.TakeStartedProcess()) {
       game = static_cast<HANDLE>(started);  // hidden once its window is up (above)
       game_shown = false;
+      coreoflight::HubLog("game: started, process " + std::to_string(GetProcessId(game)));
     }
   }
 

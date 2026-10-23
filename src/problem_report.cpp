@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "games.h"
+#include "hub_log.h"
 #include "hub_settings.h"
 #include "xiso.h"
 
@@ -303,6 +304,8 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   for (const fs::path& file : {HubSettingsFile(), launcher_dir / "coreoflight.ini"}) {
     if (std::string text = ReadTail(file); !text.empty()) report.Add("launcher/" + Utf8(file.filename()), clean(text));
   }
+  // The launcher's own log (hub_log.h): games started and ended, its focus, the pads.
+  if (std::string text = ReadTail(HubLogFile(), kLogTail); !text.empty()) report.Add("launcher/coreoflight.log", clean(text));
 
   if (!report.Write(report_path)) {
     error = german ? "Konnte den Bericht nicht auf den Desktop schreiben" : "Could not write the report to the desktop";

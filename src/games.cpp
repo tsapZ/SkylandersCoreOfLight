@@ -438,7 +438,10 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
   fs::remove(log, ec);
   // The screen's own size for the game's window, its settings at 2x (the "Quality" preset).
   const int w = GetSystemMetrics(SM_CXSCREEN), h = GetSystemMetrics(SM_CYSCREEN);
+  // No desktop shortcut per game: the launcher is where they start (the setup's own wizard still
+  // offers one when run by hand).
   std::wstring command = L"\"" + setup.wstring() + L"\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL" +
+                         L" \"/MERGETASKS=!desktopicon\"" +
                          L" /NOROM=1 /PORTAL=software /SCALE=2 /LANGUAGE=" +
                          (german ? L"german" : L"english") + L" /RESOLUTION=" + std::to_wstring(w) + L"x" +
                          std::to_wstring(h) + L" \"/LOG=" + log.wstring() + L"\"";
