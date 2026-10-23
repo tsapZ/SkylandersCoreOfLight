@@ -220,6 +220,12 @@ and needs neither the SDK nor the games' sources.
   TROPHY · 2026-10-20". (Messages set when a game ends, such as "the game ended unexpectedly",
   used to vanish at once: ImGui's clock jumps over the time the game ran. They count from the
   first frame after it now.)
+- A colleague's first start (2026-10-23): the launcher alone in a folder with the six beta.2
+  setups in `games\`, on empty documents. Spyro's Adventure installed from its card in 12 s, its
+  ISO given as a dropped file was set up in 76 s, the game started from its card into its German
+  title screen and the card said "Gespielt < 1 Min." afterwards. With an install folder of about
+  150 characters the disc's longest paths passed MAX_PATH and unpacking stopped half way with
+  "cannot write"; it now says "path too long" before writing anything.
 
 - Play time, on a copy with `coreoflight.ini` pointing Giants at a stand-in exe that runs 61 s:
   after it ended, `playtime.txt` had the line "giants, a tab, 61" and the card "Gespielt 1 Min.".

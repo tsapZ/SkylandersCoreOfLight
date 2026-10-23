@@ -138,6 +138,19 @@ bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, u
     if (!InFolder(e.path, skip_folder)) order.push_back(&e);
   }
   std::stable_partition(order.begin(), order.end(), [](const Entry* e) { return Lower(e->path) != "default.xex"; });
+  // Windows' 260-character limit (MAX_PATH), checked before anything is written: a deep install
+  // folder plus the disc's longest names (Spyro's Adventure's models/characters/minionsmonsters/...)
+  // passes it, and the game couldn't open such a file either (seen with a folder of 150 characters,
+  // which only said "cannot write" half way through).
+  const size_t folder_length = fs::absolute(to, ec).wstring().size() + 1;
+  for (const Entry* e : order) {
+    if (folder_length + fs::path(std::u8string(reinterpret_cast<const char8_t*>(e->path.data()), e->path.size()))
+                            .wstring()
+                            .size() >= MAX_PATH) {
+      error = "path too long, over 260 characters: " + e->path + "; install the game into a shorter folder";
+      return false;
+    }
+  }
   for (const Entry* entry : order) {
     const Entry& e = *entry;
     const fs::path target = to / fs::path(std::u8string(reinterpret_cast<const char8_t*>(e.path.data()), e.path.size()));
