@@ -99,9 +99,12 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
 }
 
 std::string Category(std::string_view c, bool german) {
+  // The catalog's "Cores" are just the Skylanders (the owner, 2026-10-24: "Kern-Skylander" can
+  // simply be "Skylander").
+  if (c == "Cores") return german ? "Skylander" : "Skylanders";
   if (!german) return std::string(c);
   static const std::pair<std::string_view, std::string_view> kDe[] = {
-      {"Cores", "Kern-Skylander"},     {"Variants", "Varianten"},     {"Chase Variants", "Seltene Varianten"},
+      {"Variants", "Varianten"},     {"Chase Variants", "Seltene Varianten"},
       {"Items", "Magische Objekte"},   {"Sidekicks", "Sidekicks"},    {"LightCores", "LightCore"},
       {"Giants", "Giants"},            {"Swappers", "Swapper"},       {"Trap Masters", "Fallen-Meister"},
       {"Traps", "Fallen"},             {"Minis", "Minis"},            {"Eon's Elite", "Eons Elite"},

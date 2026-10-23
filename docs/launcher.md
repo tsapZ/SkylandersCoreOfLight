@@ -199,7 +199,16 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Starts on the game the active profile saved last** (else the newest installed one); after a
   game ends or a disc is set up the chosen card stays.
 - **Starts the game** (#5) in that folder with A / Enter / a click on the chosen card, hides
-  itself while it runs and comes back when the game ends.
+  itself while it runs and comes back when the game ends, or once the game's window has been gone
+  for 5 s while its process stays (under Wine a game can hang on its way out; on a colleague's
+  SteamOS the launcher then waited for it and took no input). Checked with a stand-in game that
+  closes its window and keeps running: back after 5 s, in front, with the focus.
+- **Its own log**, `%LOCALAPPDATA%\CoreOfLight\coreoflight.log` (`src/hub_log.cpp`): the start
+  (version, Windows or Wine), each game's start and end, the window's focus, the pads coming and
+  going and the first press after a game; "Problem melden" takes it along.
+- **`--offline`**: no releases, no check, nothing downloaded or installed (scripted tests; one
+  without it once installed two real games into a scratch folder). Games installed from the
+  launcher get no desktop shortcut each (`/MERGETASKS=!desktopicon`).
 - Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
 - **DirectInput pads** (the Logitech Dual Action and the like, which XInput doesn't see) drive the
   launcher as well: read through Windows' joystick API with SDL's layout for the Dual Action
