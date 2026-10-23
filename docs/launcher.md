@@ -96,9 +96,17 @@ exe and gets out of the way while the game runs; no game needs it.
   disc but without its pictures yet (no `achievements.txt` in its picture folder) is started once,
   hidden and muted, with `--export_pictures=<folder>` (skylanders-portal): it writes its figure,
   hat and achievement pictures and quits, in about half a minute; one game at a time, after its
-  title music, each tried once a launch. Its card says "Bilder werden vorbereitet ..." meanwhile.
-  So the figure library, the cards' heroes and the achievements are complete right after a disc
-  is set up, before the game was ever played.
+  title music, each tried once a launch. Its card says "Bilder werden vorbereitet ..." meanwhile,
+  and a note at the bottom right says that the game reads its pictures in the background and ends
+  by itself. So the figure library, the cards' heroes and the achievements are complete right after
+  a disc is set up, before the game was ever played. Both exports run without a window: a game
+  built with rexglue-sdk 67364df gets `--window_hidden=true` (it never shows its window); for older
+  builds the launcher hides the export's windows as soon as they show (SW_HIDE alone didn't hold:
+  on a colleague's PC the picture export came up as a tiny window, which he closed as a pop-up).
+- **Hints for the input in use** (`src/hints.cpp`): the button hints at the bottom of every screen
+  show the controller's buttons after a pad button or stick and the keyboard's keys (key caps:
+  Enter, Esc, Tab, D, F, ...) after a key, a mouse move or a click, cross-fading in a quarter
+  second. A screen whose key differs from the usual one names it.
 - **The launcher's own settings** (LB / Q, `src/hub_settings.cpp`), in the same screen as a game's,
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
@@ -119,10 +127,12 @@ exe and gets out of the way while the game runs; no game needs it.
   cards chooses it, A (or a click) starts that game with `--continue_game=true` (skylanders-portal):
   it presses A through the title, the menus and the save slots until the game asks for a Skylander,
   then puts player 1's newest Recent figure that game reads on the portal. Offered for the game
-  played last among those whose save slot screen starts on the save played last
-  (`ContinueSupported`: Swap Force); Spyro's Adventure and Giants start on slot 1, Trap Team,
-  SuperChargers and Imaginators are still to be checked with real saves. Checked: from the tile into
-  Swap Force's hub with Chop Chop on the portal, 35 s.
+  played last among those that get into the save played last (`ContinueSupported`): Swap Force and
+  SuperChargers, whose slot screens start on it, and Trap Team and Giants, whose games move the
+  cursor there first (their `continue_slot.cpp`, from the menu script's "selection cur"). Spyro's
+  Adventure and Imaginators start on slot 1 and aren't offered. Checked: from the tile into Swap
+  Force's hub with Chop Chop on the portal, 35 s; SuperChargers, Trap Team and Giants by script with
+  saves in a later slot.
 - **Spielstände** (RT / S on a card, `src/saves_ui.cpp`, `src/saves.cpp`): the chosen game's saves of
   the active profile on the left (Spielstand 1, 2, ..., the options last, each with when it was
   saved), the copies of the chosen one on the right: the game's own previous version (the SDK keeps
