@@ -33,97 +33,27 @@ std::string Utf8(const fs::path& p) {
   return std::string(s.begin(), s.end());
 }
 
-uint32_t Crc32(const std::string& data) {
-  static const std::array<uint32_t, 256> table = [] {
-    std::array<uint32_t, 256> t{};
-    for (uint32_t i = 0; i < 256; ++i) {
-      uint32_t c = i;
-      for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-      t[i] = c;
-    }
-    return t;
-  }();
-  uint32_t crc = 0xFFFFFFFFu;
-  for (unsigned char b : data) crc = table[(crc ^ b) & 0xFF] ^ (crc >> 8);
-  return crc ^ 0xFFFFFFFFu;
-}
-
-// A ZIP of stored (uncompressed) entries with UTF-8 names: a report is a few MB of logs, and
-// Windows' Explorer opens it as it is.
-class ZipWriter {
+// The report as one text file, each part under a "===== <part> =====" line: plain text opens in
+// any browser or editor, and an issue on GitHub takes it as it is, with nothing to unpack (the
+// owner, 2026-10-23: no archives from strangers).
+class TextReport {
  public:
-  explicit ZipWriter(const fs::path& path) : out_(path, std::ios::binary) {
-    SYSTEMTIME t{};
-    GetLocalTime(&t);
-    time_ = uint16_t((t.wHour << 11) | (t.wMinute << 5) | (t.wSecond / 2));
-    date_ = uint16_t(((t.wYear - 1980) << 9) | (t.wMonth << 5) | t.wDay);
+  void Add(const std::string& part, const std::string& text) {
+    text_ += "\n===== " + part + " =====\n" + text;
+    if (!text.empty() && text.back() != '\n') text_ += "\n";
   }
-  bool ok() const { return bool(out_); }
-
-  void Add(const std::string& name, const std::string& data) {
-    const Entry e{name, Crc32(data), uint32_t(data.size()), uint32_t(out_.tellp())};
-    Header(0x04034B50, e, false);
-    out_.write(data.data(), std::streamsize(data.size()));
-    entries_.push_back(e);
-  }
-
-  bool Finish() {
-    const uint32_t start = uint32_t(out_.tellp());
-    for (const Entry& e : entries_) Header(0x02014B50, e, true);
-    const uint32_t size = uint32_t(out_.tellp()) - start;
-    U32(0x06054B50);
-    U16(0);
-    U16(0);
-    U16(uint32_t(entries_.size()));
-    U16(uint32_t(entries_.size()));
-    U32(size);
-    U32(start);
-    U16(0);
-    out_.close();
-    return !out_.fail();
+  bool Write(const fs::path& path) const {
+    std::ofstream out(path, std::ios::binary);
+    out << text_;
+    return out.good();
   }
 
  private:
-  struct Entry {
-    std::string name;
-    uint32_t crc, size, offset;
-  };
-  void U16(uint32_t v) {
-    const char b[2] = {char(v & 0xFF), char((v >> 8) & 0xFF)};
-    out_.write(b, 2);
-  }
-  void U32(uint32_t v) {
-    U16(v & 0xFFFF);
-    U16(v >> 16);
-  }
-  // The local header (then the name) or the central directory's (then the name).
-  void Header(uint32_t signature, const Entry& e, bool central) {
-    U32(signature);
-    if (central) U16(20);  // made by
-    U16(20);               // needed to extract
-    U16(0x0800);           // the name is UTF-8
-    U16(0);                // stored
-    U16(time_);
-    U16(date_);
-    U32(e.crc);
-    U32(e.size);
-    U32(e.size);
-    U16(uint32_t(e.name.size()));
-    U16(0);
-    if (central) {
-      U16(0);  // comment
-      U16(0);  // disk
-      U16(0);  // internal attributes
-      U32(0);  // external attributes
-      U32(e.offset);
-    }
-    out_.write(e.name.data(), std::streamsize(e.name.size()));
-  }
-
-  std::ofstream out_;
-  std::vector<Entry> entries_;
-  uint16_t time_ = 0, date_ = 0;
+  std::string text_;
 };
+
+// A log's end is enough (a long session's log runs to many MB).
+constexpr size_t kLogTail = 512u << 10;
 
 // Replaces every `from` (ASCII letters in any case) with `to`.
 void ReplaceAll(std::string& text, const std::string& from, const std::string& to) {
@@ -279,10 +209,10 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   SYSTEMTIME t{};
   GetLocalTime(&t);
   wchar_t name[96];
-  std::swprintf(name, std::size(name), L"%ls-%04u-%02u-%02u-%02u%02u.zip",
+  std::swprintf(name, std::size(name), L"%ls-%04u-%02u-%02u-%02u%02u.txt",
                 german ? L"Skylanders-Problembericht" : L"Skylanders-problem-report", t.wYear, t.wMonth, t.wDay,
                 t.wHour, t.wMinute);
-  const fs::path zip_path = desktop / name;
+  const fs::path report_path = desktop / name;
 
   const auto words = PrivateWords();
   auto clean = [&](std::string text) {
@@ -290,11 +220,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     return text;
   };
 
-  ZipWriter zip(zip_path);
-  if (!zip.ok()) {
-    error = german ? "Konnte die ZIP-Datei auf dem Desktop nicht anlegen" : "Could not create the ZIP on the desktop";
-    return {};
-  }
+  TextReport report;
 
   // What the PC is and which games the launcher found.
   std::string info;
@@ -331,7 +257,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     const std::string data((std::istreambuf_iterator<char>(xex)), std::istreambuf_iterator<char>());
     if (!data.empty()) info += "    default.xex SHA-256 " + Sha256Hex(data.data(), data.size()) + "\n";
   }
-  zip.Add("info.txt", clean(info));
+  report.Add("info", clean(info));
 
   // Each game's settings file and its three newest logs.
   for (size_t i = 0; i < games.size() && i < found.size(); ++i) {
@@ -339,7 +265,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     if (f.exe.empty()) continue;
     const std::string folder = std::string(games[i].key) + "/";
     const fs::path toml = f.exe.parent_path() / (UserDataName(f.exe) + ".toml");
-    if (std::string text = ReadTail(toml); !text.empty()) zip.Add(folder + Utf8(toml.filename()), clean(text));
+    if (std::string text = ReadTail(toml); !text.empty()) report.Add(folder + Utf8(toml.filename()), clean(text));
     std::vector<fs::path> dirs = {f.workdir / "logs"};
     if (f.exe.parent_path() / "logs" != dirs[0]) dirs.push_back(f.exe.parent_path() / "logs");
     // The newest log, then the newest three of real sessions: the launcher's own short runs of a
@@ -350,7 +276,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
       for (size_t k = 0; k < logs.size() && taken < 4; ++k) {
         std::error_code ec;
         if (k > 0 && fs::file_size(logs[k], ec) < 4096) continue;
-        zip.Add(folder + "logs/" + Utf8(logs[k].filename()), clean(ReadTail(logs[k])));
+        report.Add(folder + "logs/" + Utf8(logs[k].filename()), clean(ReadTail(logs[k], kLogTail)));
         ++taken;
       }
     }
@@ -360,18 +286,18 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   wchar_t temp[MAX_PATH] = {};
   if (GetTempPathW(MAX_PATH, temp)) {
     for (const fs::path& log : Newest(fs::path(temp) / "CoreOfLight", L".log", 12)) {
-      zip.Add("setup/" + Utf8(log.filename()), clean(ReadTail(log)));
+      report.Add("setup/" + Utf8(log.filename()), clean(ReadTail(log, kLogTail)));
     }
   }
   for (const fs::path& file : {HubSettingsFile(), launcher_dir / "coreoflight.ini"}) {
-    if (std::string text = ReadTail(file); !text.empty()) zip.Add("launcher/" + Utf8(file.filename()), clean(text));
+    if (std::string text = ReadTail(file); !text.empty()) report.Add("launcher/" + Utf8(file.filename()), clean(text));
   }
 
-  if (!zip.Finish()) {
-    error = german ? "Konnte die ZIP-Datei nicht fertig schreiben" : "Could not finish writing the ZIP";
+  if (!report.Write(report_path)) {
+    error = german ? "Konnte den Bericht nicht auf den Desktop schreiben" : "Could not write the report to the desktop";
     return {};
   }
-  return zip_path;
+  return report_path;
 }
 
 }  // namespace coreoflight

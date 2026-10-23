@@ -103,16 +103,26 @@ exe and gets out of the way while the game runs; no game needs it.
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
   the title music, the animations.
-- **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A packs
-  one ZIP onto the desktop, `Skylanders-Problembericht-<date>.zip`, and shows it in Explorer:
-  `info.txt` (Windows version, processor, memory, graphics cards with driver, every game's exe,
-  version, disc state and its `default.xex` SHA-256, so a pressing the port doesn't know yet can
-  be added by it), each game's settings file and its newest log plus its three newest of
-  real sessions (the launcher's own short runs leave logs of a few hundred bytes; a log over 8 MB
-  only with its end), the setups' logs (`%TEMP%\CoreOfLight`) and the launcher's settings. The
-  profile folder, the Windows user name and the computer's name are replaced in every file
-  (`%USERPROFILE%`, `%USERNAME%`, `%COMPUTERNAME%`). A store-only ZIP writer of its own, no
-  library. Checked: 29 files, Explorer opens it, no user name left in it.
+- **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
+  one text file onto the desktop, `Skylanders-Problembericht-<date>.txt`, and shows it in Explorer.
+  Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with
+  nothing to unpack (the owner: no archives from strangers). Its parts, each under a
+  `===== <part> =====` line: `info` (Windows version, processor, memory, graphics cards with
+  driver, every game's exe, version, disc state and its `default.xex` SHA-256, so a pressing the
+  port doesn't know yet can be added by it), each game's settings file and its newest log plus its
+  three newest of real sessions (the launcher's own short runs leave logs of a few hundred bytes;
+  each log's last 512 KB), the setups' logs (`%TEMP%\CoreOfLight`) and the launcher's settings.
+  The profile folder, the Windows user name and the computer's name are replaced
+  (`%USERPROFILE%`, `%USERNAME%`, `%COMPUTERNAME%`). Checked: 204 KB, 31 parts, no user name.
+- **Weiterspielen** (#16; hub setting "Weiterspielen", on): a tile between the title and the profile,
+  "Weiterspielen · Swap Force · mit Chop Chop · vor 2 Tagen" with the figure's picture; Up from the
+  cards chooses it, A (or a click) starts that game with `--continue_game=true` (skylanders-portal):
+  it presses A through the title, the menus and the save slots until the game asks for a Skylander,
+  then puts player 1's newest Recent figure that game reads on the portal. Offered for the game
+  played last among those whose save slot screen starts on the save played last
+  (`ContinueSupported`: Swap Force); Spyro's Adventure and Giants start on slot 1, Trap Team,
+  SuperChargers and Imaginators are still to be checked with real saves. Checked: from the tile into
+  Swap Force's hub with Chop Chop on the portal, 35 s.
 - **Spielstände** (RT / S on a card, `src/saves_ui.cpp`, `src/saves.cpp`): the chosen game's saves of
   the active profile on the left (Spielstand 1, 2, ..., the options last, each with when it was
   saved), the copies of the chosen one on the right: the game's own previous version (the SDK keeps
@@ -127,7 +137,7 @@ exe and gets out of the way while the game runs; no game needs it.
   automatic copies of all three saves at a game's start. A path over 260 characters fails with the
   reason shown (it happened with a deep test folder).
 - **After a crash** (a game started from here ends with an error code): "<Spiel> wurde unerwartet
-  beendet", the code, and A: Problem melden (the same ZIP), B: Schließen. Checked by ending a
+  beendet", the code, and A: Problem melden (the same report), B: Schließen. Checked by ending a
   running game from outside (code 0xFFFFFFFF).
 - **Animations:** every screen slides in from the left and fades in (0.32 s), the start screen
   rises when it comes back; off with the setting.

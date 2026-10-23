@@ -2,9 +2,10 @@
 
 // "Problem melden" (problem_report.cpp; the owner's wish, 2026-10-23: a log to send along): the
 // latest logs and settings of every game and of their setups, the launcher's own settings and a
-// few facts about the PC (Windows, processor, memory, graphics cards), in one ZIP on the desktop to
-// send with a description of what happened. The Windows user name and the computer's name are
-// taken out of every file (%USERPROFILE%, %USERNAME%, %COMPUTERNAME%).
+// few facts about the PC (Windows, processor, memory, graphics cards), in one text file on the
+// desktop to send with a description of what happened (or to attach to an issue on GitHub). The
+// Windows user name and the computer's name are taken out of it (%USERPROFILE%, %USERNAME%,
+// %COMPUTERNAME%).
 
 #include <filesystem>
 #include <string>
