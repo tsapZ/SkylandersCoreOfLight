@@ -81,6 +81,11 @@ class LauncherUi {
   std::string running_key_;
   Profile running_profile_;
   uint64_t running_since_ = 0;
+  std::string last_key_;  // the game that ran last
+  // A game that ended with an error code: "Problem melden?" (DrawCrashReport) until answered.
+  unsigned long crash_code_ = 0;
+  std::string crash_key_;
+  bool DrawCrashReport(float width, float height);
   std::vector<uint64_t> play_seconds_;  // per game, the active profile's (PlaySeconds)
   // Each game's settings pages, read from the game when first needed (game_settings.h).
   std::vector<SettingsLoader> loaders_;

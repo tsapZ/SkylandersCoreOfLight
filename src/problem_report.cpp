@@ -14,6 +14,7 @@
 
 #include "games.h"
 #include "hub_settings.h"
+#include "xiso.h"
 
 namespace coreoflight {
 namespace fs = std::filesystem;
@@ -324,6 +325,11 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     const std::string version = InstalledVersion(game, f.exe);
     info += Utf8(f.exe) + (version.empty() ? " (own build)" : " (version " + version + ")") + ", " +
             DiscText(f.disc.load()) + "\n";
+    // The disc's fingerprint: a pressing the port doesn't know yet (Imaginators' English / German
+    // disc) can be added by it, as SuperChargers' second European disc was.
+    std::ifstream xex(f.rom / "default.xex", std::ios::binary);
+    const std::string data((std::istreambuf_iterator<char>(xex)), std::istreambuf_iterator<char>());
+    if (!data.empty()) info += "    default.xex SHA-256 " + Sha256Hex(data.data(), data.size()) + "\n";
   }
   zip.Add("info.txt", clean(info));
 

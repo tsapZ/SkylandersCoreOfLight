@@ -224,13 +224,70 @@ void LauncherUi::UpdateInstall() {
 void LauncherUi::GameExitCode(unsigned long code) {
   starting_ = false;
   if (code == 0) return;
-  wchar_t text[160];
-  std::swprintf(text, std::size(text),
-                german_ ? L"Das Spiel wurde unerwartet beendet (Code 0x%08lX); sein Log liegt im Ordner logs des Spiels"
-                        : L"The game ended unexpectedly (code 0x%08lX); its log is in the game's logs folder",
-                code);
-  error_ = text;
-  error_until_ = -12.0;  // 12 s from the next frame on (Draw)
+  // "Problem melden?" comes up by itself (DrawCrashReport).
+  crash_code_ = code;
+  crash_key_ = last_key_;
+}
+
+// A game ended with an error: what happened and the report one press away (the owner, 2026-10-23:
+// "Problem melden" should come up by itself when a game crashes).
+bool LauncherUi::DrawCrashReport(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("crash", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  size_t index = AllGames().size();
+  for (size_t i = 0; i < AllGames().size(); ++i) {
+    if (crash_key_ == AllGames()[i].key) index = i;
+  }
+  DrawBackdrop(dl, width, height, index < background_art_.size() ? background_art_[index] : std::filesystem::path());
+  const float bw = 680 * u, bh = 270 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const std::string name = index < AllGames().size()
+                               ? std::string(german_ ? AllGames()[index].name_de : AllGames()[index].name_en)
+                               : std::string(german_ ? "Das Spiel" : "The game");
+  const std::string title = name + (german_ ? " wurde unerwartet beendet" : " ended unexpectedly");
+  Text(dl, bold_, 30 * u, {(width - TextWidth(bold_, 30 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
+  char code[48];
+  std::snprintf(code, sizeof(code), german_ ? "Fehlercode 0x%08lX" : "Error code 0x%08lX", crash_code_);
+  Text(dl, regular_, 20 * u, {(width - TextWidth(regular_, 20 * u, code)) * 0.5f, a.y + 80 * u}, kDim, code);
+  const char* line = german_ ? "Problem melden legt die Logs als ZIP auf den Desktop, ohne deinen Benutzernamen."
+                             : "Report a problem puts the logs on the desktop as a ZIP, without your user name.";
+  Text(dl, regular_, 19 * u, {(width - TextWidth(regular_, 19 * u, line)) * 0.5f, a.y + 118 * u}, kWhite, line);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, a.y + 180 * u}, q{x + 270 * u, a.y + 232 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    Hint(dl, bold_, 24 * u, {p.x + (270 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Problem melden" : "Report it");
+  const bool no = button(b.x - 320 * u, "B", Rgba(200, 60, 60), german_ ? "Schlie\xC3\x9F" "en" : "Close");
+  ImGui::End();
+  if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    crash_code_ = 0;
+    std::string error;
+    const std::filesystem::path zip = WriteProblemReport(found_, launcher_dir_, german_, error);
+    if (zip.empty()) {
+      error_ = Wide(error);
+    } else {
+      error_ = (german_ ? L"Auf dem Desktop: " : L"On the desktop: ") + zip.filename().wstring();
+      const std::wstring select = L"/select,\"" + zip.wstring() + L"\"";
+      ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+    }
+    error_until_ = ImGui::GetTime() + 8.0;
+  } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    crash_code_ = 0;
+  }
+  return true;
 }
 
 void LauncherUi::ToggleFullscreen() {
@@ -241,6 +298,7 @@ void LauncherUi::ToggleFullscreen() {
 void LauncherUi::GameEnded() {
   if (running_key_.empty()) return;
   AddPlaySeconds(running_profile_, running_key_, (GetTickCount64() - running_since_) / 1000);
+  last_key_ = running_key_;
   running_key_.clear();
 }
 
@@ -580,6 +638,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : setup_.is_open()              ? "setup"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
+                       : crash_code_ != 0              ? "crash"
                        : browser_.is_open()             ? "files"
                        : profiles_screen_.is_open()     ? "profiles"
                        : achievements_screen_.is_open() ? "achievements"
@@ -865,6 +924,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (ask_update_ >= 0) return DrawUpdateConfirm(width, height);
+  if (crash_code_ != 0) return DrawCrashReport(width, height);
   if (browser_.is_open()) {
     browser_.Draw(width, height);
     // The chosen disc is recognised by its default.xex and unpacked into its game's rom folder.
