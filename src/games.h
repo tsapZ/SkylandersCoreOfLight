@@ -107,6 +107,12 @@ std::string GameInstallError(size_t game);
 // quits before a window opens, in about a second, hidden, on user data of its own in the temp
 // folder. False if the game's build can't do it.
 std::filesystem::path TitleMusicFile(size_t game);
+// The game's picture folder (Documents\Skylanders\Pictures\<game>, the main profile's), and a run
+// that fills it at once (#12): the game with --export_pictures (skylanders-portal) writes its figure,
+// hat and achievement pictures there and quits, hidden and muted, in about half a minute, on user
+// data of its own in the temp folder. False if the game's build can't do it.
+std::filesystem::path PicturesDir(size_t game);
+bool StartPictureExport(size_t game, const Found& found, void** process);
 bool StartTitleMusicExport(size_t game, const Found& found, void** process);
 
 // The active profile's figure folder (profiles.h): for the main profile the shared one every game

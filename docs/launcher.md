@@ -92,6 +92,13 @@ exe and gets out of the way while the game runs; no game needs it.
   its disc) starts the game hidden with `--export_title_music=<file>`, which writes it in about a
   second and quits before a window opens (the owner found the earlier minute-long recording of the
   title screen too much, 2026-10-22). The file is `Documents\Skylanders\Pictures\<game>\title_music.wav`.
+- **The pictures at once** (#12; the owner: "first impressions count"): a game installed with its
+  disc but without its pictures yet (no `achievements.txt` in its picture folder) is started once,
+  hidden and muted, with `--export_pictures=<folder>` (skylanders-portal): it writes its figure,
+  hat and achievement pictures and quits, in about half a minute; one game at a time, after its
+  title music, each tried once a launch. Its card says "Bilder werden vorbereitet ..." meanwhile.
+  So the figure library, the cards' heroes and the achievements are complete right after a disc
+  is set up, before the game was ever played.
 - **The launcher's own settings** (LB / Q, `src/hub_settings.cpp`), in the same screen as a game's,
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,

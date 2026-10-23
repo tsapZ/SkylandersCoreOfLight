@@ -116,6 +116,13 @@ class LauncherUi {
   double export_since_ = 0;
   std::vector<bool> export_tried_;
   void UpdateTitleMusicExport();
+  // A game without its pictures yet writing them (#12): its process, which one, since when; each
+  // game tried once per launch, after its title music.
+  void* pictures_process_ = nullptr;
+  size_t pictures_game_ = 0;
+  double pictures_since_ = 0;
+  std::vector<bool> pictures_tried_;
+  void UpdatePictureExport();
   // B / Esc on the start screen asks first (a pad user would otherwise quit by mistake): false
   // once A / Enter says quit.
   bool confirm_quit_ = false;

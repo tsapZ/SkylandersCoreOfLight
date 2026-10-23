@@ -428,6 +428,10 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       }
       lines.insert(lines.begin(), text);
     }
+    // A picture export running for it (#12): first, so it shows on every card.
+    if (pictures_process_ && pictures_game_ == index) {
+      lines.insert(lines.begin(), german_ ? "Bilder werden vorbereitet ..." : "Getting its pictures ...");
+    }
     // As many as fit between the hero's picture (or the name) and the disc's state at the bottom,
     // or the chosen card's play button (at h - 112).
     float ly = tile ? hero_y + (hero_pictures_[index].empty() ? 0 : hero_side + 10 * s)
@@ -592,6 +596,7 @@ bool LauncherUi::Draw(float width, float height) {
   const bool keep = DrawScreens(width, height);
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
   UpdateTitleMusicExport();
+  UpdatePictureExport();
   UpdateInstall();
   UpdateImport();
   {
@@ -621,6 +626,37 @@ bool LauncherUi::Draw(float width, float height) {
     }
   }
   return keep;
+}
+
+// A game installed with its disc but without its pictures (achievements.txt is the last thing the
+// export writes): the game writes them, hidden and muted, one game at a time and after the title
+// music (games.h StartPictureExport). The library, the cards and the achievements then have them.
+void LauncherUi::UpdatePictureExport() {
+  if (pictures_tried_.size() != found_.size()) pictures_tried_.assign(found_.size(), false);
+  if (pictures_process_) {
+    const DWORD wait = WaitForSingleObject(pictures_process_, 0);
+    if (wait != WAIT_OBJECT_0 && ImGui::GetTime() - pictures_since_ < 200.0) return;
+    if (wait != WAIT_OBJECT_0) TerminateProcess(pictures_process_, 3);
+    CloseHandle(pictures_process_);
+    pictures_process_ = nullptr;
+    hero_checked_ = -100.0;  // the cards' hero pictures looked for again
+    CountAchievements();
+  }
+  if (export_process_ || starting_ || install_process_ || import_.running()) return;
+  for (size_t i = 0; i < found_.size(); ++i) {
+    const Found& f = found_[i];
+    if (pictures_tried_[i] || f.exe.empty() || f.disc.load() != DiscState::kMatches) continue;
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(PicturesDir(i) / "achievements.txt", ec)) continue;
+    pictures_tried_[i] = true;
+    if (StartPictureExport(i, f, &pictures_process_)) {
+      pictures_game_ = i;
+      pictures_since_ = ImGui::GetTime();
+    } else {
+      pictures_process_ = nullptr;
+    }
+    return;
+  }
 }
 
 // The chosen game's title music, written from its disc by the game when it has none yet: once per

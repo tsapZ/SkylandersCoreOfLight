@@ -431,6 +431,11 @@ std::string GameInstallError(size_t game) {
   return found;
 }
 
+fs::path PicturesDir(size_t game) {
+  if (game >= kGames.size()) return {};
+  return MainFiguresDir().parent_path() / "Pictures" / Utf8Path(kGames[game].name_en);
+}
+
 fs::path TitleMusicFile(size_t game) {
   if (game >= kGames.size()) return {};
   return MainFiguresDir().parent_path() / "Pictures" / Utf8Path(kGames[game].name_en) / "title_music.wav";
@@ -463,6 +468,29 @@ bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
   const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_title_music=" +
                                TitleMusicFile(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
                                L"\" --started_by_launcher=true";
+  STARTUPINFOW startup = {sizeof(startup)};
+  startup.dwFlags = STARTF_USESHOWWINDOW;
+  startup.wShowWindow = SW_HIDE;
+  PROCESS_INFORMATION info = {};
+  std::wstring line = command;
+  if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                      found.workdir.c_str(), &startup, &info)) {
+    return false;
+  }
+  CloseHandle(info.hThread);
+  *process = info.hProcess;
+  return true;
+}
+
+bool StartPictureExport(size_t game, const Found& found, void** process) {
+  if (found.exe.empty() || !ExeMentions(found.exe, "export_pictures")) return false;
+  wchar_t temp[MAX_PATH] = L"";
+  GetTempPathW(MAX_PATH, temp);
+  const fs::path data = fs::path(temp) / "CoreOfLight" / "pictures" / Utf8Path(UserDataName(found.exe));
+  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_pictures=" +
+                               PicturesDir(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
+                               L"\" --audio_mute=true --fullscreen=false --window_width=320 --window_height=180"
+                               L" --portal_mode=software --started_by_launcher=true";
   STARTUPINFOW startup = {sizeof(startup)};
   startup.dwFlags = STARTF_USESHOWWINDOW;
   startup.wShowWindow = SW_HIDE;
