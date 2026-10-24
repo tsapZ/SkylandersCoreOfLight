@@ -264,14 +264,14 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Profiles** (#4, Back / P / a click on the profile at the top right), like an Xbox account:
   a name, a Skylander's picture (Y: the profile's own figures and each game's hero, those a game
   has left a picture of), their own saves, achievements and figures. The main profile is the data
-  as the games keep it without the launcher (`Documents\<game>recomp`,
-  `Documents\Skylanders\Figures`), so nothing changes for it. Every other profile is a folder
-  `Documents\Skylanders\Profiles\<id>` (its `profile.ini` has the name and picture) that stands
-  in for Documents: the launcher starts a game with `--user_data_root=<folder>\<game>recomp`, the
-  game then keeps the profile's figures in `<folder>\Skylanders\Figures` and its pictures in
-  `<folder>\Skylanders\Pictures` by itself (the games put both next to their user data's
-  folder), and `--cache_root=Documents\<game>recomp\cache` keeps the main profile's shader
-  cache, so a new profile doesn't build it again. A new profile can start with the current
+  as the games keep it without the launcher (the data folder: `Skylanders\<game>`,
+  `Skylanders\Figures`), so nothing changes for it. Every other profile is a folder
+  `Skylanders\Profiles\<id>` (its `profile.ini` has the name and picture) that stands in for the
+  data folder: the launcher starts a game with `--user_data_root=<folder>\<game>`, the game then
+  keeps the profile's figures in `<folder>\Figures` and its pictures in `<folder>\Pictures` by
+  itself (for a game folder the games put both next to it), and
+  `--cache_root=Skylanders\<game>\cache` keeps the main profile's shader cache, so a new profile
+  doesn't build it again. A new profile can start with the current
   profile's figures made new (the same Skylanders back at the start, new serial numbers), with
   copies of them as they are, or with none (Y); B there gives the new profile up again. In the
   figure library, Y (C) copies the chosen figure's
@@ -286,7 +286,7 @@ exe and gets out of the way while the game runs; no game needs it.
   two columns. The list comes from the game: while it runs it
   leaves `achievements.txt` and the title's pictures (`ach-<n>.png`, the PNGs of its XDBF) in its
   picture folder (skylanders-portal `StartAchievementCache`); what is unlocked is the profile's
-  `<game>recomp\achievements\<title id>.toml`, which the SDK keeps.
+  `<game>\achievements\<title id>.toml`, which the SDK keeps.
 - **Achievement info** (#14): A (or a click) on an achievement shows it large: its picture, the
   name, the whole description and the locked one when the game has another, the gamerscore,
   "Freigeschaltet am 20.10.2026 um 09:08" or "Noch nicht freigeschaltet", and how many of the
@@ -296,13 +296,41 @@ exe and gets out of the way while the game runs; no game needs it.
   card a small cup behind "Erfolge 38 / 38" and the profile card one per such game. When a game
   ends with its last achievement, a "PLATIN-TROPHÄE!" banner shows at the top for 12 s.
 - Each card also says when the active profile last saved the game (the newest file in its save
-  folder, `<game>recomp\B13EBABEBABEBABE`).
+  folder, `<game>\B13EBABEBABEBABE`).
 - **Play time** per game and profile, on the card ("Gespielt 3 Std. 12 Min."): the time from
   start to end of each game the launcher started, for the profile it was started with, kept in
-  `Skylanders\playtime.txt` next to the profile's figure folder (`<game key>\t<seconds>`). A game
+  `playtime.txt` next to the profile's figure folder (`<game key>\t<seconds>`). A game
   started on its own isn't counted.
+- **One data folder for every game** (the owner's call, 2026-10-24; `src/data_move.cpp`,
+  skylanders-portal `data_folder.h`): `Documents\Skylanders` with `Figures`, `Pictures`,
+  `Textures`, `Profiles`, the launcher's settings and one folder per game (`Spyro's Adventure`,
+  `Giants`, `Swap Force`, `Trap Team`, `SuperChargers`, `Imaginators`: saves, achievements, shader
+  cache). Before, each game had `Documents\<game>recomp`. At its start the launcher copies what is
+  still in the old places (each game's folder, and in each profile its game folders and
+  `Skylanders\Figures` / `Pictures`); a game copies its own folder too, the first time it runs.
+  Each copy goes into `<target>.partial` first and is renamed once every file is there with its
+  size, and the old folder gets a `MOVED_TO.txt`. Then "Spieldaten umgezogen" asks whether the old
+  folders may go (only those whose every file is in the new place, checked again before each is
+  deleted); B keeps them and isn't asked again. "Spieldaten-Ordner" in the settings (and a row on
+  the first-run setup's welcome page) moves the whole folder elsewhere: `<picked>\Skylanders`,
+  copied in the background with the files counted, then written down for the games in
+  `%APPDATA%\Skylanders\data-folder.txt` (UTF-8 with a byte order mark, the uninstaller reads it);
+  an old folder that held only the launcher's settings (a fresh setup) goes at once, otherwise the
+  same question. The uninstaller deletes the game folders in the data folder and the old ones.
+- **Shader cache** (a game's settings, "Grafik" page, last row): deletes the game's
+  `cache\shaders` (in the data folder and an old one in Documents); the game builds it again on its
+  next start. For a picture with errors after an update or a graphics change.
+- **While a game runs** the launcher is minimized and hidden, draws nothing and takes no input, so
+  one controller drives only the game (a colleague's Bazzite, 2026-10-24: the launcher took the
+  pad's presses while he played). It comes back when the game ends, or when the game's SDL window
+  (class `SDL_app`, shown or not) has been gone for 5 s while its process stays (a game hanging on
+  its way out under Wine). Only a window that was there counts as gone: on that Bazzite only a
+  visible window counted and the launcher came back while the game still ran. A crash or an
+  exception nobody caught now leaves a line in the launcher's log.
 - `--documents=<folder>` runs the launcher on a copy: that folder in place of Documents for the
-  figures, pictures and profiles, and the games it starts get their user data there too.
+  figures, pictures and profiles (`<folder>\Skylanders` is the data folder; a moved one stays this
+  launch's own, the real `data-folder.txt` is left alone), and the games it starts get their user
+  data there too.
 - Controller (d-pad or stick, A, B), keyboard (arrows, Enter, Escape) and mouse; German or English
   by Windows' display language.
 - **The games' own dashboard art** from the owner's discs (`src/nxe_art.cpp`): each disc's

@@ -15,6 +15,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
 #include "hub_log.h"  // WineVersion
 #include "profiles.h"
@@ -107,6 +108,22 @@ std::string UserDataName(const fs::path& exe) {
   std::string stem = exe.stem().string();
   if (stem.ends_with("recompiled")) stem.resize(stem.size() - 4);
   return stem;
+}
+
+namespace {
+fs::path g_skylanders_override;  // SetSkylandersDirOverride
+}  // namespace
+
+fs::path SkylandersDir() {
+  if (!g_skylanders_override.empty()) return g_skylanders_override;
+  return g_documents_dir.empty() ? skylanders::DataFolder() : g_documents_dir / "Skylanders";
+}
+
+void SetSkylandersDirOverride(const fs::path& dir) { g_skylanders_override = dir; }
+
+fs::path GameFolderName(const fs::path& exe) {
+  const std::string_view folder = skylanders::GameFolderForExe(UserDataName(exe));
+  return Utf8Path(folder.empty() ? UserDataName(exe) : std::string(folder));
 }
 
 namespace {
@@ -616,7 +633,7 @@ bool StartPictureExport(size_t game, const Found& found, void** process) {
 }
 
 fs::path MainFiguresDir() {
-  return g_figures_dir.empty() ? DocumentsDir() / "Skylanders" / "Figures" : g_figures_dir;
+  return g_figures_dir.empty() ? SkylandersDir() / "Figures" : g_figures_dir;
 }
 
 fs::path FiguresDir() { return ProfileFiguresDir(ActiveProfile()); }

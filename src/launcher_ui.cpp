@@ -20,6 +20,7 @@
 #include "imgui_internal.h"
 #include "nxe_art.h"
 #include "pad_state.h"
+#include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 #include "portal/figure_info.h"
@@ -91,8 +92,13 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   launcher_dir_ = launcher_dir;
   regular_ = regular;
   bold_ = bold;
+  // What is still in the old per-game folders goes into the one data folder first (data_move.h), so
+  // the figures, saves and profiles below are read from there; the old ones are offered for deleting.
+  MoveOldData();
   hub_ = LoadHubSettings();
   ApplyHubSettings();
+  old_data_ = OldDataToDelete();
+  ask_old_data_ = !old_data_.empty() && !hub_.old_data_kept;
   work_ = std::make_shared<UpdateWork>();
   if (!Offline()) releases_ = LoadKnownReleases();  // --offline: no release, nothing to download
   Refresh();
@@ -1296,6 +1302,159 @@ void LauncherUi::ApplyGamesFolder(const std::filesystem::path& chosen) {
   }
 }
 
+// The data folder picked in the folder browser: everything in the old one copied there in the
+// background (DrawDataMove), then the games told (TakeDataMove).
+void LauncherUi::ApplyDataFolder(const std::filesystem::path& picked) {
+  const std::filesystem::path to = DataFolderFor(RealFolder(picked));
+  const std::filesystem::path from = SkylandersDir();
+  std::error_code ec;
+  std::string message;
+  const std::wstring inside = from.native() + L"\\";
+  if (to == from || std::filesystem::equivalent(to, from, ec)) {
+    message = german_ ? "Das ist schon der Spieldaten-Ordner" : "That is the data folder already";
+  } else if (to.native().starts_with(inside)) {
+    message = german_ ? "Der neue Ordner kann nicht im alten liegen" : "The new folder can't be inside the old one";
+  } else {
+    std::string error;
+    if (data_move_.Start(from, to, error)) {
+      HubLog("data folder: moving " + std::string(reinterpret_cast<const char*>(from.u8string().c_str())) + " to " +
+             std::string(reinterpret_cast<const char*>(to.u8string().c_str())));
+      return;
+    }
+    message = (german_ ? "Geht nicht: " : "Not possible: ") + error;
+  }
+  if (hub_screen_.is_open()) {
+    hub_screen_.ShowMessage(message);
+  } else {
+    error_ = Wide(message);
+    error_until_ = ImGui::GetTime() + 8.0;
+  }
+}
+
+// The move has finished: the games told where the data is now (the pointer file), the launcher's
+// settings, profiles and figures read from there, the old folder offered for deleting.
+void LauncherUi::TakeDataMove() {
+  std::string error;
+  std::filesystem::path old_dir, new_dir;
+  bool old_deleted = false;
+  if (!data_move_.TakeResult(error, old_dir, new_dir, old_deleted)) return;
+  const std::string to = reinterpret_cast<const char*>(new_dir.u8string().c_str());
+  std::string message;
+  if (!error.empty()) {
+    HubLog("data folder: the move failed: " + error);
+    message = (german_ ? "Verschieben fehlgeschlagen: " : "The move failed: ") + error;
+  } else if (!DocumentsMoved() && !skylanders::SetDataFolder(new_dir)) {
+    HubLog("data folder: copied to " + to + ", but the pointer file couldn't be written");
+    message = german_ ? "Kopiert, aber die Spiele lie\xC3\x9F" "en sich nicht umstellen" : "Copied, but the games couldn't be told";
+  } else {
+    if (DocumentsMoved()) SetSkylandersDirOverride(new_dir);
+    HubLog("data folder: now " + to + (old_deleted ? " (the old one held only the settings and is gone)" : ""));
+    hub_ = LoadHubSettings();
+    ApplyHubSettings();
+    LoadProfiles(german_);
+    figures_ = CountFigures();
+    CountAchievements();
+    if (!old_deleted) {
+      old_data_.push_back({old_dir, new_dir});
+      ask_old_data_ = true;
+    }
+    message = (german_ ? "Spieldaten jetzt in " : "Game data now in ") + to;
+  }
+  if (hub_screen_.is_open()) {
+    std::string en, de;
+    DataFolderLabels(en, de);
+    hub_screen_.SetActionLabel("choose_data_dir", en, de);
+    hub_screen_.ShowMessage(message);
+  } else {
+    error_ = Wide(message);
+    error_until_ = ImGui::GetTime() + 8.0;
+  }
+}
+
+bool LauncherUi::DrawDataMove(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("datamove", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, std::filesystem::path());
+  const char* title = german_ ? "Spieldaten werden verschoben ..." : "Moving the game data ...";
+  Text(dl, bold_, 36 * u, {(width - TextWidth(bold_, 36 * u, title)) * 0.5f, height * 0.40f}, kGold, title);
+  const char* note = german_ ? "Spielst\xC3\xA4nde, Figuren, Profile und Einstellungen. Der alte Ordner bleibt, bis du ihn l\xC3\xB6schst."
+                             : "Saves, figures, profiles and settings. The old folder stays until you delete it.";
+  Text(dl, regular_, 20 * u, {(width - TextWidth(regular_, 20 * u, note)) * 0.5f, height * 0.40f + 56 * u}, kDim, note);
+  char count[64];
+  std::snprintf(count, sizeof(count), german_ ? "%zu Dateien kopiert" : "%zu files copied", data_move_.files());
+  Text(dl, bold_, 22 * u, {(width - TextWidth(bold_, 22 * u, count)) * 0.5f, height * 0.40f + 200 * u}, kWhite, count);
+  const ImVec2 c{width * 0.5f, height * 0.40f + 150 * u};
+  const double t = ImGui::GetTime();
+  for (int i = 0; i < 12; ++i) {
+    const float a = float(i) / 12.0f * 6.2832f;
+    const float lit = float(std::fmod(t * 1.5 - i / 12.0, 1.0));
+    dl->AddCircleFilled({c.x + std::cos(a) * 26 * u, c.y + std::sin(a) * 26 * u}, 5 * u,
+                        Rgba(255, 210, 90, int(60 + 195 * (1.0f - lit))));
+  }
+  ImGui::End();
+  return true;
+}
+
+// "Spieldaten umgezogen": the old folders whose every file is in the data folder now. A deletes
+// them (each checked again), B keeps them and isn't asked again (a moved data folder asks anyway).
+bool LauncherUi::DrawOldData(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("olddata", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, std::filesystem::path());
+  const float bw = 820 * u, bh = 330 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Spieldaten umgezogen" : "Game data moved";
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title)) * 0.5f, a.y + 28 * u}, kGold, title);
+  const std::string where = reinterpret_cast<const char*>(SkylandersDir().u8string().c_str());
+  const std::string line1 = (german_ ? "Spielst\xC3\xA4nde und Figuren aller Spiele liegen jetzt in " : "Every game's saves and figures are now in ") + where + ".";
+  const std::string line2 = (german_ ? "Die alten Ordner sind noch da, alles darin ist am neuen Ort: "
+                                     : "The old folders are still there, everything in them is in the new place: ") +
+                            OldDataNames(old_data_, 4, german_ ? "Dokumente\\" : "Documents\\");
+  Text(dl, regular_, 21 * u, {a.x + 40 * u, a.y + 84 * u}, kWhite, line1.c_str(), bw - 80 * u);
+  Text(dl, regular_, 19 * u, {a.x + 40 * u, a.y + 150 * u}, kDim, line2.c_str(), bw - 80 * u);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, b.y - 74 * u}, q{x + 300 * u, b.y - 22 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    ButtonHint(dl, bold_, 24 * u, {p.x + (300 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 60 * u, "A", Rgba(200, 60, 60), german_ ? "Alte l\xC3\xB6schen" : "Delete old ones");
+  const bool no = button(b.x - 360 * u, "B", Rgba(70, 120, 200), german_ ? "Behalten" : "Keep them");
+  ImGui::End();
+  if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    const int deleted = DeleteOldData(old_data_);
+    char line[120];
+    std::snprintf(line, sizeof(line), german_ ? "%d alte(r) Ordner gel\xC3\xB6scht" : "%d old folder(s) deleted", deleted);
+    ShowToast(line);
+    old_data_.clear();
+    ask_old_data_ = false;
+  } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    hub_.old_data_kept = true;
+    WriteGameSetting(HubSettingsFile(), "Hub", "old_data_kept", "bool", "true");
+    HubLog("data folder: the old folders kept");
+    old_data_.clear();
+    ask_old_data_ = false;
+  }
+  return true;
+}
+
 void LauncherUi::StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update,
                                bool hub) {
   work_->game = game;
@@ -1432,10 +1591,21 @@ bool LauncherUi::DrawScreens(float width, float height) {
     return DrawHubUpdate(width, height);
   }
   if (ask_updates_found_ && !install_process_) return DrawUpdatesFound(width, height);
+  TakeDataMove();
+  if (data_move_.running()) return DrawDataMove(width, height);
+  if (ask_old_data_ && !setup_.is_open() && !install_process_ && !import_.running() && !folder_browser_.is_open()) {
+    return DrawOldData(width, height);
+  }
   // The games folder's browser, over the first-run setup or the hub's settings it came from.
   if (folder_browser_.is_open()) {
     folder_browser_.Draw(width, height);
-    if (const std::filesystem::path chosen = folder_browser_.TakeChosen(); !chosen.empty()) ApplyGamesFolder(chosen);
+    if (const std::filesystem::path chosen = folder_browser_.TakeChosen(); !chosen.empty()) {
+      if (folder_for_data_) {
+        ApplyDataFolder(chosen);
+      } else {
+        ApplyGamesFolder(chosen);
+      }
+    }
     return true;
   }
   if (setup_.is_open()) {
@@ -1457,7 +1627,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
     } else if (job.kind == SetupScreen::Job::Kind::kPickIso) {
       browser_.Open();
     } else if (job.kind == SetupScreen::Job::Kind::kPickFolder) {
+      folder_for_data_ = false;
+      folder_browser_.SetForData(false);
       folder_browser_.Open(GamesFolderChosen() ? GamesFolder() : std::filesystem::path());
+    } else if (job.kind == SetupScreen::Job::Kind::kPickDataFolder) {
+      folder_for_data_ = true;
+      folder_browser_.SetForData(true);
+      folder_browser_.Open(SkylandersDir().parent_path());
     }
     if (const std::string language = setup_.TakeLanguage(); !language.empty()) {
       hub_.language = language;
@@ -1515,7 +1691,14 @@ bool LauncherUi::DrawScreens(float width, float height) {
     // "Problem melden": the report on the desktop, shown in Explorer.
     const std::string action = hub_screen_.TakeAction();
     if (action == "choose_games_dir") {
+      folder_for_data_ = false;
+      folder_browser_.SetForData(false);
       folder_browser_.Open(GamesFolderChosen() ? GamesFolder() : std::filesystem::path());
+    }
+    if (action == "choose_data_dir") {
+      folder_for_data_ = true;
+      folder_browser_.SetForData(true);
+      folder_browser_.Open(SkylandersDir().parent_path());
     }
     if (action == "check_updates") StartUpdateCheck(true);  // DrawToast shows it and what it finds
     if (action == "report_problem") {
@@ -1537,6 +1720,22 @@ bool LauncherUi::DrawScreens(float width, float height) {
     settings_.Draw(width, height);
     // What was saved shows on the card at once.
     for (const auto& [cvar, value] : settings_.TakeSaved()) found_[settings_game_].settings[cvar] = value;
+    // "Shader-Cache leeren" (game_settings.cpp): the game's shaders in the data folder, and in its old
+    // folder in Documents for a game from before the move; it builds them again on its next start.
+    if (settings_.TakeAction() == "reset_shader_cache" && settings_game_ < found_.size()) {
+      const std::filesystem::path exe = found_[settings_game_].exe;
+      std::error_code ec;
+      uintmax_t removed = 0;
+      for (const std::filesystem::path& dir : {SkylandersDir() / GameFolderName(exe) / "cache" / "shaders",
+                                               DocumentsDir() / UserDataName(exe) / "cache" / "shaders"}) {
+        const uintmax_t n = std::filesystem::remove_all(dir, ec);
+        if (!ec && n != static_cast<uintmax_t>(-1)) removed += n;
+      }
+      HubLog("shader cache: " + UserDataName(exe) + ", " + std::to_string(removed) + " entries deleted");
+      settings_.ShowMessage(removed ? (german_ ? "Shader-Cache geleert: der n\xC3\xA4" "chste Start baut ihn neu"
+                                               : "Shader cache emptied: the next start builds it again")
+                                    : (german_ ? "Der Shader-Cache ist schon leer" : "The shader cache is empty already"));
+    }
     return true;
   }
   ImGui::SetNextWindowPos({0, 0});
@@ -1698,7 +1897,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // The folder as Windows names it when it is the usual one, else its path (coreoflight.ini).
   std::string folder = german_ ? "Dokumente\\Skylanders\\Figures" : "Documents\\Skylanders\\Figures";
   {
-    const std::filesystem::path usual = DocumentsDir() / "Skylanders" / "Figures";
+    const std::filesystem::path usual = SkylandersDir() / "Figures";
     if (FiguresDir() != usual) {
       const std::u8string u8 = FiguresDir().u8string();
       folder = std::string(u8.begin(), u8.end());

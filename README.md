@@ -100,9 +100,15 @@ pictures of every figure.
   file; a leaderboard of your figures.
 - **Profiles** like Xbox accounts: create, rename, pick a picture, delete (with a confirmation);
   each profile has its own saves, figures and achievements, and the games show its name.
+- **One folder for your data**: every game keeps its saves, achievements and shader cache in
+  `Documents\Skylanders\<game>`, next to the figures and pictures (or wherever you move it in the
+  settings). Saves from before, in the games' old folders in Documents, are copied over once; the
+  launcher asks before the old folders go.
+- **Gets out of the way while you play**: it hides while a game runs and takes no input, so one
+  controller drives only the game.
 - **The launcher's own settings**: language (German / English), the library's defaults, title
   music and its volume, animations, fullscreen (also `--fullscreen` for Steam's launch options),
-  the games folder.
+  the games folder, the data folder. A game's settings can empty its shader cache.
 - **Controller, keyboard or mouse** everywhere: the button hints at the bottom follow what you use
   and can be clicked.
 
@@ -123,7 +129,7 @@ Everything in detail: [docs/launcher.md](docs/launcher.md).
   `feature/portal-menu`), the recompilation runtime in
   [`tsapZ/rexglue-sdk`](https://github.com/tsapZ/rexglue-sdk) (branch `skylanders`).
 - **One figure folder for every game:** `Documents\Skylanders\Figures`, like real figures lying
-  next to the portal.
+  next to the portal, and one data folder around it for all six games.
 
 ## Planned
 

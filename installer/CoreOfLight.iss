@@ -47,14 +47,14 @@ english.UninstallTitle=Uninstall Core of Light
 english.UninstallIntro=Core of Light itself is removed. What should go along with it?
 english.UninstallGames=The games too (all six Recompiled games and the discs set up for them)
 english.UninstallSaves=Saves, achievements and profiles
-english.UninstallFigures=The figures (Documents\Skylanders\Figures: levels, gold, hats)
+english.UninstallFigures=The figures (Skylanders\Figures: levels, gold, hats)
 english.UninstallData=Pictures, HD textures, save backups and the launcher's settings
 english.UninstallKeep=Whatever isn't ticked stays.
 german.UninstallTitle=Core of Light deinstallieren
 german.UninstallIntro=Core of Light selbst wird entfernt. Was soll mit weg?
 german.UninstallGames=Auch die Spiele (alle sechs Recompiled-Spiele und ihre eingelesenen Discs)
 german.UninstallSaves=Spielstände, Erfolge und Profile
-german.UninstallFigures=Die Figuren (Dokumente\Skylanders\Figures: Level, Gold, Hüte)
+german.UninstallFigures=Die Figuren (Skylanders\Figures: Level, Gold, Hüte)
 german.UninstallData=Bilder, HD-Texturen, Sicherungen der Spielstände und die Hub-Einstellungen
 german.UninstallKeep=Was nicht angehakt ist, bleibt.
 
@@ -128,6 +128,32 @@ begin
   else
     Result := 'imaginatorsrecomp';
   end;
+end;
+
+// Their folders in the one data folder since 0.2.0-beta.3 (skylanders-portal data_folder.h).
+function GameFolder(I: Integer): String;
+begin
+  case I of
+    0: Result := 'Spyro''s Adventure';
+    1: Result := 'Giants';
+    2: Result := 'Swap Force';
+    3: Result := 'Trap Team';
+    4: Result := 'SuperChargers';
+  else
+    Result := 'Imaginators';
+  end;
+end;
+
+// The data folder: the one the launcher wrote down for the games (%APPDATA%\Skylanders\
+// data-folder.txt, UTF-8 with a byte order mark), else Documents\Skylanders.
+function DataFolder: String;
+var
+  Lines: TArrayOfString;
+begin
+  Result := ExpandConstant('{userdocs}') + '\Skylanders';
+  if LoadStringsFromFile(ExpandConstant('{userappdata}') + '\Skylanders\data-folder.txt', Lines) and
+     (GetArrayLength(Lines) > 0) and (Trim(Lines[0]) <> '') then
+    Result := RemoveBackslashUnlessRoot(Trim(Lines[0]));
 end;
 
 function AddBox(Form: TSetupForm; var Top: Integer; const Caption: String): TNewCheckBox;
@@ -226,15 +252,20 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   I: Integer;
-  Docs, Skylanders: String;
+  Docs, Skylanders, Pointer: String;
 begin
   if CurUninstallStep <> usPostUninstall then Exit;
   Docs := ExpandConstant('{userdocs}');
-  Skylanders := Docs + '\Skylanders';
+  Skylanders := DataFolder;
+  Pointer := ExpandConstant('{userappdata}') + '\Skylanders\data-folder.txt';
   if RemoveGames then
     for I := 0 to 5 do UninstallGame(I);
   if RemoveSaves then begin
-    for I := 0 to 5 do DelTree(Docs + '\' + GameDataFolder(I), True, True, True);
+    // The games' folders in the data folder, and the old ones in Documents if they are still there.
+    for I := 0 to 5 do begin
+      DelTree(Skylanders + '\' + GameFolder(I), True, True, True);
+      DelTree(Docs + '\' + GameDataFolder(I), True, True, True);
+    end;
     DelTree(Skylanders + '\Profiles', True, True, True);
   end;
   if RemoveFigures then DelTree(Skylanders + '\Figures', True, True, True);
@@ -246,4 +277,9 @@ begin
     DeleteFile(Skylanders + '\playtime.txt');
   end;
   RemoveDir(Skylanders);  // only when nothing is left in it
+  // Nothing left in a data folder picked elsewhere: the note that told the games goes too.
+  if not DirExists(Skylanders) and FileExists(Pointer) then begin
+    DeleteFile(Pointer);
+    RemoveDir(ExtractFileDir(Pointer));
+  end;
 end;

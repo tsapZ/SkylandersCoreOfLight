@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
@@ -244,7 +245,27 @@ std::shared_ptr<GameSettings> Load(const fs::path& exe, const fs::path& workdir,
   const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   if (text.empty()) return nullptr;
   auto json = Parser(text).Parse();
-  return json ? FromJson(*json) : nullptr;
+  std::shared_ptr<GameSettings> out = json ? FromJson(*json) : nullptr;
+  if (!out) return nullptr;
+  // A button of the launcher's own at the end of the graphics page: the game's shader cache emptied
+  // (the owner's wish, 2026-10-24, after a colleague saw a tinted picture following a graphics
+  // change). LauncherUi deletes it; the game builds it again on its next start.
+  GameSetting reset;
+  reset.cvar = "reset_shader_cache";
+  reset.en = "Shader cache";
+  reset.de = "Shader-Cache";
+  reset.help_en = "Deletes the shaders this game has kept from earlier starts. The next start builds them "
+                  "again (it stutters a little at first). Worth a try when the picture shows errors after "
+                  "an update or a change of the graphics settings.";
+  reset.help_de = "L\xC3\xB6scht die Shader, die das Spiel von fr\xC3\xBCheren Starts aufbewahrt. Der n\xC3\xA4" "chste "
+                  "Start baut sie neu (am Anfang ruckelt es kurz). Einen Versuch wert, wenn das Bild nach "
+                  "einem Update oder einer ge\xC3\xA4nderten Grafikeinstellung Fehler zeigt.";
+  reset.type = "action";
+  reset.options = {{"", "Empty it", "Leeren"}};
+  auto page = std::find_if(out->pages.begin(), out->pages.end(),
+                           [](const GameSettingsPage& p) { return p.en == "Graphics"; });
+  (page != out->pages.end() ? *page : out->pages.back()).settings.push_back(std::move(reset));
+  return out;
 }
 
 // Where a line's comment starts (a '#' outside a quoted string after the '='), or npos.

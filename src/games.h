@@ -151,8 +151,17 @@ std::unordered_map<std::string, std::string> ReadIni(const std::filesystem::path
 std::filesystem::path DocumentsDir();
 void SetDocumentsDir(const std::filesystem::path& dir);  // --documents=<folder>, to try on a copy
 bool DocumentsMoved();  // --documents was given
-// The folder name of a game's user data in Documents: ssarecompiled.exe keeps it in ssarecomp
-// (the SDK's app name, the same as its settings file's).
+// The games' executable name as the SDK knows it: ssarecompiled.exe is ssarecomp (its settings
+// file's name, and the name of its old data folder in Documents).
 std::string UserDataName(const std::filesystem::path& exe);
+// The one data folder of every game (skylanders-portal data_folder.h; the owner's call, 2026-10-24):
+// Documents\Skylanders or the folder picked in the launcher, <--documents>\Skylanders on a copy.
+// Figures, Pictures, Profiles, the launcher's settings and one folder per game are in it.
+std::filesystem::path SkylandersDir();
+// On a --documents copy a moved data folder stays this launch's own (the real pointer file that
+// tells the games is left alone).
+void SetSkylandersDirOverride(const std::filesystem::path& dir);
+// A game's folder in it, by its exe ("Spyro's Adventure" for ssarecompiled.exe).
+std::filesystem::path GameFolderName(const std::filesystem::path& exe);
 
 }  // namespace coreoflight

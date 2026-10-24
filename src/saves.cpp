@@ -34,7 +34,7 @@ uint64_t NewestFile(const fs::path& dir) {
   return newest;
 }
 
-fs::path UserData(const Profile& p, const fs::path& exe) { return p.root / Utf8Path(UserDataName(exe)); }
+fs::path UserData(const Profile& p, const fs::path& exe) { return p.root / GameFolderName(exe); }
 
 // The save folder and its header as the SDK's manifest names them, relative to the user data.
 std::wstring RelativeSave(const SaveSlot& slot) {
@@ -85,7 +85,7 @@ std::string NowName() {
 std::string LastSaveError() { return g_error; }
 
 fs::path BackupsDir(const Profile& p, const Game& game) {
-  return DocumentsDir() / "Skylanders" / "Backups" / game.key / (p.id.empty() ? fs::path("main") : Utf8Path(p.id));
+  return SkylandersDir() / "Backups" / game.key / (p.id.empty() ? fs::path("main") : Utf8Path(p.id));
 }
 
 std::vector<SaveSlot> ListSaves(const Profile& p, const fs::path& exe) {

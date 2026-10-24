@@ -321,19 +321,35 @@ void SetupScreen::DrawWelcome(float width, float height) {
                : "No game data comes with it: it needs your own discs as ISOs.",
        left + wrap);
   // The language, left / right.
-  const float y = 340 * u;
+  const float y = 320 * u;
   const std::string label = german_ ? "Sprache" : "Language";
   Text(dl, bold_, 24 * u, {left, y + 9 * u}, kWhite, label);
-  const float bx = left + 180 * u;
+  const float bx = left + 260 * u;
   Button(dl, bold_, u, bx, y, 200 * u, "<  " + std::string(german_ ? "Deutsch" : "English") + "  >", selected_ == 0);
-  Button(dl, bold_, u, left, y + 90 * u, 380 * u, german_ ? "Weiter: Discs suchen" : "Next: find my discs",
-         selected_ == 1);
-  if (Up()) selected_ = 0;
-  if (Down()) selected_ = 1;
+  // Where the saves and figures go (the owner's call, 2026-10-24): one folder for every game,
+  // Documents\Skylanders unless another is picked here (A: the folder browser).
+  {
+    const float dy = y + 70 * u;
+    Text(dl, bold_, 24 * u, {left, dy + 9 * u}, kWhite, german_ ? "Spieldaten" : "Game data");
+    std::string en, de;
+    DataFolderLabels(en, de);
+    const std::string where = german_ ? de : en;
+    const float w = std::min(width - bx - left, 760 * u);
+    Button(dl, bold_, u, bx, dy, w, FitStart(regular_, 20 * u, where, w - 40 * u), selected_ == 1);
+    Text(dl, regular_, 18 * u, {bx, dy + 58 * u}, kDim,
+         german_ ? "Spielst\xC3\xA4nde, Erfolge und Figuren aller Spiele  \xC2\xB7  A: anderer Ordner"
+                 : "Saves, achievements and figures of every game  \xC2\xB7  A: another folder");
+  }
+  Button(dl, bold_, u, left, y + 180 * u, 380 * u, german_ ? "Weiter: Discs suchen" : "Next: find my discs",
+         selected_ == 2);
+  if (Up() && selected_ > 0) --selected_;
+  if (Down() && selected_ < 2) ++selected_;
   if (selected_ == 0 && (Left() || Right() || Accept())) {
     german_ = !german_;
     language_ = german_ ? "german" : "english";
   } else if (selected_ == 1 && Accept()) {
+    job_ = {Job::Kind::kPickDataFolder, 0, {}};
+  } else if (selected_ == 2 && Accept()) {
     page_ = Page::kDiscs;
     selected_ = 0;
   }

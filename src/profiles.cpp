@@ -26,7 +26,7 @@ constexpr wchar_t kSaveFolder[] = L"B13EBABEBABEBABE";
 std::vector<Profile> g_profiles;
 size_t g_active = 0;
 
-fs::path ProfilesDir() { return DocumentsDir() / "Skylanders" / "Profiles"; }
+fs::path ProfilesDir() { return SkylandersDir() / "Profiles"; }
 
 fs::path Utf8Path(const std::string& s) {
   return fs::path(std::u8string(reinterpret_cast<const char8_t*>(s.data()), s.size()));
@@ -112,7 +112,7 @@ std::vector<Profile> LoadProfiles(bool german) {
   main.name = get("main_name");
   if (main.name.empty()) main.name = german ? "Hauptprofil" : "Main profile";
   ParsePicture(get("main_picture"), main);
-  main.root = DocumentsDir();
+  main.root = SkylandersDir();
   profiles.push_back(main);
   std::error_code ec;
   std::vector<fs::path> dirs;
@@ -143,7 +143,7 @@ std::vector<Profile> LoadProfiles(bool german) {
 const Profile& ActiveProfile() {
   if (g_profiles.empty()) {
     static Profile main;
-    main.root = DocumentsDir();
+    main.root = SkylandersDir();
     return main;
   }
   return g_profiles[g_active];
@@ -164,7 +164,7 @@ std::string CreateProfile(const std::string& name) {
     const std::string id = "p" + std::to_string(n);
     const fs::path dir = ProfilesDir() / id;
     if (fs::exists(dir, ec)) continue;
-    fs::create_directories(dir / "Skylanders" / "Figures", ec);
+    fs::create_directories(dir / "Figures", ec);
     if (ec) return {};
     Profile p;
     p.id = id;
@@ -206,22 +206,22 @@ bool DeleteProfile(const Profile& p, bool to_recycle_bin) {
 }
 
 fs::path ProfileFiguresDir(const Profile& p) {
-  return IsMainProfile(p) ? MainFiguresDir() : p.root / "Skylanders" / "Figures";
+  return IsMainProfile(p) ? MainFiguresDir() : p.root / "Figures";
 }
 
 fs::path ProfilePicturesDir(const Profile& p) {
-  return IsMainProfile(p) ? MainFiguresDir().parent_path() / "Pictures" : p.root / "Skylanders" / "Pictures";
+  return IsMainProfile(p) ? MainFiguresDir().parent_path() / "Pictures" : p.root / "Pictures";
 }
 
 bool HasSave(const Profile& p, const fs::path& exe) {
   std::error_code ec;
-  const fs::path saves = p.root / Utf8Path(UserDataName(exe)) / kSaveFolder;
+  const fs::path saves = p.root / GameFolderName(exe) / kSaveFolder;
   return fs::is_directory(saves, ec) && !fs::is_empty(saves, ec);
 }
 
 uint64_t LastSaved(const Profile& p, const fs::path& exe) {
   std::error_code ec;
-  const fs::path saves = p.root / Utf8Path(UserDataName(exe)) / kSaveFolder;
+  const fs::path saves = p.root / GameFolderName(exe) / kSaveFolder;
   uint64_t newest = 0;
   for (fs::recursive_directory_iterator it(saves, ec), end; it != end; it.increment(ec)) {
     if (ec) break;
@@ -303,9 +303,9 @@ std::wstring ProfileArguments(const fs::path& exe) {
   const Profile& p = ActiveProfile();
   // The main profile is the games' own default, unless the launcher runs on a copy (--documents).
   if (IsMainProfile(p) && !DocumentsMoved()) return {};
-  const fs::path name = Utf8Path(UserDataName(exe));
+  const fs::path name = GameFolderName(exe);
   return L" \"--user_data_root=" + (p.root / name).wstring() + L"\" \"--cache_root=" +
-         (DocumentsDir() / name / "cache").wstring() + L"\"";
+         (SkylandersDir() / name / "cache").wstring() + L"\"";
 }
 
 }  // namespace coreoflight

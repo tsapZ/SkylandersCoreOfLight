@@ -38,10 +38,11 @@ class SetupScreen {
 
   // The next step for the launcher to start, once: a game's setup or a disc, stopping the disc
   // being set up (B while it unpacks), the file browser for an ISO the search didn't find (X), or
-  // the folder browser for the games folder (A on its row). The ISO chosen there comes back with
-  // AddIso, the folder with UseGamesFolder.
+  // the folder browser for the games folder (A on its row) or for the data folder (A on the welcome
+  // page's row). The ISO chosen there comes back with AddIso, the games folder with UseGamesFolder;
+  // the data folder the launcher moves itself (data_move.h).
   struct Job {
-    enum class Kind { kNone, kInstall, kImport, kCancel, kPickIso, kPickFolder } kind = Kind::kNone;
+    enum class Kind { kNone, kInstall, kImport, kCancel, kPickIso, kPickFolder, kPickDataFolder } kind = Kind::kNone;
     size_t game = 0;
     std::filesystem::path iso;
   };

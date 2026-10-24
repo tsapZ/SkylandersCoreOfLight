@@ -95,7 +95,7 @@ GameAchievements LoadAchievements(const Game& game, const Profile& profile) {
   out.known = !out.items.empty();
   if (!out.known || title.empty()) return out;
   const fs::path toml =
-      profile.root / Utf8Path(UserDataName(fs::path(game.exe))) / "achievements" / Utf8Path(title + ".toml");
+      profile.root / GameFolderName(fs::path(game.exe)) / "achievements" / Utf8Path(title + ".toml");
   const auto unlocked = ReadUnlocked(toml);
   for (Achievement& a : out.items) {
     out.gamerscore_total += a.gamerscore;

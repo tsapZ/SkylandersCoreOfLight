@@ -43,7 +43,7 @@ GameSetting Switch(const char* key, const char* en, const char* de, const char* 
 
 }  // namespace
 
-fs::path HubSettingsFile() { return DocumentsDir() / "Skylanders" / "coreoflight.toml"; }
+fs::path HubSettingsFile() { return SkylandersDir() / "coreoflight.toml"; }
 
 HubSettings LoadHubSettings() {
   HubSettings s;
@@ -66,6 +66,7 @@ HubSettings LoadHubSettings() {
   s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   s.games_dir = get("games_dir");
+  s.old_data_kept = IsOn(get("old_data_kept"), s.old_data_kept);
   return s;
 }
 
@@ -80,6 +81,15 @@ void GamesFolderLabels(std::string& en, std::string& de) {
   const std::string path(u8.begin(), u8.end());
   en = GamesFolderChosen() ? path : "Default: " + path;
   de = GamesFolderChosen() ? path : "Standard: " + path;
+}
+
+void DataFolderLabels(std::string& en, std::string& de) {
+  const std::u8string u8 = SkylandersDir().u8string();
+  const std::string path(u8.begin(), u8.end());
+  std::error_code ec;
+  const bool standard = !DocumentsMoved() && SkylandersDir() == DocumentsDir() / "Skylanders";
+  en = standard ? "Default: " + path : path;
+  de = standard ? "Standard: " + path : path;
 }
 
 std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
@@ -178,6 +188,25 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     folder.options = {{"", en, de}};
   }
   page.settings.push_back(std::move(folder));
+  // A button: the data folder (data_move.h), picked in the same folder browser and moved there with
+  // everything in it.
+  GameSetting data;
+  data.cvar = "choose_data_dir";
+  data.en = "Data folder";
+  data.de = "Spieldaten-Ordner";
+  data.help_en = "Where the games keep your saves, achievements and figures, and where the launcher keeps "
+                 "its profiles and settings: one folder for all six games. Picking another one moves "
+                 "everything there; the old folder is deleted only when you say so.";
+  data.help_de = "Wo die Spiele deine Spielst\xC3\xA4nde, Erfolge und Figuren ablegen und der Hub seine "
+                 "Profile und Einstellungen: ein Ordner f\xC3\xBCr alle sechs Spiele. Ein anderer Ordner "
+                 "nimmt alles mit; der alte wird erst gel\xC3\xB6scht, wenn du es sagst.";
+  data.type = "action";
+  {
+    std::string en, de;
+    DataFolderLabels(en, de);
+    data.options = {{"", en, de}};
+  }
+  page.settings.push_back(std::move(data));
   // A button: the updates from GitHub (updates.h), looked for when A is pressed on it.
   GameSetting updates;
   updates.cvar = "check_updates";

@@ -24,6 +24,7 @@ struct HubSettings {
   bool auto_backup = true;        // the saves copied at a game's start, end and every 60 minutes
   bool setup_done = false;        // the first-run setup (setup_ui.h) finished or skipped
   std::string games_dir;          // where the games are and new ones go (the setup or "Spiele-Ordner"); empty: %LOCALAPPDATA%\Programs
+  bool old_data_kept = false;     // the old per-game folders were kept when asked (data_move.h): not asked again
 };
 
 std::filesystem::path HubSettingsFile();
@@ -34,5 +35,8 @@ bool HubGerman(const HubSettings& settings);
 std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings);
 // What the "Spiele-Ordner" row shows: the games folder, "Standard: ..." while none is chosen.
 void GamesFolderLabels(std::string& en, std::string& de);
+// What the "Spieldaten-Ordner" row shows: the data folder (games.h SkylandersDir), "Standard: ..."
+// for Documents\Skylanders.
+void DataFolderLabels(std::string& en, std::string& de);
 
 }  // namespace coreoflight

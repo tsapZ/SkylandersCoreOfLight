@@ -5,6 +5,10 @@
 #include <d3d11.h>
 #include <shellapi.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+#include <exception>
 #include <filesystem>
 #include <string>
 
@@ -82,6 +86,29 @@ bool HasVisibleWindow(DWORD pid) {
         DWORD owner = 0;
         GetWindowThreadProcessId(w, &owner);
         if (owner == f->pid && IsWindowVisible(w)) {
+          f->found = true;
+          return FALSE;
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&find));
+  return find.found;
+}
+
+// Whether the game still has its window, shown or not: the games draw into an SDL window (class
+// "SDL_app"). Not just a visible one: a hidden or minimized window is still a game that runs.
+bool HasGameWindow(DWORD pid) {
+  struct Find {
+    DWORD pid;
+    bool found;
+  } find{pid, false};
+  EnumWindows(
+      [](HWND w, LPARAM p) -> BOOL {
+        auto* f = reinterpret_cast<Find*>(p);
+        DWORD owner = 0;
+        GetWindowThreadProcessId(w, &owner);
+        wchar_t name[32] = L"";
+        if (owner == f->pid && GetClassNameW(w, name, 32) && std::wcscmp(name, L"SDL_app") == 0) {
           f->found = true;
           return FALSE;
         }
@@ -210,9 +237,38 @@ ImFont* LoadFont(ImGuiIO& io, const wchar_t* windows_file, const wchar_t* own_fi
   return nullptr;
 }
 
+// The launcher ending by a crash says so in its log (it vanished without a word before): an
+// exception nobody caught, or a fault with its code and address.
+void LogTerminate() {
+  std::string what = "unknown";
+  if (const std::exception_ptr e = std::current_exception()) {
+    try {
+      std::rethrow_exception(e);
+    } catch (const std::exception& ex) {
+      what = ex.what();
+    } catch (...) {
+    }
+  }
+  coreoflight::HubLog("launcher: ended by an uncaught exception: " + what);
+  std::abort();
+}
+
+LONG WINAPI LogFault(EXCEPTION_POINTERS* info) {
+  char line[128];
+  const HMODULE self = GetModuleHandleW(nullptr);
+  std::snprintf(line, sizeof(line), "launcher: crashed, exception 0x%08lX at exe+0x%llX",
+                info->ExceptionRecord->ExceptionCode,
+                static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) -
+                                                reinterpret_cast<uintptr_t>(self)));
+  coreoflight::HubLog(line);
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+  std::set_terminate(LogTerminate);
+  SetUnhandledExceptionFilter(LogFault);
   ImGui_ImplWin32_EnableDpiAwareness();
   WNDCLASSEXW wc = {sizeof(wc), CS_CLASSDC, WndProc, 0, 0, instance, nullptr, nullptr, nullptr, nullptr,
                     L"CoreOfLight", nullptr};
@@ -296,6 +352,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   bool running = true;
   HANDLE game = nullptr;
   bool game_shown = false;  // the game's window is up and the launcher hidden
+  bool window_seen = false;  // the game's SDL window was there once (only then can it be gone)
   ULONGLONG took_back_until = 0;  // after a game: until then a pad press brings the launcher to the front
   bool input_logged = true;       // the first press after a game went into the log
   while (running) {
@@ -307,28 +364,41 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     if (!running) break;
     if (game && !game_shown) {
-      // The launch screen until the game's window is up (or 30 s, or the game ended at once).
+      // The launch screen (it takes no input) until the game's window is up (or 30 s, or the game
+      // ended at once).
       static ULONGLONG since = 0;
       if (!since) since = GetTickCount64();
-      if (HasVisibleWindow(GetProcessId(game)) || GetTickCount64() - since > 30000 ||
-          WaitForSingleObject(game, 0) == WAIT_OBJECT_0) {
+      const bool visible = HasVisibleWindow(GetProcessId(game));
+      if (visible || GetTickCount64() - since > 30000 || WaitForSingleObject(game, 0) == WAIT_OBJECT_0) {
         since = 0;
         game_shown = true;
-        coreoflight::HubLog(HasVisibleWindow(GetProcessId(game)) ? "game: window up, launcher hidden"
-                                                                  : "game: no window after 30 s (or ended at once)");
+        window_seen = HasGameWindow(GetProcessId(game));
+        coreoflight::HubLog(std::string(visible ? "game: window up" : "game: no window after 30 s (or ended at once)") +
+                            ", game window " + (window_seen ? "found" : "not found") + ", launcher hidden");
         ui.GameWindowShown();
+        // Minimized and hidden: off the screen and the taskbar, and no frame drawn, so no pad press
+        // reaches it while the game runs (one controller drives the game only).
+        ShowWindow(hwnd, SW_MINIMIZE);
         ShowWindow(hwnd, SW_HIDE);
       }
     }
     if (game && game_shown) {
-      // A game is running: the launcher waits hidden and comes back when it ends, or when its
+      // A game is running: the launcher waits hidden and comes back when it ends, or when the game's
       // window has been gone for 5 s while its process stays (under Wine a game can hang on its
-      // way out: the launcher waited for it, took no input, and had to be started again).
+      // way out: the launcher waited for it, took no input, and had to be started again). Gone means
+      // no SDL window at all, shown or not, after one was there: a colleague's Bazzite got the
+      // launcher back while the game still ran (2026-10-24), when only a visible window counted.
       DWORD code = 0;
       if (WaitForSingleObject(game, 250) == WAIT_TIMEOUT) {
         static ULONGLONG gone_since = 0;
-        if (HasVisibleWindow(GetProcessId(game))) {
+        if (HasGameWindow(GetProcessId(game))) {
+          if (!window_seen) coreoflight::HubLog("game: game window found");
+          window_seen = true;
           gone_since = 0;
+          ui.GameRunning();
+          continue;
+        }
+        if (!window_seen) {  // its window never found: the game's end is its process's end
           ui.GameRunning();
           continue;
         }
@@ -364,6 +434,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       // Space and Esc are up (at most 3 s), and forget the keys' states from before the game (their
       // releases went to the game's window).
       for (int i = 0; i < 120 && coreoflight::InputHeld(); ++i) Sleep(25);
+      ImGui::GetIO().ClearEventsQueue();
       ImGui::GetIO().ClearInputKeys();
     }
     // For a while after a game, a controller press brings the launcher back to the front should it

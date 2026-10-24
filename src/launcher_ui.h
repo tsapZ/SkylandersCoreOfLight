@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "achievements_ui.h"
+#include "data_move.h"
 #include "saves_ui.h"
 #include "disc_import.h"
 #include "file_browser.h"
@@ -215,6 +216,17 @@ class LauncherUi {
   // there at once.
   FileBrowser folder_browser_;
   void ApplyGamesFolder(const std::filesystem::path& dir);
+  // The data folder (data_move.h; the owner's call, 2026-10-24): picked in the same folder browser
+  // (folder_for_data_), from the setup's welcome page or the settings' "Spieldaten-Ordner", moved
+  // in the background; then the old folders offered for deleting (DrawOldData).
+  bool folder_for_data_ = false;
+  DataFolderMove data_move_;
+  std::vector<OldData> old_data_;
+  bool ask_old_data_ = false;
+  void ApplyDataFolder(const std::filesystem::path& picked);
+  void TakeDataMove();
+  bool DrawDataMove(float width, float height);
+  bool DrawOldData(float width, float height);
   // A game was just started: its launch screen, until its window is up (main.cpp).
   bool starting_ = false;
   size_t starting_game_ = 0;
