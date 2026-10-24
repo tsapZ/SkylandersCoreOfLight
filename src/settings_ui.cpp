@@ -4,11 +4,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <initializer_list>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "imgui.h"
+#include "imgui_internal.h"  // GetKeyData: how long a key is held (the slider speeds up)
 #include "nxe_art.h"
 
 namespace coreoflight {
@@ -111,6 +114,7 @@ std::string SettingsScreen::ValueLabel(const GameSetting& s) const {
     if (SameValue(o.value, s.value)) return german_ ? o.de : o.en;
   }
   if (s.options.empty() && s.type == "bool") return IsOn(s.value) ? (german_ ? "An" : "On") : (german_ ? "Aus" : "Off");
+  if (s.slider_max > s.slider_min) return s.value + s.slider_unit;
   if (s.value.empty()) return german_ ? "Eigene Einstellung" : "Custom";
   return s.value;
 }
@@ -136,6 +140,10 @@ void SettingsScreen::Step(int step) {
   // A button row (type "action", the launcher's "Problem melden"): A runs it, left / right nothing.
   if (s.type == "action") {
     if (step > 0) action_ = s.cvar;
+    return;
+  }
+  if (s.slider_max > s.slider_min) {
+    SetSlider(s, std::atoi(s.value.c_str()) + step);
     return;
   }
   std::string next;
@@ -194,6 +202,25 @@ void SettingsScreen::Step(int step) {
     }
   }
   confirm_discard_ = false;
+}
+
+void SettingsScreen::SetSlider(GameSetting& s, int value) {
+  value = std::clamp(value, s.slider_min, s.slider_max);
+  if (std::to_string(value) == s.value) return;
+  s.value = std::to_string(value);
+  changes_[s.cvar] = {s.category, s.type, s.value};
+  confirm_discard_ = false;
+}
+
+std::string SettingsScreen::EditedValue(const std::string& cvar) const {
+  if (const auto c = changes_.find(cvar); c != changes_.end()) return c->second.value;
+  if (!edit_) return {};
+  for (const GameSettingsPage& page : edit_->pages) {
+    for (const GameSetting& s : page.settings) {
+      if (s.cvar == cvar) return s.value;
+    }
+  }
+  return {};
 }
 
 void SettingsScreen::Save() {
@@ -285,18 +312,32 @@ void SettingsScreen::Draw(float width, float height) {
 
   auto& settings = pages[page_].settings;
   const int n = int(settings.size());
+  // The view follows the chosen row when the pad or the keys move it; the mouse wheel only scrolls
+  // (the owner, #23: with the wheel every row in between got chosen).
+  bool follow = false;
   if (pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp)) {
     row_ = (row_ + n - 1) % n;
+    follow = true;
   }
   if (pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown)) {
     row_ = (row_ + 1) % n;
+    follow = true;
   }
   row_ = std::clamp(row_, 0, n - 1);
+  // A slider moves faster the longer left / right is held (1, then 2, then 5 per step; #24).
+  const bool on_slider = settings[row_].slider_max > settings[row_].slider_min;
+  auto held_step = [&](std::initializer_list<ImGuiKey> keys) {
+    float held = 0.0f;
+    for (ImGuiKey k : keys) held = std::max(held, ImGui::GetKeyData(k)->DownDuration);
+    return held > 1.6f ? 5 : held > 0.8f ? 2 : 1;
+  };
   if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft)) {
-    Step(-1);
+    Step(on_slider ? -held_step({ImGuiKey_LeftArrow, ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft}) : -1);
   }
-  if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight) ||
-      (!asking && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)))) {
+  if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight)) {
+    Step(on_slider ? held_step({ImGuiKey_RightArrow, ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight}) : 1);
+  } else if (!asking && !on_slider &&
+             (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false))) {
     Step(1);
   }
   // Y as the hint says; S as before.
@@ -305,20 +346,23 @@ void SettingsScreen::Draw(float width, float height) {
     Save();
   }
 
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragging_ = -1;
   // The rows on the left, the chosen one's explanation on the right.
   const float list_top = top + 66 * u;
   const float list_w = std::min(width * 0.58f, 760 * u);
   const float row_h = 50 * u;
   const int visible = std::max(1, int((bottom - list_top - 20 * u) / row_h));
-  // The mouse wheel moves the choice a row per notch (and the view with it).
+  // The mouse wheel scrolls the view a row per notch and leaves the choice where it is.
   if (!asking) {
     wheel_ += io.MouseWheel;
     const int steps = int(wheel_);
     wheel_ -= float(steps);
-    if (steps) row_ = std::clamp(row_ - steps, 0, n - 1);
+    scroll_ -= steps;
   }
-  if (row_ < scroll_) scroll_ = row_;
-  if (row_ >= scroll_ + visible) scroll_ = row_ - visible + 1;
+  if (follow) {
+    if (row_ < scroll_) scroll_ = row_;
+    if (row_ >= scroll_ + visible) scroll_ = row_ - visible + 1;
+  }
   scroll_ = std::clamp(scroll_, 0, std::max(0, n - visible));
   const int first = scroll_;
   for (int i = first; i < std::min(n, first + visible); ++i) {
@@ -328,11 +372,24 @@ void SettingsScreen::Draw(float width, float height) {
     const bool hovered = !asking && io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y &&
                          io.MousePos.y < b.y;
     if (hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) row_ = i;
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    const bool slider = s.slider_max > s.slider_min;
+    // A slider's bar on the right of its row: a click or a drag on it sets the value.
+    const float bar_w = 220 * u, bar_x1 = b.x - 40 * u, bar_x0 = bar_x1 - bar_w;
+    if (slider && Enabled(s) && !asking) {
+      const bool on_bar = io.MousePos.x >= bar_x0 - 10 * u && io.MousePos.x <= bar_x1 + 10 * u && io.MousePos.y >= a.y &&
+                          io.MousePos.y < b.y;
+      if (on_bar && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) dragging_ = i;
+      if (dragging_ == i && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        row_ = i;
+        const float f = std::clamp((io.MousePos.x - bar_x0) / bar_w, 0.0f, 1.0f);
+        SetSlider(settings[i], s.slider_min + int(std::lround(f * float(s.slider_max - s.slider_min))));
+      }
+    }
+    if (hovered && !slider && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
       row_ = i;
       Step(1);
     }
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    if (hovered && !slider && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
       row_ = i;
       Step(-1);
     }
@@ -345,6 +402,17 @@ void SettingsScreen::Draw(float width, float height) {
     const ImU32 greyed = Rgba(110, 118, 150);
     Text(dl, regular_, 22 * u, {a.x + 18 * u, y + 9 * u}, !enabled ? greyed : changed ? kGold : kWhite, label);
     const float vs = 21 * u;
+    if (slider) {
+      const float f = float(std::atoi(s.value.c_str()) - s.slider_min) / float(s.slider_max - s.slider_min);
+      const float cy = y + row_h * 0.5f - 4 * u;
+      dl->AddRectFilled({bar_x0, cy - 4 * u}, {bar_x1, cy + 4 * u}, Rgba(30, 38, 80), 4 * u);
+      dl->AddRectFilled({bar_x0, cy - 4 * u}, {bar_x0 + bar_w * f, cy + 4 * u}, enabled ? kGold : greyed, 4 * u);
+      dl->AddCircleFilled({bar_x0 + bar_w * f, cy}, (chosen ? 10 : 8) * u, enabled ? kWhite : greyed);
+      const std::string value = ValueLabel(s);
+      Text(dl, bold_, vs, {bar_x0 - 18 * u - TextWidth(bold_, vs, value.c_str()), y + 10 * u}, enabled ? kGold : greyed,
+           value);
+      continue;
+    }
     // The value keeps clear of the label (a folder's path is long).
     const float room = list_w - TextWidth(regular_, 22 * u, label.c_str()) - 120 * u;
     const std::string value = FitStart(bold_, vs, ValueLabel(s), std::max(room, 80 * u));

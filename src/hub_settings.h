@@ -18,7 +18,7 @@ struct HubSettings {
   bool figures_only_mine = true;  // the figure library opens on the owner's figures, not all
   bool figures_marks = true;      // Y marks a figure without a file as owned ("Hab ich")
   bool title_music = true;        // a game's title music while its card is chosen
-  int music_volume = 60;          // its loudness in percent, 10..100 (a colleague found it loud, 2026-10-23)
+  int music_volume = 60;          // its loudness in percent, 0..100 (a colleague found it loud, 2026-10-23)
   bool animations = true;         // screens slide and fade in
   bool fullscreen = false;        // the window fills the screen (F11 / Alt+Enter switch it too)
   bool auto_backup = true;        // the saves copied at a game's start, end and every 60 minutes

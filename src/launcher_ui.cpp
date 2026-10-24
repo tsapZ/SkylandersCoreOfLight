@@ -709,12 +709,9 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     const float t = float(ImGui::GetTime());
     const float breathe = 0.5f + 0.5f * std::sin(t * 1.6f);
     dl->AddCircle(c, radius + 3 * u, Rgba(255, 210, 90, int(35 + 45 * breathe)), 48, 4.0f * u);
-    for (int i = 0; i < 3; ++i) {
-      const float speed = 1.2f + 0.45f * float(i);
-      auto along = [&](float a) { return ImVec2{c.x + std::cos(a) * radius, c.y + std::sin(a) * radius}; };
-      DrawComet(dl, along, t * speed + float(i) * 2.0944f, 0.085f, 9, 3.0f * u);
-    }
-    for (int i = 0; i < 7; ++i) {
+    // Only particles here (the owner, #26: the three circling sparks were too much); the chosen
+    // card keeps its sparks.
+    for (int i = 0; i < 10; ++i) {
       float phase = t * 0.45f + float(i) * 0.618034f;
       phase -= std::floor(phase);
       const float a = float(i) * 2.399963f + t * 0.25f;
@@ -798,10 +795,17 @@ bool LauncherUi::Draw(float width, float height) {
   UpdateImport();
   {
     std::filesystem::path wanted;
-    if (hub_.title_music && selected_ < found_.size() && !found_[selected_].exe.empty()) {
+    // None while a game starts or runs: Start's music_.Stop() was undone by the launch screen's next
+    // frame, and the music went on behind the game (a colleague's Bazzite, #20).
+    if (hub_.title_music && running_key_.empty() && selected_ < found_.size() && !found_[selected_].exe.empty()) {
       wanted = TitleMusicFile(selected_);
     }
-    music_.SetLoudness(float(hub_.music_volume) / 100.0f);
+    // The volume as the launcher's settings show it while they are open, before it is saved (#24).
+    int volume = hub_.music_volume;
+    if (hub_screen_.is_open()) {
+      if (const std::string v = hub_screen_.EditedValue("music_volume"); !v.empty()) volume = std::atoi(v.c_str());
+    }
+    music_.SetLoudness(float(std::clamp(volume, 0, 100)) / 100.0f);
     music_.Play(wanted);
     music_.Update(ImGui::GetIO().DeltaTime);
   }
@@ -1136,7 +1140,11 @@ void LauncherUi::DrawToast(float width, float height, bool start_screen) {
   const float pad = 18 * u, icon = spinning ? 28 * u : 0.0f;
   const float w = std::min(width - 96 * u, TextWidth(regular_, size, text.c_str()) + 2 * pad + icon);
   const float h = (progress >= 0 ? 66 : 48) * u;
-  const ImVec2 b{width - 48 * u, height - 96 * u}, a{b.x - w, b.y - h};
+  // The start screen has room above its hints; on the other screens (the settings) that is where
+  // the description is, and the toast covered it (the owner, "Nach Updates suchen"): there it sits
+  // at the top right, next to the screen's title.
+  const ImVec2 b = start_screen ? ImVec2{width - 48 * u, height - 96 * u} : ImVec2{width - 48 * u, 30 * u + h};
+  const ImVec2 a{b.x - w, b.y - h};
   dl->AddRectFilled(a, b, Rgba(20, 26, 64, 245), 16 * u);
   dl->AddRect(a, b, kGold, 16 * u, 0, 2 * u);
   if (spinning) {
@@ -1782,7 +1790,15 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (settings_.is_open()) {
     settings_.Draw(width, height);
     // What was saved shows on the card at once.
-    for (const auto& [cvar, value] : settings_.TakeSaved()) found_[settings_game_].settings[cvar] = value;
+    // The loader kept the values from before the save: the next look at the settings reads them
+    // again, or the screen showed the old ones and the change seemed lost (#19; the owner too:
+    // "Nativ" and "HD" were back although the file had the new values).
+    bool saved = false;
+    for (const auto& [cvar, value] : settings_.TakeSaved()) {
+      found_[settings_game_].settings[cvar] = value;
+      saved = true;
+    }
+    if (saved && settings_game_ < loaders_.size()) loaders_[settings_game_] = SettingsLoader();
     // "Shader-Cache leeren" (game_settings.cpp): the game's shaders in the data folder, and in its old
     // folder in Documents for a game from before the move; it builds them again on its next start.
     if (settings_.TakeAction() == "reset_shader_cache" && settings_game_ < found_.size()) {
@@ -1974,7 +1990,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
     std::snprintf(figures, sizeof(figures), german_ ? "%d Figuren im Profil %s" : "%d figures in the profile %s",
                   figures_, ActiveProfile().name.c_str());
   }
-  Text(dl, regular_, 20 * u, {48 * u, height - 92 * u}, kDim, figures);
+  // The figure count line that was here went (the owner: nobody needs it there, #25); the
+  // launcher's version small at the bottom right instead (#22).
+  (void)figures;
+  {
+    const char* version = "Core of Light " COREOFLIGHT_VERSION;
+    Text(dl, regular_, 16 * u, {width - 48 * u - TextWidth(regular_, 16 * u, version), height - 86 * u}, kDim, version);
+  }
   // While a game writes its pictures (UpdatePictureExport), a note at the bottom right: the game
   // runs for it in the background, and should its window show for a moment, it isn't a pop-up to
   // close (a colleague did, 2026-10-23).

@@ -9,6 +9,7 @@
 #include <xinput.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cwchar>
 #include <cwctype>
@@ -60,17 +61,33 @@ inline std::set<std::pair<unsigned long, unsigned long>> XInputVidPids() {
 }
 
 // Looks again which joystick ids have a pad that isn't an XInput one (every two seconds).
-inline void FindGenericPads() {
+// Under Wine / Proton the "IG_" test doesn't hold: Steam Input's virtual Xbox pad (and the real pad
+// behind it) shows up through winmm as well, in the Xbox layout, which the Dual Action layout below
+// turns into other buttons: B also pressed A, so leaving a game's settings changed its first row and
+// "save the changes?" came up with changes nobody made (a colleague's Bazzite, #18, his fix). There
+// every pad is an XInput one (Steam Input gives each pad as one): with an XInput pad connected winmm
+// isn't read, nor Microsoft pads under Wine, nor Valve's virtual pads anywhere.
+inline void FindGenericPads(bool xinput_connected) {
   const auto xinput = XInputVidPids();
+  const bool wine = !WineVersion().empty();
   const UINT n = std::min<UINT>(joyGetNumDevs(), 16);
   for (UINT id = 0; id < 16; ++id) {
     GenericPad& pad = g_generic_pads[id];
     JOYINFOEX info = {sizeof(info), JOY_RETURNALL};
+    const bool was = pad.connected && !pad.skip;
     pad.connected = id < n && joyGetPosEx(id, &info) == JOYERR_NOERROR;
     if (!pad.connected) continue;
     JOYCAPSW caps = {};
+    constexpr unsigned long kValve = 0x28DE, kMicrosoft = 0x045E;
     pad.skip = joyGetDevCapsW(id, &caps, sizeof(caps)) != JOYERR_NOERROR ||
-               xinput.count({caps.wMid, caps.wPid}) != 0;
+               xinput.count({caps.wMid, caps.wPid}) != 0 || caps.wMid == kValve ||
+               (wine && (xinput_connected || caps.wMid == kMicrosoft));
+    if (!pad.skip && !was) {
+      char line[160];
+      std::snprintf(line, sizeof(line), "pads: joystick %u read as a DirectInput pad (vendor %04X, product %04X)", id,
+                    unsigned(caps.wMid), unsigned(caps.wPid));
+      HubLog(line);
+    }
     if (pad.skip) continue;
     const DWORD mins[4] = {caps.wXmin, caps.wYmin, caps.wZmin, caps.wRmin};
     const DWORD maxs[4] = {caps.wXmax, caps.wYmax, caps.wZmax, caps.wRmax};
@@ -199,7 +216,7 @@ inline void UpdatePads(ImGuiIO& io) {
     if (connected[pad]) merge(state.Gamepad);
   }
   // The DirectInput pads, merged the same way.
-  if (recheck) FindGenericPads();
+  if (recheck) FindGenericPads(std::find(connected, connected + XUSER_MAX_COUNT, true) != connected + XUSER_MAX_COUNT);
   for (UINT id = 0; id < 16; ++id) {
     if (!g_generic_pads[id].connected || g_generic_pads[id].skip) continue;
     XINPUT_GAMEPAD g;

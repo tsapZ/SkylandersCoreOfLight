@@ -59,7 +59,7 @@ HubSettings LoadHubSettings() {
   s.figures_marks = IsOn(get("figures_marks"), s.figures_marks);
   s.title_music = IsOn(get("title_music"), s.title_music);
   if (const std::string v = get("music_volume"); !v.empty() && std::all_of(v.begin(), v.end(), ::isdigit) && v.size() < 4) {
-    s.music_volume = std::clamp(std::stoi(v), 10, 100);
+    s.music_volume = std::clamp(std::stoi(v), 0, 100);
   }
   s.animations = IsOn(get("animations"), s.animations);
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
@@ -135,16 +135,18 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     volume.cvar = "music_volume";
     volume.en = "Music volume";
     volume.de = "Musik-Lautst\xC3\xA4rke";
-    volume.help_en = "How loud the title music plays in the launcher (the games' own volume is in their settings).";
-    volume.help_de = "Wie laut die Titelmusik im Hub spielt (die Lautst\xC3\xA4rke der Spiele steht in ihren "
-                     "Einstellungen).";
+    volume.help_en = "How loud the title music plays in the launcher, heard while you change it: left / right "
+                     "(faster when held) or drag the bar. The games' own volume is in their settings.";
+    volume.help_de = "Wie laut die Titelmusik im Hub spielt, schon beim Verstellen zu h\xC3\xB6ren: links / rechts "
+                     "(gehalten schneller) oder den Balken ziehen. Die Lautst\xC3\xA4rke der Spiele steht in ihren "
+                     "Einstellungen.";
     volume.type = "int";
     volume.category = kCategory;
     volume.value = std::to_string(settings.music_volume);
-    for (int percent = 10; percent <= 100; percent += 10) {
-      const std::string label = std::to_string(percent) + " %";
-      volume.options.push_back({std::to_string(percent), label, label});
-    }
+    // A slider 0-100 % (the owner, #24), no fixed steps.
+    volume.slider_min = 0;
+    volume.slider_max = 100;
+    volume.slider_unit = " %";
     page.settings.push_back(std::move(volume));
   }
   page.settings.push_back(Switch("animations", "Animations", "Animationen",

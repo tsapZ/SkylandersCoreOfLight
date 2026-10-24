@@ -30,11 +30,16 @@ class SettingsScreen {
   std::string TakeAction();
   // A line next to the hints for a few seconds (what an action did).
   void ShowMessage(const std::string& text);
+  // A setting's value as it is on the screen now, unsaved changes included (the music volume is
+  // heard while it changes); empty when the screen doesn't have it.
+  std::string EditedValue(const std::string& cvar) const;
   // What a button row shows as its value (the games folder after choosing one).
   void SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de);
 
  private:
   void Step(int step);
+  // A slider's value set (clamped), as Step does for the other rows.
+  void SetSlider(GameSetting& s, int value);
   void Save();
   std::string ValueLabel(const GameSetting& s) const;
   // Whether a row can be changed: its enabled_by setting is on (as edited so far), or it has none.
@@ -53,6 +58,7 @@ class SettingsScreen {
   // The first row shown: it follows the chosen row only when that leaves the view (a list centred
   // on it jumped under a resting mouse). The wheel's turns not yet a whole row (a touchpad's).
   int scroll_ = 0;
+  int dragging_ = -1;  // the slider row the mouse drags (#24), until the button is up
   float wheel_ = 0.0f;
   // Changed settings: cvar -> (category, type, value).
   struct Pending {

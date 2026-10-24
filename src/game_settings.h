@@ -32,6 +32,10 @@ struct GameSetting {
   // keyboard's player with the keyboard off. Empty: always.
   std::string enabled_by;
   std::vector<SettingChoice> options;
+  // A slider from slider_min to slider_max (an "int" without options, the launcher's own settings:
+  // the music volume) when slider_max > slider_min; its value shows with slider_unit (" %").
+  int slider_min = 0, slider_max = 0;
+  std::string slider_unit;
   // A preset: what each option sets, (cvar, value, category, type).
   struct Assignment {
     std::string cvar, value, category, type;
