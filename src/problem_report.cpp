@@ -239,7 +239,9 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   info += "Graphics cards:\n" + GraphicsCards();
   wchar_t exe[MAX_PATH] = {};
   GetModuleFileNameW(nullptr, exe, MAX_PATH);
-  info += "Launcher: " + Utf8(fs::path(exe)) + "\n\nGames:\n";
+  info += "Launcher: " + Utf8(fs::path(exe)) + "\n";
+  // Where the saves and figures are (the one data folder since 0.2.0-beta.3, data_move.h).
+  info += "Data folder: " + Utf8(SkylandersDir()) + "\n\nGames:\n";
   const auto& games = AllGames();
   for (size_t i = 0; i < games.size(); ++i) {
     const Game& game = games[i];

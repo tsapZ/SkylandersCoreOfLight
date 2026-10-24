@@ -335,7 +335,8 @@ void SetupScreen::DrawWelcome(float width, float height) {
     DataFolderLabels(en, de);
     const std::string where = german_ ? de : en;
     const float w = std::min(width - bx - left, 760 * u);
-    Button(dl, bold_, u, bx, dy, w, FitStart(regular_, 20 * u, where, w - 40 * u), selected_ == 1);
+    // Shortened at the front in the font the button draws with (a long path ran past it).
+    Button(dl, bold_, u, bx, dy, w, FitStart(bold_, 22 * u, where, w - 48 * u), selected_ == 1);
     Text(dl, regular_, 18 * u, {bx, dy + 58 * u}, kDim,
          german_ ? "Spielst\xC3\xA4nde, Erfolge und Figuren aller Spiele  \xC2\xB7  A: anderer Ordner"
                  : "Saves, achievements and figures of every game  \xC2\xB7  A: another folder");

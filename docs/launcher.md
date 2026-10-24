@@ -147,9 +147,14 @@ exe and gets out of the way while the game runs; no game needs it.
 - **The launcher's own settings** (LB / Q, `src/hub_settings.cpp`), in the same screen as a game's,
   saved in `Documents\Skylanders\coreoflight.toml`: the menus' language (Automatisch / Deutsch /
   English), whether the figure library opens on the owner's figures or on all, the "Hab ich" marks,
-  the title music and its volume (10-100 %, 60 at first), the animations, fullscreen (also at the
-  start, from the first frame; `--fullscreen` on the command line, e.g. Steam's launch options on
-  Bazzite or SteamOS, starts it in fullscreen whatever the setting says), the games folder.
+  the title music and its volume (a slider 0-100 %, 60 at first: dragged with the mouse, left /
+  right faster the longer held, heard while it changes before it is saved), the animations,
+  fullscreen (also at the start, from the first frame; `--fullscreen` on the command line, e.g.
+  Steam's launch options on Bazzite or SteamOS, starts it in fullscreen whatever the setting says),
+  the games folder, the data folder. In every settings screen the mouse wheel scrolls the list
+  and leaves the chosen row where it is (the pad and the arrow keys move the choice); after a save
+  a game's settings are read again, so they show what was saved. The launcher's version is at the
+  bottom right of the start screen.
 - **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
   one text file onto the desktop, `Skylanders-problem-report-<date>.txt` (the same name in German), and shows it in Explorer.
   Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with
@@ -216,11 +221,15 @@ exe and gets out of the way while the game runs; no game needs it.
 - **`--offline`**: no releases, no check, nothing downloaded or installed (scripted tests; one
   without it once installed two real games into a scratch folder). Games installed from the
   launcher get no desktop shortcut each (`/MERGETASKS=!desktopicon`).
-- Counts the figure files in the shared folder `Documents\Skylanders\Figures`.
+- Counts the figure files in the shared folder `Documents\Skylanders\Figures` (for the library;
+  the start screen no longer prints the count).
 - **DirectInput pads** (the Logitech Dual Action and the like, which XInput doesn't see) drive the
   launcher as well: read through Windows' joystick API with SDL's layout for the Dual Action
   (1-4 = X A B Y, 5 / 6 shoulders, 7 / 8 triggers, 9 Back, 10 Start, the hat as the d-pad);
   XInput pads, which show up there too, are left out by their HID path ("IG_"), `src/pad_state.h`.
+  Under Wine / Proton that path test doesn't hold (Steam Input's virtual Xbox pad came through
+  both ways and B also pressed A, #18): there no winmm pad is read while an XInput one is
+  connected, nor Microsoft pads; Valve's pads never; each winmm pad that is read is logged.
 - **The connected controllers** are shown left of the profile at the top right, as on the Xbox:
   each pad's number (its XInput slot, 1-4) and, for a pad on batteries, three bars
   (`XInputGetBatteryInformation`, asked every ten seconds; red at one bar).
