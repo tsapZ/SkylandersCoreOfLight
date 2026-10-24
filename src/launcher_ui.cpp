@@ -86,6 +86,40 @@ void ButtonHint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char
   Text(dl, font, size, {x, pos.y}, kWhite, label);
 }
 
+// The point `d` along a rounded rectangle's border, clockwise from the end of its top left corner.
+ImVec2 AlongRoundedRect(ImVec2 a, ImVec2 b, float r, float d) {
+  const float w = b.x - a.x - 2 * r, h = b.y - a.y - 2 * r, q = 1.5707963f * r;
+  const float total = 2 * (w + h) + 4 * q;
+  d = std::fmod(d, total);
+  if (d < 0) d += total;
+  if (d < w) return {a.x + r + d, a.y};
+  d -= w;
+  if (d < q) return {b.x - r + std::sin(d / r) * r, a.y + r - std::cos(d / r) * r};
+  d -= q;
+  if (d < h) return {b.x, a.y + r + d};
+  d -= h;
+  if (d < q) return {b.x - r + std::cos(d / r) * r, b.y - r + std::sin(d / r) * r};
+  d -= q;
+  if (d < w) return {b.x - r - d, b.y};
+  d -= w;
+  if (d < q) return {a.x + r - std::sin(d / r) * r, b.y - r + std::cos(d / r) * r};
+  d -= q;
+  if (d < h) return {a.x, b.y - r - d};
+  d -= h;
+  return {a.x + r - std::cos(d / r) * r, a.y + r - std::sin(d / r) * r};
+}
+
+// A spark of light with a fading tail, `head` the position of its front along a path.
+template <typename Along>
+void DrawComet(ImDrawList* dl, Along along, float head, float step, int tail, float size) {
+  for (int k = tail - 1; k >= 0; --k) {
+    const float fade = 1.0f - float(k) / float(tail);
+    dl->AddCircleFilled(along(head - float(k) * step), size * (0.35f + 0.65f * fade),
+                        Rgba(255, 236, 170, int(235 * fade * fade)));
+  }
+  dl->AddCircleFilled(along(head), size * 2.6f, Rgba(255, 215, 110, 55));
+}
+
 }  // namespace
 
 void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular, ImFont* bold) {
@@ -460,6 +494,14 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
   dl->AddRectFilled({x, y}, {x + w, y + h}, Rgba(24, 30, 70, 235), r);
   dl->AddRect({x, y}, {x + w, y + h}, selected ? kGold : Rgba(90, 100, 150), r, 0, selected ? 5 * s : 2 * s);
+  // Two sparks running round the chosen card's border (the owner's wish for more life, 2026-10-24).
+  if (selected && hub_.animations) {
+    const float head = float(ImGui::GetTime()) * 260 * s;
+    const float half = (w + h) - 4 * r + 3.14159265f * r;  // half the border
+    auto along = [&](float d) { return AlongRoundedRect({x, y}, {x + w, y + h}, r, d); };
+    DrawComet(dl, along, head, 8 * s, 14, 4.6f * s);
+    DrawComet(dl, along, head + half, 8 * s, 14, 4.6f * s);
+  }
   char year[8];
   std::snprintf(year, sizeof(year), "%d", game.year);
   // The disc's dashboard tile (its logo, 420x320) at the top, once the game is set up (nxe_art.h);
@@ -660,6 +702,27 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
          initial.c_str());
   }
   dl->AddCircle(c, radius, kGold, 48, 2.5f * u);
+  // Light round the profile's border (the owner's wish, 2026-10-24: little sparks along it): a glow
+  // that breathes, three sparks circling at their own pace and motes drifting off. Off with the
+  // "Animationen" setting.
+  if (hub_.animations) {
+    const float t = float(ImGui::GetTime());
+    const float breathe = 0.5f + 0.5f * std::sin(t * 1.6f);
+    dl->AddCircle(c, radius + 3 * u, Rgba(255, 210, 90, int(35 + 45 * breathe)), 48, 4.0f * u);
+    for (int i = 0; i < 3; ++i) {
+      const float speed = 1.2f + 0.45f * float(i);
+      auto along = [&](float a) { return ImVec2{c.x + std::cos(a) * radius, c.y + std::sin(a) * radius}; };
+      DrawComet(dl, along, t * speed + float(i) * 2.0944f, 0.085f, 9, 3.0f * u);
+    }
+    for (int i = 0; i < 7; ++i) {
+      float phase = t * 0.45f + float(i) * 0.618034f;
+      phase -= std::floor(phase);
+      const float a = float(i) * 2.399963f + t * 0.25f;
+      const float d = radius + 4 * u + phase * 18 * u;
+      dl->AddCircleFilled({c.x + std::cos(a) * d, c.y + std::sin(a) * d}, 1.7f * u,
+                          Rgba(255, 230, 160, int(200 * (1.0f - phase) * std::min(1.0f, phase * 5.0f))));
+    }
+  }
   // The connected controllers left of it, as on the Xbox: each pad's number and its battery
   // (three bars; a wired pad has none).
   float px = left - 26 * u;

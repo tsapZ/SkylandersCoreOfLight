@@ -148,7 +148,10 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     page.settings.push_back(std::move(volume));
   }
   page.settings.push_back(Switch("animations", "Animations", "Animationen",
-                                 "Screens slide and fade in.", "Bildschirme gleiten und blenden ein.",
+                                 "Screens slide and fade in; sparks of light run round the chosen game's card and "
+                                 "the profile picture.",
+                                 "Bildschirme gleiten und blenden ein; Lichtfunken laufen um die gew\xC3\xA4hlte "
+                                 "Spielkarte und das Profilbild.",
                                  settings.animations));
   page.settings.push_back(Switch("fullscreen", "Fullscreen (also at start)", "Vollbild (auch beim Start)",
                                  "The launcher fills the screen and starts that way, for the TV or a handheld. F11 or "
