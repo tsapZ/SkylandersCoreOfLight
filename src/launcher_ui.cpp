@@ -1614,7 +1614,11 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
       work_->download = 0;
       STARTUPINFOW startup = {sizeof(startup)};
       PROCESS_INFORMATION info = {};
-      std::wstring command = L"\"" + work_->file.wstring() + L"\" /SILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH=1";
+      // Into the folder this launcher runs from: under Wine the setup took its default folder in the
+      // prefix and started the new launcher there, while Steam's shortcut pointed at the old one (a
+      // colleague's Bazzite, noted in #19).
+      std::wstring command = L"\"" + work_->file.wstring() + L"\" /SILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH=1 \"/DIR=" +
+                             launcher_dir_.wstring() + L"\"";
       if (CreateProcessW(work_->file.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &info)) {
         CloseHandle(info.hThread);
         CloseHandle(info.hProcess);
