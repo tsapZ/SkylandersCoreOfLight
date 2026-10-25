@@ -22,6 +22,7 @@ struct HubSettings {
   bool animations = true;         // screens slide and fade in
   bool fullscreen = false;        // the window fills the screen (F11 / Alt+Enter switch it too)
   bool auto_backup = true;        // the saves copied at a game's start, end and every 60 minutes
+  bool auto_update_games = true;  // a game's update found by the daily check installs without asking (#27)
   bool setup_done = false;        // the first-run setup (setup_ui.h) finished or skipped
   std::string games_dir;          // where the games are and new ones go (the setup or "Spiele-Ordner"); empty: %LOCALAPPDATA%\Programs
   bool old_data_kept = false;     // the old per-game folders were kept when asked (data_move.h): not asked again

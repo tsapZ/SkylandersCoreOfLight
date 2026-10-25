@@ -64,6 +64,7 @@ HubSettings LoadHubSettings() {
   s.animations = IsOn(get("animations"), s.animations);
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
   s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
+  s.auto_update_games = IsOn(get("auto_update_games"), s.auto_update_games);
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   s.games_dir = get("games_dir");
   s.old_data_kept = IsOn(get("old_data_kept"), s.old_data_kept);
@@ -235,6 +236,15 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   import.type = "action";
   import.options = {{"", "Choose a folder", "Ordner w\xC3\xA4hlen"}};
   page.settings.push_back(std::move(import));
+  // The games' updates without asking (#27, the owner's wish: on unless someone wants to keep a version).
+  page.settings.push_back(Switch(
+      "auto_update_games", "Update games by themselves", "Spiele automatisch aktualisieren",
+      "On: a game's new version, found by the daily check, is installed right away, one game after the "
+      "other (a running game first ends).\nOff: the update waits on the game's card until you pick it.",
+      "An: Die neue Version eines Spiels, gefunden bei der t\xC3\xA4glichen Suche, wird gleich installiert, "
+      "ein Spiel nach dem anderen (ein laufendes erst nach dem Beenden).\nAus: Das Update wartet auf der "
+      "Karte des Spiels, bis du es w\xC3\xA4hlst.",
+      settings.auto_update_games));
   // A button: the updates from GitHub (updates.h), looked for when A is pressed on it.
   GameSetting updates;
   updates.cvar = "check_updates";

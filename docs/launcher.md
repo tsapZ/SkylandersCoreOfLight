@@ -73,7 +73,11 @@ exe and gets out of the way while the game runs; no game needs it.
   after the other (download, silent setup), the button then says "Aktualisiere 2 von 3: Giants" and
   the cards "Wird aktualisiert ..." / "Update wartet ..."; a queued game can't be started meanwhile,
   a running one waits until it has ended, and at the end "Alle Spiele sind aktualisiert" or which
-  weren't. A newer launcher comes last (it restarts). **"Nach Updates suchen"** in the launcher's
+  weren't. A newer launcher comes last (it restarts). **"Spiele automatisch aktualisieren"** (#27,
+  a launcher setting, on by default) puts the games' updates into that queue without asking, after
+  the daily check and at a start when the last check found some ("Spiele werden aktualisiert:
+  Giants, Trap Team" at the bottom right); off, they wait on the cards. Developer builds are never
+  updated (no version). **"Nach Updates suchen"** in the launcher's
   settings shows "Suche nach Updates ..." at the bottom right of every screen, then "Kein neues
   Update" or "Updates gefunden" with each game's versions and "Herunterladen" (the same queue; its
   progress at the bottom right while another screen is open). Checked in scratch with stand-in

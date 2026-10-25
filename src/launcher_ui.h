@@ -219,6 +219,7 @@ class LauncherUi {
   bool UpdateQueued(size_t index) const;
   bool BeingUpdated(size_t index) const;  // queued, downloading or its setup running
   void StartUpdateAll();
+  void AutoUpdateGames();  // the queue above without asking, when the hub setting is on (#27)
   void UpdateQueue();
   void DrawUpdateAll(float width, float u);
   // The games folder (games.h GamesFolder), chosen in a folder browser of its own: from the hub's

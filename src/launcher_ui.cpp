@@ -137,6 +137,7 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   if (!Offline()) releases_ = LoadKnownReleases();  // --offline: no release, nothing to download
   Refresh();
   if (!Offline() && UpdateCheckDue()) StartUpdateCheck(false);
+  else AutoUpdateGames();  // updates the last check found and that weren't installed yet
   // The first-run setup: on a first start with no game there (a friend's PC, not a developer's).
   if (!hub_.setup_done && std::none_of(found_.begin(), found_.end(), [](const Found& f) { return !f.exe.empty(); })) {
     setup_.Open();
@@ -1127,6 +1128,7 @@ void LauncherUi::UpdateReleases() {
   }
   releases_ = std::move(found);
   if (!install_process_ && !Downloading()) Refresh();
+  if (!manual) AutoUpdateGames();
   if (manual) {
     // A newer launcher: its own question comes up (DrawHubUpdate); the games' updates: asked here.
     hub_update_put_off_ = false;
@@ -1294,6 +1296,20 @@ bool LauncherUi::UpdateQueued(size_t index) const {
 bool LauncherUi::BeingUpdated(size_t index) const {
   const bool installed = index < found_.size() && !found_[index].exe.empty();
   return installed && (UpdateQueued(index) || DownloadingFor(index) || (install_process_ && install_game_ == index));
+}
+
+// "Spiele automatisch aktualisieren" (#27): the games' updates go into the "Alle aktualisieren"
+// queue without asking, with a note saying so. Not offline, not before the first-run setup.
+void LauncherUi::AutoUpdateGames() {
+  if (!hub_.auto_update_games || Offline() || setup_.is_open() || update_total_) return;
+  std::string names;
+  for (size_t i = 0; i < found_.size(); ++i) {
+    if (found_[i].exe.empty() || !UpdateAvailable(i) || BeingUpdated(i)) continue;
+    names += (names.empty() ? "" : ", ") + std::string(german_ ? AllGames()[i].name_de : AllGames()[i].name_en);
+  }
+  if (names.empty()) return;
+  StartUpdateAll();
+  ShowToast((german_ ? "Spiele werden aktualisiert: " : "Updating games: ") + names, 8.0);
 }
 
 // "Alle aktualisieren": every installed game with an update, in the cards' order.
