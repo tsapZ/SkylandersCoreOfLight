@@ -172,6 +172,41 @@ inline int PadBattery(DWORD pad) {
   return level[pad];
 }
 
+// A short buzz on an XInput pad at `percent` of full strength: the controller page (#35) lets the
+// new vibration strength be felt while it changes. PadBuzzUpdate (from UpdatePads, every frame)
+// stops it after a quarter second.
+inline ULONGLONG g_buzz_until[XUSER_MAX_COUNT] = {};
+
+inline bool SetPadVibration(DWORD pad, WORD speed) {
+  using SetState = DWORD(WINAPI*)(DWORD, XINPUT_VIBRATION*);
+  static SetState set_state = [] {
+    for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll"}) {
+      if (HMODULE m = LoadLibraryW(dll)) {
+        if (auto f = reinterpret_cast<SetState>(GetProcAddress(m, "XInputSetState"))) return f;
+      }
+    }
+    return SetState(nullptr);
+  }();
+  XINPUT_VIBRATION v = {speed, speed};
+  return set_state && set_state(pad, &v) == ERROR_SUCCESS;
+}
+
+inline void PadBuzz(DWORD pad, int percent) {
+  if (pad >= XUSER_MAX_COUNT) return;
+  const WORD speed = WORD(65535u * unsigned(std::clamp(percent, 0, 100)) / 100u);
+  if (SetPadVibration(pad, speed)) g_buzz_until[pad] = speed ? GetTickCount64() + 250 : 0;
+}
+
+inline void PadBuzzUpdate() {
+  const ULONGLONG now = GetTickCount64();
+  for (DWORD pad = 0; pad < XUSER_MAX_COUNT; ++pad) {
+    if (g_buzz_until[pad] && now >= g_buzz_until[pad]) {
+      g_buzz_until[pad] = 0;
+      SetPadVibration(pad, 0);
+    }
+  }
+}
+
 // Every connected XInput pad (slots 0-3) as Dear ImGui's gamepad keys, merged: its Win32 backend
 // reads only slot 0, so a second pad, or one that came back in another slot, did nothing
 // (IMGUI_IMPL_WIN32_DISABLE_GAMEPAD is set for it). Which slots are connected is looked at every
@@ -186,6 +221,7 @@ inline void UpdatePads(ImGuiIO& io) {
     }
     return GetState(nullptr);
   }();
+  PadBuzzUpdate();
   bool* connected = g_pad_connected;
   static ULONGLONG checked = 0;
   const ULONGLONG now = GetTickCount64();

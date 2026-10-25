@@ -25,7 +25,14 @@ struct HubSettings {
   bool setup_done = false;        // the first-run setup (setup_ui.h) finished or skipped
   std::string games_dir;          // where the games are and new ones go (the setup or "Spiele-Ordner"); empty: %LOCALAPPDATA%\Programs
   bool old_data_kept = false;     // the old per-game folders were kept when asked (data_move.h): not asked again
+  // How strongly player 1's and 2's controllers vibrate, 0-100 % (#35): the games' pad_rumble_p1/2
+  // (their F4 > Controller), written into every game's settings file when changed here; -1 while
+  // not set here (the launcher then shows a game's value).
+  int pad_rumble[2] = {-1, -1};
 };
+
+// The "Controller" page's index in HubSettingsPages (a click on a pad at the top opens on it).
+constexpr int kHubControllerPage = 1;
 
 std::filesystem::path HubSettingsFile();
 HubSettings LoadHubSettings();

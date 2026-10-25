@@ -76,13 +76,15 @@ void SettingsScreen::Init(ImFont* regular, ImFont* bold, bool german) {
   german_ = german;
 }
 
-void SettingsScreen::Open(const std::string& title, SettingsLoader* loader, std::filesystem::path background) {
+void SettingsScreen::Open(const std::string& title, SettingsLoader* loader, std::filesystem::path background,
+                          int page) {
   open_ = true;
   title_ = title;
   background_ = std::move(background);
   loader_ = loader;
   edit_.reset();
-  page_ = row_ = scroll_ = 0;
+  page_ = page;  // Draw keeps it within the pages
+  row_ = scroll_ = 0;
   wheel_ = 0.0f;
   changes_.clear();
   confirm_discard_ = false;

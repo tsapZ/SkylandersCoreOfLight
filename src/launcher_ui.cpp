@@ -665,6 +665,24 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
 }
 
+void LauncherUi::OpenHubSettings(int page) {
+  // The vibration rows show this launcher's value, or while it has none the first game's (its F4
+  // may have set one), else the games' default of 100 %.
+  HubSettings shown = hub_;
+  for (int p = 0; p < 2; ++p) {
+    if (shown.pad_rumble[p] >= 0) continue;
+    for (const Found& f : found_) {
+      auto it = f.settings.find(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
+      if (f.exe.empty() || it == f.settings.end()) continue;
+      shown.pad_rumble[p] = std::clamp(std::atoi(it->second.c_str()), 0, 100);
+      break;
+    }
+  }
+  hub_loader_.SetReady(HubSettingsPages(shown));
+  hub_screen_.Open(german_ ? "Einstellungen des Hubs" : "Launcher settings", &hub_loader_, {}, page);
+  for (int p = 0; p < 2; ++p) rumble_seen_[p].clear();
+}
+
 bool LauncherUi::DrawProfileBadge(float width, float u) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const ImGuiIO& io = ImGui::GetIO();
@@ -721,13 +739,20 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     }
   }
   // The connected controllers left of it, as on the Xbox: each pad's number and its battery
-  // (three bars; a wired pad has none).
+  // (three bars; a wired pad has none). A click on one opens the controller settings (#35).
+  pad_clicked_ = false;
+  auto pad_hover = [&](ImVec2 a, ImVec2 b) {
+    if (!ImGui::IsMouseHoveringRect(a, b)) return;
+    dl->AddRectFilled({a.x - 4 * u, a.y - 4 * u}, {b.x + 4 * u, b.y + 4 * u}, Rgba(255, 210, 90, 40), 13 * u);
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) pad_clicked_ = true;
+  };
   float px = left - 26 * u;
   for (int pad = XUSER_MAX_COUNT - 1; pad >= 0; --pad) {
     if (!g_pad_connected[pad]) continue;
     const int level = PadBattery(DWORD(pad));
     const float w = (level >= 0 ? 52 : 32) * u, h = 30 * u;
     const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
+    pad_hover(a, b);
     dl->AddRectFilled(a, b, Rgba(40, 50, 100, 230), 10 * u);
     dl->AddRect(a, b, Rgba(90, 100, 150), 10 * u, 0, 1.5f * u);
     const std::string number = std::to_string(pad + 1);
@@ -745,6 +770,7 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     if (!pad.connected || pad.skip) continue;
     const float w = 40 * u, h = 30 * u;
     const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
+    pad_hover(a, b);
     dl->AddRectFilled(a, b, Rgba(40, 50, 100, 230), 10 * u);
     dl->AddRect(a, b, Rgba(90, 100, 150), 10 * u, 0, 1.5f * u);
     const ImVec2 m{(a.x + b.x) * 0.5f, c.y};
@@ -1757,11 +1783,33 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   if (hub_screen_.is_open()) {
     hub_screen_.Draw(width, height);
+    // A changed vibration strength buzzes that player's pad (XInput slot 1 / 2) at once (#35).
+    for (int p = 0; p < 2; ++p) {
+      const std::string v = hub_screen_.EditedValue(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
+      if (!rumble_seen_[p].empty() && v != rumble_seen_[p] && g_pad_connected[p]) PadBuzz(DWORD(p), std::atoi(v.c_str()));
+      rumble_seen_[p] = v;
+    }
     // Saved settings apply at once (the language with the next frame).
-    if (!hub_screen_.TakeSaved().empty()) {
+    if (const auto saved = hub_screen_.TakeSaved(); !saved.empty()) {
       hub_ = LoadHubSettings();
       ApplyHubSettings();
       LoadProfiles(german_);
+      // The vibration strength goes into every game's settings file, as its F4 > Controller would
+      // write it ([Input], pad_rumble_p1 / _p2).
+      for (const char* cvar : {"pad_rumble_p1", "pad_rumble_p2"}) {
+        auto it = saved.find(cvar);
+        if (it == saved.end()) continue;
+        for (Found& f : found_) {
+          if (f.exe.empty()) continue;
+          const std::filesystem::path toml = f.exe.parent_path() / (UserDataName(f.exe) + ".toml");
+          if (WriteGameSetting(toml, "Input", cvar, "int", it->second)) {
+            f.settings[cvar] = it->second;
+          } else {
+            HubLog("controller page: could not write " + std::string(cvar) + " into " +
+                   std::string(reinterpret_cast<const char*>(toml.u8string().c_str())));
+          }
+        }
+      }
     }
     // "Problem melden": the report on the desktop, shown in Explorer.
     const std::string action = hub_screen_.TakeAction();
@@ -1909,10 +1957,12 @@ bool LauncherUi::DrawScreens(float width, float height) {
     figures_screen_.Configure(hub_.figures_only_mine, hub_.figures_marks);
     figures_screen_.Open(FiguresDir());
   }
-  // LB / Q: the launcher's own settings (hub_settings.h).
+  // LB / Q: the launcher's own settings (hub_settings.h); a click on a pad at the top: their
+  // "Controller" page.
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) || ImGui::IsKeyPressed(ImGuiKey_Q, false)) {
-    hub_loader_.SetReady(HubSettingsPages(hub_));
-    hub_screen_.Open(german_ ? "Einstellungen des Hubs" : "Launcher settings", &hub_loader_);
+    OpenHubSettings(0);
+  } else if (pad_clicked_) {
+    OpenHubSettings(kHubControllerPage);
   }
   // RB / E: the chosen game's achievements (achievements_ui.h).
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_E, false)) {

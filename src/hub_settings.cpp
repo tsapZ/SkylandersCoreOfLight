@@ -67,6 +67,12 @@ HubSettings LoadHubSettings() {
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   s.games_dir = get("games_dir");
   s.old_data_kept = IsOn(get("old_data_kept"), s.old_data_kept);
+  for (int p = 0; p < 2; ++p) {
+    const std::string v = get(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
+    if (!v.empty() && v.size() < 4 && std::all_of(v.begin(), v.end(), ::isdigit)) {
+      s.pad_rumble[p] = std::clamp(std::stoi(v), 0, 100);
+    }
+  }
   return s;
 }
 
@@ -242,6 +248,30 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   report.options = {{"", "Make the report", "Bericht erstellen"}};
   page.settings.push_back(report);
   out->pages.push_back(std::move(page));
+  // The controllers (#35, the owner's idea: a click on a pad at the top): the vibration strength per
+  // player, the same setting as each game's F4 > Controller, set here once for all games.
+  GameSettingsPage pads{"Controller", "Controller", {}};
+  for (int p = 0; p < 2; ++p) {
+    GameSetting rumble;
+    rumble.cvar = p == 0 ? "pad_rumble_p1" : "pad_rumble_p2";
+    rumble.en = p == 0 ? "Vibration, player 1" : "Vibration, player 2";
+    rumble.de = p == 0 ? "Vibration, Spieler 1" : "Vibration, Spieler 2";
+    rumble.help_en = "How strongly this player's controller vibrates in every game (the same as F4 > Controller "
+                     "in a game). The controller buzzes briefly at each change, so you feel the new strength; "
+                     "saving writes it into all your games.";
+    rumble.help_de = "Wie stark der Controller dieses Spielers in allen Spielen vibriert (wie F4 > Controller "
+                     "im Spiel). Bei jeder \xC3\x84nderung vibriert er kurz, so sp\xC3\xBCrst du die neue "
+                     "St\xC3\xA4rke; Speichern tr\xC3\xA4gt sie in alle deine Spiele ein.";
+    rumble.type = "int";
+    rumble.category = kCategory;
+    rumble.value = std::to_string(settings.pad_rumble[p] < 0 ? 100 : settings.pad_rumble[p]);
+    for (int v = 0; v <= 100; v += 10) {
+      const std::string label = v == 0 ? std::string() : std::to_string(v) + " %";
+      rumble.options.push_back({std::to_string(v), v == 0 ? "Off" : label, v == 0 ? "Aus" : label});
+    }
+    pads.settings.push_back(std::move(rumble));
+  }
+  out->pages.push_back(std::move(pads));
   return out;
 }
 

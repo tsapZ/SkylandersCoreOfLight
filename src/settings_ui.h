@@ -19,8 +19,10 @@ class SettingsScreen {
  public:
   void Init(ImFont* regular, ImFont* bold, bool german);
   // Opens the screen for a game; its pages come from `loader` (maybe still loading).
-  // `background`: the game's dashboard background (nxe_art.h), or empty.
-  void Open(const std::string& title, SettingsLoader* loader, std::filesystem::path background = {});
+  // `background`: the game's dashboard background (nxe_art.h), or empty. `page`: the page it opens
+  // on (the launcher's "Controller" page when a pad at the top is clicked).
+  void Open(const std::string& title, SettingsLoader* loader, std::filesystem::path background = {},
+            int page = 0);
   bool is_open() const { return open_; }
   // Draws the screen into the whole window; closes itself on B / Escape.
   void Draw(float width, float height);

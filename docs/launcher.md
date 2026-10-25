@@ -151,7 +151,10 @@ exe and gets out of the way while the game runs; no game needs it.
   right faster the longer held, heard while it changes before it is saved), the animations,
   fullscreen (also at the start, from the first frame; `--fullscreen` on the command line, e.g.
   Steam's launch options on Bazzite or SteamOS, starts it in fullscreen whatever the setting says),
-  the games folder, the data folder. In every settings screen the mouse wheel scrolls the list
+  the games folder, the data folder; a second page "Controller" (#35) has the vibration strength
+  of player 1's and 2's controller (0-100 % in 10 % steps, the games' `pad_rumble_p1` / `_p2`):
+  each change buzzes that pad (XInput slot 1 / 2) for a quarter second, and saving writes the value
+  into every game's settings file too (`["Input"]`, as the game's F4 > Controller would). In every settings screen the mouse wheel scrolls the list
   and leaves the chosen row where it is (the pad and the arrow keys move the choice); after a save
   a game's settings are read again, so they show what was saved. The launcher's version is at the
   bottom right of the start screen.
@@ -232,7 +235,8 @@ exe and gets out of the way while the game runs; no game needs it.
   connected, nor Microsoft pads; Valve's pads never; each winmm pad that is read is logged.
 - **The connected controllers** are shown left of the profile at the top right, as on the Xbox:
   each pad's number (its XInput slot, 1-4) and, for a pad on batteries, three bars
-  (`XInputGetBatteryInformation`, asked every ten seconds; red at one bar).
+  (`XInputGetBatteryInformation`, asked every ten seconds; red at one bar). A click on a pad opens the
+  launcher's settings on their "Controller" page (#35).
 - **The figure library** (#8, Start / F): every figure in that folder with its level, XP to the
   next level, gold, play time, upgrades, nickname and the day it was last played, by game (LB /
   RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built

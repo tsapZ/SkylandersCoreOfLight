@@ -59,8 +59,14 @@ class LauncherUi {
   void Start(size_t index);
   void OpenSettings(size_t index);
   void DrawCard(size_t index, float x, float y, float w, float h, bool selected);
-  // The active profile at the top right; true when clicked.
+  // The active profile at the top right; true when clicked. A click on a pad left of it sets
+  // pad_clicked_ (its settings, #35).
   bool DrawProfileBadge(float width, float u);
+  bool pad_clicked_ = false;
+  // The launcher's own settings, on `page` (hub_settings.h kHubControllerPage for the pads).
+  void OpenHubSettings(int page);
+  // The vibration rows' values last seen on the controller page: a change buzzes that pad.
+  std::string rumble_seen_[2];
   // Each game's achievements of the active profile, for its card.
   void CountAchievements();
   // The launcher's own settings (hub_settings.h) into every screen: the language, the library.
