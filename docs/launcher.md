@@ -135,7 +135,13 @@ exe and gets out of the way while the game runs; no game needs it.
 - **Hints for the input in use** (`src/hints.cpp`): the button hints at the bottom of every screen
   show the controller's buttons after a pad button or stick and the keyboard's keys (key caps:
   Enter, Esc, Tab, D, F, ...) after a key, a mouse move or a click, cross-fading in a quarter
-  second. A screen whose key differs from the usual one names it. **A click on a hint** presses its
+  second. A screen whose key differs from the usual one names it. **The controller's own buttons**
+  (#29): after a press on a Sony pad (DirectInput, vendor 054C) the hints show PlayStation's
+  symbols (cross, circle, square, triangle) and L1 / R1 / L2 / R2, Options, Share; on a Nintendo pad
+  (057E) its letters in their places (B where the Xbox has A) and L / R / ZL / ZR, + and -. An
+  XInput pad (Xbox, Steam Input, a Steam Deck) keeps the Xbox look. `--hint_pad=playstation` or
+  `nintendo` shows one of them from the start (to see them without such a pad). The games' menus do
+  the same (skylanders-portal menu_draw `Hint`). **A click on a hint** presses its
   button for a frame (a colleague's wish, 2026-10-23: "Speichern", "Zurück", "Seite" with the
   mouse): every `Hint()` leaves its area, and the click's press goes in as the controller's button
   (also without a controller connected), so each screen's own handling runs; "LB/RB" takes the

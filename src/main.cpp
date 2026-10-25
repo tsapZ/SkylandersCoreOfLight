@@ -300,6 +300,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       } else if (arg == L"--offline") {
         // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
         coreoflight::SetOffline(true);
+      } else if (arg == L"--hint_pad=playstation" || arg == L"--hint_pad=nintendo") {
+        // The hints as that controller's from the start, whatever pad is used (#29; to see them
+        // without such a pad).
+        coreoflight::ForceHintPad(arg.ends_with(L"playstation") ? coreoflight::HintPad::kPlayStation
+                                                                : coreoflight::HintPad::kNintendo);
       } else if (arg == L"--fullscreen") {
         // Fullscreen for this start, whatever the setting says (Steam's launch options on a
         // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).

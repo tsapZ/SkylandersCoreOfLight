@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "hints.h"
 #include "hub_log.h"
 #include "imgui.h"
 
@@ -52,6 +53,7 @@ inline XInputGetStateFn PadGetState() {
 // in its HID path, as Microsoft's XInput-and-DirectInput note tells them apart) is left out.
 struct GenericPad {
   bool connected = false, skip = false;
+  unsigned long vendor = 0;  // its USB vendor id (Sony, Nintendo: their button pictures in the hints)
   DWORD min[4] = {0, 0, 0, 0}, max[4] = {65535, 65535, 65535, 65535};  // X, Y, Z, R
 };
 inline GenericPad g_generic_pads[16];
@@ -112,6 +114,7 @@ inline void FindGenericPads(bool xinput_connected) {
       HubLog(line);
     }
     if (pad.skip) continue;
+    pad.vendor = caps.wMid;
     const DWORD mins[4] = {caps.wXmin, caps.wYmin, caps.wZmin, caps.wRmin};
     const DWORD maxs[4] = {caps.wXmax, caps.wYmax, caps.wZmax, caps.wRmax};
     for (int a = 0; a < 4; ++a) {
@@ -287,15 +290,24 @@ inline void UpdatePads(ImGuiIO& io) {
   for (DWORD pad = 0; PadGetState() && pad < XUSER_MAX_COUNT; ++pad) {
     if (!g_pad_connected[pad]) continue;
     XINPUT_STATE state = {};
-    if (PadGetState()(pad, &state) == ERROR_SUCCESS) merge(state.Gamepad);
+    if (PadGetState()(pad, &state) != ERROR_SUCCESS) continue;
+    merge(state.Gamepad);
+    if (state.Gamepad.wButtons) SetHintPad(HintPad::kXbox);
   }
-  // The DirectInput pads, merged the same way.
+  // The DirectInput pads, merged the same way; the hints follow the maker of the one pressed (#29).
   GenericPad generic[16];
   GenericPadsNow(generic);
   for (UINT id = 0; id < 16; ++id) {
     if (!generic[id].connected || generic[id].skip) continue;
     XINPUT_GAMEPAD g;
-    if (ReadGenericPad(id, generic[id], g)) merge(g);
+    if (!ReadGenericPad(id, generic[id], g)) continue;
+    merge(g);
+    if (g.wButtons) {
+      constexpr unsigned long kSony = 0x054C, kNintendo = 0x057E;
+      SetHintPad(generic[id].vendor == kSony       ? HintPad::kPlayStation
+                 : generic[id].vendor == kNintendo ? HintPad::kNintendo
+                                                   : HintPad::kXbox);
+    }
   }
   io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
   if (!any) return;

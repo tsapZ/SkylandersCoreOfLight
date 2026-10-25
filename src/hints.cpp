@@ -63,9 +63,53 @@ ImGuiKey PadKey(std::string_view button) {
   return ImGuiKey_None;
 }
 
+HintPad g_pad = HintPad::kXbox;
+
+// A button as the controller in use prints it ("LB/RB" -> "L1/R1" or "L/R", "Start" -> "Options"
+// or "+", Nintendo's A where the Xbox has B); the Xbox names as they are.
+const char* ShownButton(const char* button) {
+  if (g_pad == HintPad::kXbox) return button;
+  static const struct {
+    const char* xbox;
+    const char* ps;
+    const char* nintendo;
+  } kNames[] = {
+      {"A", "A", "B"},          {"B", "B", "A"},          {"X", "X", "Y"},          {"Y", "Y", "X"},
+      {"LB", "L1", "L"},        {"RB", "R1", "R"},        {"LT", "L2", "ZL"},       {"RT", "R2", "ZR"},
+      {"LB/RB", "L1/R1", "L/R"}, {"LT/RT", "L2/R2", "ZL/ZR"}, {"Start", "Options", "+"}, {"Back", "Share", "-"},
+      {"L3", "L3", "L3"},       {"R3", "R3", "R3"},
+  };
+  for (const auto& n : kNames) {
+    if (std::strcmp(n.xbox, button) == 0) return g_pad == HintPad::kPlayStation ? n.ps : n.nintendo;
+  }
+  return button;
+}
+
+bool FaceButton(const char* button) {
+  return button[0] && !button[1] && std::strchr("ABXY", button[0]) != nullptr;
+}
+
+// A PlayStation face button's symbol in its colour, centred on `c` (radius `r` of the circle).
+void PsSymbol(ImDrawList* dl, char button, ImVec2 c, float r, float alpha) {
+  const float t = std::max(1.5f, r * 0.17f), s = r * 0.5f;
+  if (button == 'A') {  // cross
+    const ImU32 col = WithAlpha(IM_COL32(124, 178, 232, 255), alpha);
+    dl->AddLine({c.x - s, c.y - s}, {c.x + s, c.y + s}, col, t);
+    dl->AddLine({c.x - s, c.y + s}, {c.x + s, c.y - s}, col, t);
+  } else if (button == 'B') {  // circle
+    dl->AddCircle(c, s, WithAlpha(IM_COL32(232, 92, 92, 255), alpha), 0, t);
+  } else if (button == 'X') {  // square
+    dl->AddRect({c.x - s * 0.85f, c.y - s * 0.85f}, {c.x + s * 0.85f, c.y + s * 0.85f},
+                WithAlpha(IM_COL32(226, 140, 200, 255), alpha), 0, 0, t);
+  } else if (button == 'Y') {  // triangle
+    dl->AddTriangle({c.x, c.y - s}, {c.x - s * 0.95f, c.y + s * 0.7f}, {c.x + s * 0.95f, c.y + s * 0.7f},
+                    WithAlpha(IM_COL32(90, 200, 160, 255), alpha), t);
+  }
+}
+
 // The controller button: a pill (a circle for one letter) in the button's colour.
 float PadWidth(ImFont* font, float size, const char* button) {
-  return std::max(Width(font, size * 0.8f, button) + size * 0.5f, size * 1.24f);
+  return std::max(Width(font, size * 0.8f, ShownButton(button)) + size * 0.5f, size * 1.24f);
 }
 
 // The keyboard key: a key cap, dark with a light edge.
@@ -115,6 +159,17 @@ void UpdateHintInput() {
   }
 }
 
+bool g_pad_forced = false;
+
+void SetHintPad(HintPad pad) {
+  if (!g_pad_forced) g_pad = pad;
+}
+
+void ForceHintPad(HintPad pad) {
+  g_pad = pad;
+  g_pad_forced = true;
+}
+
 void KeepClickedButton(ImGuiIO& io) {
   // Dear ImGui clears the controller's buttons each frame while the backend has no controller (no
   // pad connected: a mouse user, whom this is for); the frame a click's press is down it has one.
@@ -135,10 +190,22 @@ float HintGlyph(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char
   const float t = *key ? g_shown : 0.0f;
   const float pad_w = PadWidth(font, size, button), key_w = *key ? KeyWidth(font, size, key) : pad_w;
   const float top = pos.y + size * 0.55f - size * 0.62f, h = size * 1.24f;
-  if (t < 1.0f) {
+  if (t < 1.0f && g_pad != HintPad::kXbox && FaceButton(button)) {
+    // A PlayStation or Nintendo face button: dark, with the symbol or the letter of its place.
+    const ImVec2 c{pos.x + pad_w * 0.5f, top + h * 0.5f};
+    dl->AddCircleFilled(c, h * 0.5f, WithAlpha(IM_COL32(64, 70, 98, 255), 1.0f - t));
+    if (g_pad == HintPad::kPlayStation) {
+      PsSymbol(dl, button[0], c, h * 0.5f, 1.0f - t);
+    } else {
+      const char* shown = ShownButton(button);
+      dl->AddText(font, size * 0.8f, {pos.x + (pad_w - Width(font, size * 0.8f, shown)) * 0.5f, pos.y + size * 0.13f},
+                  WithAlpha(IM_COL32_WHITE, 1.0f - t), shown);
+    }
+  } else if (t < 1.0f) {
+    const char* shown = ShownButton(button);
     dl->AddRectFilled({pos.x, top}, {pos.x + pad_w, top + h}, WithAlpha(col, 1.0f - t), size * 0.62f);
-    dl->AddText(font, size * 0.8f, {pos.x + (pad_w - Width(font, size * 0.8f, button)) * 0.5f, pos.y + size * 0.13f},
-                WithAlpha(IM_COL32_WHITE, 1.0f - t), button);
+    dl->AddText(font, size * 0.8f, {pos.x + (pad_w - Width(font, size * 0.8f, shown)) * 0.5f, pos.y + size * 0.13f},
+                WithAlpha(IM_COL32_WHITE, 1.0f - t), shown);
   }
   if (t > 0.0f) {
     dl->AddRectFilled({pos.x, top}, {pos.x + key_w, top + h}, WithAlpha(IM_COL32(34, 40, 72, 255), t), size * 0.22f);

@@ -11,6 +11,14 @@ namespace coreoflight {
 // Once a frame, after ImGui::NewFrame: notes which input was used last.
 void UpdateHintInput();
 
+// The kind of controller that pressed a button last (#29): the hints draw its buttons, PlayStation's
+// symbols (cross, circle, ...) and L1 / R1, Nintendo's letters in their places and L / R / ZL / ZR.
+// An XInput pad (Xbox, Steam Input, a Steam Deck) counts as Xbox. Set by UpdatePads.
+enum class HintPad { kXbox, kPlayStation, kNintendo };
+void SetHintPad(HintPad pad);
+// That kind for the whole run, whatever pad is used (--hint_pad=playstation / nintendo).
+void ForceHintPad(HintPad pad);
+
 // Draws a hint's glyph at `pos` (the text line's top left at `size`): the controller button
 // (`button`, "A", "LB/RB", ... in `col`) or the keyboard key (`key`; nullptr: the key the launcher
 // uses for that button everywhere, A Enter, B Esc, LB Q, ...; "": the button only). Returns its
