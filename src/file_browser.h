@@ -29,7 +29,14 @@ class FileBrowser {
   void Open(const std::filesystem::path& folder = {});
   // In folders-only mode: the data folder is being chosen (data_move.h), not the games folder; the
   // title and the "this folder" row say so. Set before Open.
-  void SetForData(bool data) { for_data_ = data; }
+  void SetForData(bool data) {
+    for_data_ = data;
+    for_figures_ = false;
+  }
+  // In folders-only mode: a folder of Imaginators figure files to import (figure_import.h, #34).
+  // Set before Open; SetForData(false) or (true) ends it.
+  void SetForFigures(bool figures) { for_figures_ = figures; }
+  bool for_figures() const { return for_figures_; }
   bool is_open() const { return open_; }
   void Draw(float width, float height);
   // The ISO or folder chosen since the last call, or empty.
@@ -52,6 +59,7 @@ class FileBrowser {
   bool german_ = false;
   bool folders_only_ = false;  // choosing a folder (the games folder), not a disc
   bool for_data_ = false;      // the folder is the data folder's place (SetForData)
+  bool for_figures_ = false;   // the folder has figure files to import (SetForFigures)
   bool open_ = false;
   std::filesystem::path folder_, last_folder_, chosen_;
   std::vector<Entry> entries_;

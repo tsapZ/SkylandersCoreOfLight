@@ -810,6 +810,10 @@ bool LauncherUi::Draw(float width, float height) {
     shown_since_ = now;
   }
   const bool keep = DrawScreens(width, height);
+  // What the figure import brought in (#34), over whatever screen is open.
+  if (const std::string summary = figure_import_.TakeSummary(); !summary.empty()) {
+    ShowToast((german_ ? "Imaginators-Figuren: " : "Imaginators figures: ") + summary, 12.0);
+  }
   DrawToast(width, height, std::string_view(window) == "launcher");
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
   UpdateTitleMusicExport();
@@ -1157,6 +1161,9 @@ void LauncherUi::DrawToast(float width, float height, bool start_screen) {
     text = line;
     spinning = true;
     if (Downloading()) progress = DownloadProgress();
+  } else if (figure_import_.running()) {
+    text = german_ ? "Imaginators pr\xC3\xBC" "ft die Figuren ..." : "Imaginators is checking the figures ...";
+    spinning = true;
   } else if (!toast_.empty() && ImGui::GetTime() < toast_until_) {
     text = toast_;
   }
@@ -1701,7 +1708,14 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (folder_browser_.is_open()) {
     folder_browser_.Draw(width, height);
     if (const std::filesystem::path chosen = folder_browser_.TakeChosen(); !chosen.empty()) {
-      if (folder_for_data_) {
+      if (folder_browser_.for_figures()) {
+        // The Imaginators exe checks the files (figure_import.h); the toast says what came in.
+        static const Found none;
+        size_t im = 0;
+        while (im < AllGames().size() && std::string_view(AllGames()[im].name_en) != "Imaginators") ++im;
+        figure_import_.Start(chosen, im < found_.size() ? found_[im] : none, FiguresDir(), german_);
+        folder_browser_.SetForData(false);
+      } else if (folder_for_data_) {
         ApplyDataFolder(chosen);
       } else {
         ApplyGamesFolder(chosen);
@@ -1822,6 +1836,12 @@ bool LauncherUi::DrawScreens(float width, float height) {
       folder_for_data_ = true;
       folder_browser_.SetForData(true);
       folder_browser_.Open(SkylandersDir().parent_path());
+    }
+    if (action == "import_im_figures" && !figure_import_.running()) {
+      folder_for_data_ = false;
+      folder_browser_.SetForData(false);
+      folder_browser_.SetForFigures(true);
+      folder_browser_.Open();
     }
     if (action == "check_updates") StartUpdateCheck(true);  // DrawToast shows it and what it finds
     if (action == "report_problem") {

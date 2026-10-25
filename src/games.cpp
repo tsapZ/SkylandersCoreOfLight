@@ -608,6 +608,29 @@ bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
   return true;
 }
 
+bool StartFigureCheck(const Found& found, const fs::path& list, void** process) {
+  if (found.exe.empty() || !ExeMentions(found.exe, "check_figures")) return false;
+  wchar_t temp[MAX_PATH] = L"";
+  GetTempPathW(MAX_PATH, temp);
+  const fs::path data = fs::path(temp) / "CoreOfLight" / "figure_check";
+  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--check_figures=" + list.wstring() +
+                               L"\" \"--user_data_root=" + data.wstring() +
+                               L"\" --audio_mute=true --started_by_launcher=true" + HiddenWindowFlag(found);
+  STARTUPINFOW startup = {sizeof(startup)};
+  startup.dwFlags = STARTF_USESHOWWINDOW;
+  startup.wShowWindow = SW_HIDE;
+  PROCESS_INFORMATION info = {};
+  std::wstring line = command;
+  if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                      found.workdir.c_str(), &startup, &info)) {
+    return false;
+  }
+  CloseHandle(info.hThread);
+  KeepWindowsHidden(info.hProcess);
+  *process = info.hProcess;
+  return true;
+}
+
 bool StartPictureExport(size_t game, const Found& found, void** process) {
   if (found.exe.empty() || !ExeMentions(found.exe, "export_pictures")) return false;
   wchar_t temp[MAX_PATH] = L"";

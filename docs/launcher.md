@@ -158,6 +158,16 @@ exe and gets out of the way while the game runs; no game needs it.
   and leaves the chosen row where it is (the pad and the arrow keys move the choice); after a save
   a game's settings are read again, so they show what was saved. The launcher's version is at the
   bottom right of the start screen.
+- **Imaginators-Figuren importieren** (a row of the launcher's settings, `src/figure_import.cpp`, #34):
+  Imaginators' own toys are signed by their maker, so nothing can make them; the launcher imports
+  files of real ones instead (no download, no links). A folder is picked in the folder browser
+  (subfolders count); each file needs 1024 bytes, the header's checksum and a toy the catalog knows
+  as an Imaginators one (an earlier game's figure is skipped: the portal menu makes those), then the
+  Imaginators exe checks them with the game's own signature check (`--check_figures`, hidden, about
+  5 s; an older build that can't is asked to update). What passes goes into the figure folder's
+  `Imaginators` under its own file name (the catalog's name when the file's has fewer than three
+  letters), never over a file there; one whose bytes are there already counts as "schon da". A toast
+  says what came in and why the rest didn't; the launcher log lists every file.
 - **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
   one text file onto the desktop, `Skylanders-problem-report-<date>.txt` (the same name in German), and shows it in Explorer.
   Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with

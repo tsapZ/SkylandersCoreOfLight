@@ -13,6 +13,7 @@
 #include "saves_ui.h"
 #include "disc_import.h"
 #include "file_browser.h"
+#include "figure_import.h"
 #include "figures_ui.h"
 #include "game_settings.h"
 #include "games.h"
@@ -226,6 +227,9 @@ class LauncherUi {
   // (folder_for_data_), from the setup's welcome page or the settings' "Spieldaten-Ordner", moved
   // in the background; then the old folders offered for deleting (DrawOldData).
   bool folder_for_data_ = false;
+  // Imaginators figures from a folder (#34): picked in the same browser (FileBrowser::for_figures),
+  // from the settings' "Imaginators-Figuren importieren"; what came in shows as a toast.
+  FigureImport figure_import_;
   DataFolderMove data_move_;
   std::vector<OldData> old_data_;
   bool ask_old_data_ = false;

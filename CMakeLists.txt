@@ -38,6 +38,7 @@ add_executable(coreoflight WIN32
   src/disc_search.cpp
   src/file_browser.cpp
   src/music.cpp
+  src/figure_import.cpp
   src/figures_ui.cpp
   src/textures.cpp
   src/xiso.cpp

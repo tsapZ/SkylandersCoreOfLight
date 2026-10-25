@@ -131,6 +131,10 @@ std::filesystem::path TitleMusicFile(size_t game);
 std::filesystem::path PicturesDir(size_t game);
 bool StartPictureExport(size_t game, const Found& found, void** process);
 bool StartTitleMusicExport(size_t game, const Found& found, void** process);
+// The Imaginators toy files `list` names (one path per line), checked by the game's own code
+// (--check_figures, ImaginatorsRecomp figure_check.cpp; #34): it writes <list>.result and quits,
+// hidden, in about 5 s. False if the game's build can't do it (it would start the whole game).
+bool StartFigureCheck(const Found& found, const std::filesystem::path& list, void** process);
 
 // The active profile's figure folder (profiles.h): for the main profile the shared one every game
 // uses (Documents\Skylanders\Figures, or "figures = <folder>" in coreoflight.ini, as a game's

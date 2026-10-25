@@ -185,9 +185,11 @@ void FileBrowser::List(const fs::path& folder) {
   // Choosing the games folder: this one, as the second entry in every folder.
   if (folders_only_) {
     entries_.push_back({Entry::Kind::kThisFolder,
-                        for_data_ ? (german_ ? "Hier den Ordner Skylanders f\xC3\xBCr die Spieldaten nehmen"
-                                             : "Put the Skylanders data folder here")
-                                  : (german_ ? "Diesen Ordner f\xC3\xBCr die Spiele nehmen" : "Use this folder for the games"),
+                        for_figures_ ? (german_ ? "Diesen Ordner pr\xC3\xBC" "fen und importieren"
+                                                : "Check and import this folder")
+                        : for_data_  ? (german_ ? "Hier den Ordner Skylanders f\xC3\xBCr die Spieldaten nehmen"
+                                                : "Put the Skylanders data folder here")
+                                     : (german_ ? "Diesen Ordner f\xC3\xBCr die Spiele nehmen" : "Use this folder for the games"),
                         folder});
   }
   // A folder with an unpacked disc can be taken as it is.
@@ -271,10 +273,13 @@ void FileBrowser::Draw(float width, float height) {
   DrawBackdrop(dl, width, height, {}, true);
   if (folders_only_) {
     Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim,
-         for_data_ ? (german_ ? "SPIELDATEN-ORDNER" : "DATA FOLDER") : (german_ ? "SPIELE-ORDNER" : "GAMES FOLDER"));
+         for_figures_ ? (german_ ? "IMAGINATORS-FIGUREN" : "IMAGINATORS FIGURES")
+         : for_data_  ? (german_ ? "SPIELDATEN-ORDNER" : "DATA FOLDER")
+                      : (german_ ? "SPIELE-ORDNER" : "GAMES FOLDER"));
     Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
-         for_data_ ? (german_ ? "Wohin mit Spielst\xC3\xA4nden und Figuren?" : "Where should saves and figures go?")
-                   : (german_ ? "Wo liegen deine Spiele?" : "Where are your games?"));
+         for_figures_ ? (german_ ? "Welcher Ordner hat die Figurendateien?" : "Which folder has the figure files?")
+         : for_data_  ? (german_ ? "Wohin mit Spielst\xC3\xA4nden und Figuren?" : "Where should saves and figures go?")
+                      : (german_ ? "Wo liegen deine Spiele?" : "Where are your games?"));
   } else {
     Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, german_ ? "DISC EINLESEN" : "ADD A DISC");
     Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
@@ -392,7 +397,9 @@ void FileBrowser::Draw(float width, float height) {
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
     Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
-         for_data_ ? (german_ ? "Darin kommt ein Ordner Skylanders mit allem: Spielst\xC3\xA4nde, Figuren, Profile."
+         for_figures_ ? (german_ ? "Unterordner z\xC3\xA4hlen mit. Imaginators pr\xC3\xBC" "ft jede Datei selbst; nur echte kommen dazu."
+                                 : "Subfolders count too. Imaginators checks every file itself; only real ones come in.")
+         : for_data_ ? (german_ ? "Darin kommt ein Ordner Skylanders mit allem: Spielst\xC3\xA4nde, Figuren, Profile."
                               : "A Skylanders folder goes in it with everything: saves, figures, profiles.")
          : german_ ? "Spiele in diesem Ordner und seinen Unterordnern werden gefunden, mit ihrer Disc; neue kommen hierher."
                    : "Games in this folder and its subfolders are found, with their disc; new ones go here.");

@@ -218,6 +218,23 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     data.options = {{"", en, de}};
   }
   page.settings.push_back(std::move(data));
+  // A button: Imaginators figures from a folder (figure_import.h, #34), checked by the game itself.
+  GameSetting import;
+  import.cvar = "import_im_figures";
+  import.en = "Import Imaginators figures";
+  import.de = "Imaginators-Figuren importieren";
+  import.help_en = "Imaginators' own toys (senseis, creation crystals, chests) can't be made, only copied from "
+                   "real figures. Pick a folder with such figure files (subfolders count too): Imaginators "
+                   "checks each one itself, and only the ones it accepts are added to your figures (with their "
+                   "file names). A figure you have already stays as it is.";
+  import.help_de = "Die eigenen Spielzeuge von Imaginators (Sensei, Kristalle, Truhen) lassen sich nicht "
+                   "erstellen, nur von echten Figuren kopieren. W\xC3\xA4hle einen Ordner mit solchen "
+                   "Figurendateien (Unterordner z\xC3\xA4hlen mit): Imaginators pr\xC3\xBC" "ft jede selbst, und nur "
+                   "die, die es annimmt, kommen zu deinen Figuren (mit ihrem Dateinamen). Eine Figur, die du "
+                   "schon hast, bleibt, wie sie ist.";
+  import.type = "action";
+  import.options = {{"", "Choose a folder", "Ordner w\xC3\xA4hlen"}};
+  page.settings.push_back(std::move(import));
   // A button: the updates from GitHub (updates.h), looked for when A is pressed on it.
   GameSetting updates;
   updates.cvar = "check_updates";
