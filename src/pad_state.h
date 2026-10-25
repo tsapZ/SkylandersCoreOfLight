@@ -258,7 +258,8 @@ inline void UpdatePads(ImGuiIO& io) {
   analog(ImGuiKey_GamepadRStickDown, merged.sThumbRY, -kDead, -32768);
 }
 
-inline bool InputHeld() {
+// A controller button held, or (with `keys`) Enter, Space or Esc.
+inline bool InputHeld(bool keys = true) {
   using GetState = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
   static GetState get_state = [] {
     for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll"}) {
@@ -280,7 +281,7 @@ inline bool InputHeld() {
     if (ReadGenericPad(id, g) && (g.wButtons || g.bLeftTrigger || g.bRightTrigger)) return true;
   }
   for (const int key : {VK_RETURN, VK_SPACE, VK_ESCAPE}) {
-    if (GetAsyncKeyState(key) & 0x8000) return true;
+    if (keys && (GetAsyncKeyState(key) & 0x8000)) return true;
   }
   return false;
 }

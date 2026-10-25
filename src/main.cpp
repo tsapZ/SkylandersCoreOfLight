@@ -439,8 +439,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     // For a while after a game, a controller press brings the launcher back to the front should it
     // not have got there (someone else's window in front, the pad's presses would be dropped).
+    // Only a controller: keys go to the window in front anyway, and Space / Enter typed in another
+    // program took the focus away from it again and again (the owner, Core of Light #31).
     if (took_back_until && GetTickCount64() < took_back_until && GetForegroundWindow() != hwnd &&
-        coreoflight::InputHeld()) {
+        coreoflight::InputHeld(/*keys=*/false)) {
       TakeForeground(hwnd);
     }
     // The first press after a game, once: whether the launcher hears the pads again (the log).

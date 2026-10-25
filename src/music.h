@@ -30,6 +30,7 @@ class MusicPlayer {
   bool open_ = false;
   float volume_ = 0.0f;  // 0..1, the fade
   float loudness_ = 0.6f;  // 0..1, the setting
+  float since_check_ = 0.0f;  // seconds since Update last asked whether it still plays
 };
 
 }  // namespace coreoflight

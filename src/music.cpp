@@ -1,5 +1,7 @@
 #include "music.h"
 
+#include "hub_log.h"
+
 #include <windows.h>
 #include <mmsystem.h>
 
@@ -76,6 +78,19 @@ void MusicPlayer::Update(float dt) {
   if (open_ && volume_ < 1.0f) {
     volume_ = std::min(1.0f, volume_ + dt / kFadeIn);
     SetVolume(volume_);
+  }
+  // "repeat" doesn't always hold with mpegvideo: the owner heard the title music stop after its
+  // ~40 s (2026-10-25). Twice a second: if it stopped, from the start again.
+  since_check_ += dt;
+  if (open_ && since_check_ >= 0.5f) {
+    since_check_ = 0.0f;
+    wchar_t mode[32] = L"";
+    const std::wstring status = std::wstring(L"status ") + kAlias + L" mode";
+    if (mciSendStringW(status.c_str(), mode, 32, nullptr) == 0 && std::wstring(mode) == L"stopped") {
+      Mci(std::wstring(L"seek ") + kAlias + L" to start");
+      Mci(std::wstring(L"play ") + kAlias + L" repeat");
+      HubLog("music: played through, from the start again");
+    }
   }
 }
 
