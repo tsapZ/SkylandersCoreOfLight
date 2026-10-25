@@ -1,9 +1,12 @@
 #pragma once
 
 // The saves screen (saves_ui.cpp, RT / S on a card): the chosen game's saves of the active profile on
-// the left, the copies of the one chosen on the right (the game's own previous version and the
-// launcher's backups). X backs the save up, A on a copy puts it back (after asking; the save as it
-// is now is backed up first), Y opens the backups' folder.
+// the left ("Deine Spielstände", when each was last saved and how many older versions it has; the
+// game's options file apart below), the older versions of the one chosen on the right, each saying
+// where it comes from (the game's own previous version, the launcher's automatic copies, the
+// player's, the one kept before a restore). X backs the save up, A on a version brings it back
+// (after asking; the save as it is now is kept first), Y opens the backups' folder. Reworded and
+// laid out again for Core of Light #33 (the owner found the first version confusing).
 
 #include <cstddef>
 #include <filesystem>
@@ -36,6 +39,7 @@ class SavesScreen {
   std::filesystem::path background_;
   std::vector<SaveSlot> slots_;
   std::vector<SaveCopy> copies_;  // of the chosen save
+  std::vector<size_t> copy_counts_;  // how many older versions each save has
   int slot_ = 0, copy_ = 0;
   int column_ = 0;        // 0 the saves, 1 the copies
   bool confirm_ = false;  // "replace the save with this copy?"
