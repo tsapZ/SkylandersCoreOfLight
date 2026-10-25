@@ -246,11 +246,20 @@ exe and gets out of the way while the game runs; no game needs it.
 - **The connected controllers** are shown left of the profile at the top right, as on the Xbox:
   each pad's number (its XInput slot, 1-4) and, for a pad on batteries, three bars
   (`XInputGetBatteryInformation`, asked every ten seconds; red at one bar). A click on a pad opens the
-  launcher's settings on their "Controller" page (#35).
+  launcher's settings on their "Controller" page (#35). Up from the cards goes to this bar (the
+  owner, 2026-10-25: only the mouse reached it), left to the controllers, right to the profile, A
+  opens, B or down goes back to the cards. The pads are looked for on a thread of their own
+  (`pad_state.h` `StartPadWatch`): asking XInput's empty slots, winmm and the battery on the UI
+  thread made the sparks round the chosen card hitch every second or two.
 - **The figure library** (#8, Start / F): every figure in that folder with its level, XP to the
   next level, gold, play time, upgrades, nickname and the day it was last played, by game (LB /
   RB), read with skylanders-portal's figure code (its `skylanders_portal_figures` target, built
-  without the games' SDK, AES and MD5 from Windows). Every card shows the figure's element lightly
+  without the games' SDK, AES and MD5 from Windows). Below the game tabs a row of **element chips**
+  (LT / RT, PageUp / PageDown or a click): "Alle", the elements the tab's figures have, then
+  "Kristalle" (Imaginators' creation crystals), "Fahrzeuge" (SuperChargers' and Imaginators'
+  vehicles) and "Fallen" (Trap Team's traps) as groups of their own; "Alle" sorts by element. The
+  details panel puts its rows closer and leaves the hat's picture out when they wouldn't fit
+  (with a hat they ran over the hints). Every card shows the figure's element lightly
   (its colour fading in from the left edge); the last tab, **"Magische Objekte"**, has the magic
   items and adventure packs of every game, by game, and the Skylander tabs leave them out. X
   switches to every Skylander of a game, the

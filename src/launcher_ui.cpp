@@ -695,9 +695,13 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
   const float left = c.x - radius - 14 * u - name_w;
   const bool hovered = io.MousePos.x >= left && io.MousePos.x < right && io.MousePos.y >= c.y - radius &&
                        io.MousePos.y < c.y + radius;
-  if (hovered) {
+  if (hovered || top_focus_ == 1) {
     dl->AddRectFilled({left - 14 * u, c.y - radius - 8 * u}, {right + 8 * u, c.y + radius + 8 * u},
                       Rgba(255, 210, 90, 30), radius);
+  }
+  if (top_focus_ == 1) {  // chosen with the pad
+    dl->AddRect({left - 14 * u, c.y - radius - 8 * u}, {right + 8 * u, c.y + radius + 8 * u}, kGold, radius, 0,
+                2.5f * u);
   }
   Text(dl, regular_, 17 * u, {c.x - radius - 14 * u - TextWidth(regular_, 17 * u, label.c_str()), c.y - 28 * u}, kDim,
        label.c_str());
@@ -778,6 +782,10 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     dl->AddCircleFilled({m.x - 6 * u, m.y}, 2.5f * u, Rgba(40, 50, 100));
     dl->AddCircleFilled({m.x + 6 * u, m.y}, 2.5f * u, Rgba(40, 50, 100));
     px = a.x - 8 * u;
+  }
+  // The controllers chosen with the pad: a gold frame round all of them.
+  if (top_focus_ == 0 && px < left - 26 * u) {
+    dl->AddRect({px + 2 * u, c.y - 21 * u}, {left - 20 * u, c.y + 21 * u}, kGold, 14 * u, 0, 2.5f * u);
   }
   badge_left_ = px;  // DrawUpdateAll keeps left of it
   return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -1935,7 +1943,33 @@ bool LauncherUi::DrawScreens(float width, float height) {
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
   const bool up = pressed(ImGuiKey_UpArrow) || pressed(ImGuiKey_GamepadDpadUp) || pressed(ImGuiKey_GamepadLStickUp);
   const bool down = pressed(ImGuiKey_DownArrow) || pressed(ImGuiKey_GamepadDpadDown) || pressed(ImGuiKey_GamepadLStickDown);
-  if (n) {
+  // Up from the (top row of) cards: the top bar, the controllers and the profile, so a pad reaches
+  // them too (the owner, 2026-10-25: only the mouse could); left / right between the two, A opens,
+  // B or down goes back to the cards.
+  bool any_pad = std::any_of(std::begin(g_pad_connected), std::end(g_pad_connected), [](const auto& c) { return bool(c); });
+  for (const GenericPad& pad : g_generic_pads) any_pad = any_pad || (pad.connected && !pad.skip);
+  const bool on_top = top_focus_ >= 0;
+  if (on_top) {
+    if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft)) {
+      top_focus_ = 0;
+    }
+    if (pressed(ImGuiKey_RightArrow) || pressed(ImGuiKey_GamepadDpadRight) || pressed(ImGuiKey_GamepadLStickRight)) {
+      top_focus_ = 1;
+    }
+    if (!any_pad) top_focus_ = 1;
+    if (down) top_focus_ = -1;
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
+        ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
+      if (top_focus_ == 0) {
+        OpenHubSettings(kHubControllerPage);
+      } else {
+        profiles_screen_.Open(&found_);
+      }
+    }
+  } else if (up && (!two_rows || selected_ < per_row)) {
+    top_focus_ = any_pad ? 0 : 1;
+  }
+  if (n && !on_top && top_focus_ < 0) {
     if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft)) {
       selected_ = (selected_ + n - 1) % n;
     }
@@ -1951,7 +1985,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
     const float x = x0 + col * (card_w + gap), y = y0 + row * (card_h + gap);
     const bool hovered = io.MousePos.x >= x && io.MousePos.x < x + card_w && io.MousePos.y >= y &&
                          io.MousePos.y < y + card_h;
-    if (hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) selected_ = i;
+    if (hovered && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) {
+      selected_ = i;
+      top_focus_ = -1;
+    }
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
       if (selected_ == i) Start(i);
       selected_ = i;
@@ -1965,8 +2002,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
     lift_[i] = hub_.animations ? lift_[i] + (target - lift_[i]) * std::min(1.0f, io.DeltaTime * 12.0f) : target;
     DrawCard(i, x, y - lift_[i] * 12 * u, card_w, card_h, i == selected_);
   }
-  if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
-      ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
+  if (!on_top && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
+                  ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false))) {
     Start(selected_);
   }
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
@@ -2034,7 +2071,11 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   // B / Escape: quit (asks first), or while a disc is being set up, stop that: the first press
   // asks, a second one within a few seconds stops it (an 8 GB unpack is easy to start by mistake).
-  const bool back = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+  bool back = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+  if (back && on_top) {  // from the top bar: back to the cards, not quit
+    top_focus_ = -1;
+    back = false;
+  }
   const bool quit = back && !import_.running();
   if (back && import_.running()) {
     if (ImGui::GetTime() < cancel_import_until_) {

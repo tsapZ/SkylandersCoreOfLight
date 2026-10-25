@@ -541,8 +541,50 @@ std::vector<const FiguresScreen::Figure*> FiguresScreen::Shown() const {
   const bool items_tab = tab_ == 1 + int(std::size(kGames));
   for (const Figure& f : list) {
     const bool item = f.category == "Items";
-    if (items_tab ? item : !item && (tab_ == 0 || f.game == kGames[tab_ - 1])) out.push_back(&f);
+    if (items_tab ? item : !item && (tab_ == 0 || f.game == kGames[tab_ - 1])) {
+      // The chip: an element shows that element's characters, a kind chip (traps, vehicles,
+      // crystals) that kind; "every" (0) all of them.
+      const int kind = KindOf(f);
+      if (!items_tab && element_ > 0 && (kind != 0 || int(f.element) != element_)) continue;
+      if (!items_tab && element_ < 0 && kind != element_) continue;
+      out.push_back(&f);
+    }
   }
+  // A game's figures by element, in the games' order (Magic first, Light and Dark last), the
+  // characters without one after them, then the crystals, vehicles and traps; within each as the
+  // lists are.
+  if (!items_tab && tab_ > 0) {
+    std::stable_sort(out.begin(), out.end(), [](const Figure* a, const Figure* b) {
+      auto key = [](const Figure* f) {
+        const int kind = KindOf(*f);
+        return kind ? 100 - kind : f->element == sp::Element::kNone ? 99 : int(f->element);
+      };
+      return key(a) < key(b);
+    });
+  }
+  return out;
+}
+
+int FiguresScreen::KindOf(const Figure& f) {
+  if (f.category == "Traps") return kKindTraps;
+  if (f.category == "Vehicles" || f.category == "Vehicle Variants") return kKindVehicles;
+  if (f.category == "Creation Crystals") return kKindCrystals;
+  return 0;
+}
+
+std::vector<int> FiguresScreen::Elements() const {
+  std::vector<int> out;
+  const bool items_tab = tab_ == 1 + int(std::size(kGames));
+  if (items_tab) return out;
+  for (const Figure& f : all_ ? catalog_ : owned_) {
+    if (f.category == "Items") continue;
+    if (tab_ != 0 && f.game != kGames[tab_ - 1]) continue;
+    const int kind = KindOf(f);
+    const int chip = kind ? kind : f.element == sp::Element::kNone ? 0 : int(f.element);
+    if (chip && std::find(out.begin(), out.end(), chip) == out.end()) out.push_back(chip);
+  }
+  // The elements in their order, then the kinds (crystals, vehicles, traps).
+  std::sort(out.begin(), out.end(), [](int a, int b) { return (a > 0 ? a : 100 - a) < (b > 0 ? b : 100 - b); });
   return out;
 }
 
@@ -598,11 +640,11 @@ void FiguresScreen::Draw(float width, float height) {
 
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
   const int tabs = 2 + int(std::size(kGames));  // every game, each game, the magic items
-  if (pressed(ImGuiKey_GamepadL1) || pressed(ImGuiKey_Q) || pressed(ImGuiKey_PageUp)) {
+  if (pressed(ImGuiKey_GamepadL1) || pressed(ImGuiKey_Q)) {
     tab_ = (tab_ + tabs - 1) % tabs;
     selected_ = 0;
   }
-  if (pressed(ImGuiKey_GamepadR1) || pressed(ImGuiKey_E) || pressed(ImGuiKey_PageDown)) {
+  if (pressed(ImGuiKey_GamepadR1) || pressed(ImGuiKey_E)) {
     tab_ = (tab_ + 1) % tabs;
     selected_ = 0;
   }
@@ -635,9 +677,55 @@ void FiguresScreen::Draw(float width, float height) {
     tx += w + 10 * u;
   }
 
+  // The element chips under the tabs: "every element", then the tab's elements in their colours.
+  // LT / RT (Page Up / Down) or a click; a chosen element stays when the game changes, if it has it.
+  const std::vector<int> elements = Elements();
+  if (std::find(elements.begin(), elements.end(), element_) == elements.end()) element_ = 0;
+  if (!elements.empty()) {
+    std::vector<int> chips = {0};
+    chips.insert(chips.end(), elements.begin(), elements.end());
+    const int at = int(std::find(chips.begin(), chips.end(), element_) - chips.begin());
+    const int count = int(chips.size());
+    if (pressed(ImGuiKey_GamepadL2) || pressed(ImGuiKey_PageUp)) {
+      element_ = chips[(at + count - 1) % count];
+      selected_ = 0;
+    }
+    if (pressed(ImGuiKey_GamepadR2) || pressed(ImGuiKey_PageDown)) {
+      element_ = chips[(at + 1) % count];
+      selected_ = 0;
+    }
+    float cx = left;
+    const float chip_top = top + 50 * u, chip_size = 16 * u;
+    for (const int e : chips) {
+      const sp::Element el = e > 0 ? sp::Element(e) : sp::Element::kNone;
+      const std::string name = e == 0               ? (german_ ? "Alle" : "All")
+                               : e == kKindTraps    ? (german_ ? "Fallen" : "Traps")
+                               : e == kKindVehicles ? (german_ ? "Fahrzeuge" : "Vehicles")
+                               : e == kKindCrystals ? (german_ ? "Kristalle" : "Crystals")
+                               : german_            ? std::string(ElementDe(el))
+                                                    : std::string(sp::ElementName(el));
+      const float w = TextWidth(bold_, chip_size, name) + (e > 0 ? 36 : 24) * u;
+      const ImVec2 a{cx, chip_top}, b{cx + w, chip_top + 30 * u};
+      if (io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y &&
+          ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        element_ = e;
+        selected_ = 0;
+      }
+      const bool on = e == element_;
+      dl->AddRectFilled(a, b, on ? kGold : Rgba(30, 38, 85, 230), 15 * u);
+      float label_x = cx + 12 * u;
+      if (e > 0) {
+        dl->AddCircleFilled({cx + 17 * u, chip_top + 15 * u}, 7 * u, ElementColor(el), 20);
+        label_x = cx + 30 * u;
+      }
+      Text(dl, bold_, chip_size, {label_x, chip_top + 6 * u}, on ? Rgba(60, 35, 0) : Rgba(210, 215, 235), name);
+      cx += w + 8 * u;
+    }
+  }
+
   const std::vector<const Figure*> shown = Shown();
   const int n = int(shown.size());
-  const float grid_top = top + 60 * u, bottom = height - 80 * u;
+  const float grid_top = top + (elements.empty() ? 60 : 94) * u, bottom = height - 80 * u;
   const float panel_w = std::min(380 * u, width * 0.3f);
   const float grid_w = width - 2 * left - panel_w - 24 * u;
   const float tile_w = 240 * u, tile_h = 96 * u, gap = 12 * u;
@@ -657,13 +745,9 @@ void FiguresScreen::Draw(float width, float height) {
       selected_ = std::min(n - 1, selected_ + cols);
     }
     if (io.MouseWheel != 0) selected_ = std::clamp(selected_ - int(io.MouseWheel) * cols, 0, n - 1);
-    // LT / RT (Page Up / Down): a page at a time, for the ~600 tiles of "Alle Skylander".
-    if (pressed(ImGuiKey_GamepadL2) || pressed(ImGuiKey_PageUp)) {
-      selected_ = std::max(0, selected_ - cols * rows_visible);
-    }
-    if (pressed(ImGuiKey_GamepadR2) || pressed(ImGuiKey_PageDown)) {
-      selected_ = std::min(n - 1, selected_ + cols * rows_visible);
-    }
+    // Home / End: the first and the last tile (LT / RT are the element chips now).
+    if (pressed(ImGuiKey_Home)) selected_ = 0;
+    if (pressed(ImGuiKey_End)) selected_ = n - 1;
   }
   selected_ = std::clamp(selected_, 0, std::max(0, n - 1));
   // The rows shown follow the chosen tile only when it leaves them (worked out from the chosen row
@@ -794,11 +878,16 @@ void FiguresScreen::Draw(float width, float height) {
     const Figure& f = *shown[selected_];
     float y = grid_top + 18 * u;
     const float x = px + 20 * u, w = panel_w - 40 * u;
+    // The picture at the top right; the lines next to it stop short of it, and what follows starts
+    // below it (the "not played yet" note ran into it, the owner, 2026-10-25).
+    float beside = w, below = y;
     if (const fs::path* picture = Picture(f)) {
       if (const ImTextureID texture = LoadTexture(*picture)) {
         const float side = 120 * u;
         dl->AddImageRounded(texture, {px + panel_w - 20 * u - side, y}, {px + panel_w - 20 * u, y + side}, {0, 0},
                             {1, 1}, Rgba(255, 255, 255, f.owned ? 255 : 120), 16 * u);
+        beside = w - 130 * u;
+        below = y + side + 16 * u;
       }
     }
     Text(dl, bold_, 26 * u, {x, y}, kWhite, f.name, w - 130 * u);
@@ -806,11 +895,17 @@ void FiguresScreen::Draw(float width, float height) {
     std::string sub = f.game;
     const std::string element = german_ ? std::string(ElementDe(f.element)) : std::string(sp::ElementName(f.element));
     if (!element.empty()) sub += (sub.empty() ? "" : "  \xC2\xB7  ") + element;
-    Text(dl, regular_, 18 * u, {x, y}, kDim, sub, w);
+    Text(dl, regular_, 18 * u, {x, y}, kDim, sub, beside);
     y += 28 * u;
-    Text(dl, regular_, 18 * u, {x, y}, kDim, Category(f.category, german_) + (f.badge.empty() ? "" : "  \xC2\xB7  " + Badge(f.badge, german_)),
-         w);
-    y += 40 * u;
+    // The badge only when it says more than the group ("Fallen-Meister  ·  Fallen-Meister",
+    // "Fahrzeuge  ·  Fahrzeug" said it twice).
+    std::string group = Category(f.category, german_);
+    if (const std::string badge = f.badge.empty() ? std::string() : Badge(f.badge, german_);
+        !badge.empty() && !group.starts_with(badge)) {
+      group += "  \xC2\xB7  " + badge;
+    }
+    Text(dl, regular_, 18 * u, {x, y}, kDim, group, beside);
+    y = std::max(y + 40 * u, below);
     // A trap: the villain caught in it (skylanders-portal trap_villain.h), as Trap Team shows it.
     if (f.trap) {
       const sp::TrapVillain* villain =
@@ -839,11 +934,14 @@ void FiguresScreen::Draw(float width, float height) {
       std::snprintf(text, sizeof(text), s.next_xp ? "%u / %u XP" : "%u XP", unsigned(s.xp), unsigned(s.next_xp));
       Text(dl, regular_, 16 * u, {x, y}, kDim, text);
       y += 34 * u;
-      auto row = [&](const char* label, const std::string& value) {
-        Text(dl, regular_, 18 * u, {x, y}, kDim, label);
-        Text(dl, bold_, 18 * u, {x + w - TextWidth(bold_, 18 * u, value), y}, kWhite, value);
-        y += 30 * u;
+      // The rows are gathered first and drawn when they fit: with a hat they ran past the panel
+      // over the hints (the owner's window, 2026-10-25).
+      struct Row {
+        std::string label, value;
+        const Hat* hat = nullptr;  // its picture and bonuses on a line below
       };
+      std::vector<Row> rows;
+      auto row = [&](const char* label, const std::string& value) { rows.push_back({label, value}); };
       row("Gold", std::to_string(s.gold));
       row(german_ ? "Spielzeit" : "Play time", PlayTime(s.play_seconds, german_));
       std::snprintf(text, sizeof(text), "%d", sp::UpgradeCount(s));
@@ -873,19 +971,7 @@ void FiguresScreen::Draw(float width, float height) {
         const std::string name = hat != hats_.end() ? hat->second.name
                                                     : (german_ ? "Nr. " : "No. ") + std::to_string(s.hat);
         row(german_ ? "Hut" : "Hat", name);
-        if (hat != hats_.end()) {
-          float bx = x;
-          if (!hat->second.picture.empty()) {
-            if (const ImTextureID texture = LoadTexture(hat->second.picture)) {
-              dl->AddImageRounded(texture, {x, y}, {x + 44 * u, y + 44 * u}, {0, 0}, {1, 1}, kWhite, 8 * u);
-              bx = x + 54 * u;
-            }
-          }
-          if (!hat->second.bonuses.empty()) {
-            Text(dl, regular_, 16 * u, {bx, y + 12 * u}, kGold, hat->second.bonuses, x + w - bx);
-          }
-          y += 52 * u;
-        }
+        if (hat != hats_.end()) rows.back().hat = &hat->second;
       }
       // Hero points (Giants' and Swap Force's heroic challenges, 100 at most) and the consoles the
       // figure has been on, as the figure keeps them.
@@ -905,6 +991,33 @@ void FiguresScreen::Draw(float width, float height) {
         std::snprintf(text, sizeof(text), "%02u.%02u.%04u", unsigned(s.last_played->day), unsigned(s.last_played->month),
                       unsigned(s.last_played->year));
         row(german_ ? "Zuletzt gespielt" : "Last played", text);
+      }
+      // Fitting them: closer together first, then without the hat's picture line, then the last
+      // rows left out.
+      const float room = bottom - 14 * u - y;
+      float step = 30 * u, hat_h = 52 * u;
+      auto need = [&] {
+        float h = 0;
+        for (const Row& r : rows) h += step + (r.hat ? hat_h : 0);
+        return h;
+      };
+      if (need() > room) step = 24 * u;
+      if (need() > room) hat_h = 0;
+      while (!rows.empty() && need() > room) rows.pop_back();
+      for (const Row& r : rows) {
+        Text(dl, regular_, 18 * u, {x, y}, kDim, r.label);
+        Text(dl, bold_, 18 * u, {x + w - TextWidth(bold_, 18 * u, r.value), y}, kWhite, r.value);
+        y += step;
+        if (!r.hat || hat_h == 0) continue;
+        float bx = x;
+        if (!r.hat->picture.empty()) {
+          if (const ImTextureID texture = LoadTexture(r.hat->picture)) {
+            dl->AddImageRounded(texture, {x, y}, {x + 44 * u, y + 44 * u}, {0, 0}, {1, 1}, kWhite, 8 * u);
+            bx = x + 54 * u;
+          }
+        }
+        if (!r.hat->bonuses.empty()) Text(dl, regular_, 16 * u, {bx, y + 12 * u}, kGold, r.hat->bonuses, x + w - bx);
+        y += hat_h;
       }
     } else if (!f.trap) {
       Text(dl, regular_, 18 * u, {x, y}, kDim,
@@ -947,7 +1060,7 @@ void FiguresScreen::Draw(float width, float height) {
   float hx = left;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Spiel" : "Game");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LT/RT", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
+  if (!elements.empty()) hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LT/RT", Rgba(80, 90, 140), "Element");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));

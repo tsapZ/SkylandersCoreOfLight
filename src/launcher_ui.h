@@ -64,6 +64,9 @@ class LauncherUi {
   // pad_clicked_ (its settings, #35).
   bool DrawProfileBadge(float width, float u);
   bool pad_clicked_ = false;
+  // The start screen's top bar chosen with the pad (up from the cards): -1 the cards, 0 the
+  // controllers (A: their settings page), 1 the profile (A: the profiles).
+  int top_focus_ = -1;
   // The launcher's own settings, on `page` (hub_settings.h kHubControllerPage for the pads).
   void OpenHubSettings(int page);
   // The vibration rows' values last seen on the controller page: a change buzzes that pad.

@@ -63,6 +63,15 @@ class FiguresScreen {
   bool marks_enabled_ = true;    // "I own it" marks (hub_settings.h)
   bool all_ = false;             // every Skylander of the game, not only the owner's
   int selected_ = 0;
+  // The chip under the tabs (the owner's wish, 2026-10-25: a game's figures by element, to get
+  // through them faster; traps and vehicles on their own): 0 every figure, a skylanders::portal::
+  // Element's number for that element's characters, or one of the kinds below.
+  int element_ = 0;
+  static constexpr int kKindCrystals = -1, kKindVehicles = -2, kKindTraps = -3;
+  // A figure's kind for the chips: one of the kinds above, or 0 for a character.
+  static int KindOf(const Figure& f);
+  // The chips the current tab has (its figures', whichever chip is chosen).
+  std::vector<int> Elements() const;
   // Documents\Skylanders\Pictures, one folder per game: the profile's (next to its figure folder),
   // then the main profile's (the discs' pictures are the same for every profile).
   std::vector<std::filesystem::path> pictures_dirs_;

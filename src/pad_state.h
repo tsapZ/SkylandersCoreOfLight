@@ -9,12 +9,15 @@
 #include <xinput.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
 #include <cwctype>
+#include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -23,8 +26,22 @@
 
 namespace coreoflight {
 
-// Which XInput slots have a pad, as UpdatePads saw them last (it looks every two seconds).
-inline bool g_pad_connected[XUSER_MAX_COUNT] = {};
+// Which XInput slots have a pad, as the pad watch (StartPadWatch) saw them last, every two seconds.
+inline std::atomic<bool> g_pad_connected[XUSER_MAX_COUNT] = {};
+
+// XInputGetState, loaded by hand as Dear ImGui's Win32 backend does (or null without XInput).
+using XInputGetStateFn = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
+inline XInputGetStateFn PadGetState() {
+  static XInputGetStateFn get_state = [] {
+    for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll"}) {
+      if (HMODULE m = LoadLibraryW(dll)) {
+        return reinterpret_cast<XInputGetStateFn>(GetProcAddress(m, "XInputGetState"));
+      }
+    }
+    return XInputGetStateFn(nullptr);
+  }();
+  return get_state;
+}
 
 // Pads that aren't XInput ones, DirectInput pads such as the Logitech Dual Action (the owner's
 // player 1 pad): XInput doesn't see them, so the launcher reads them through Windows' joystick API
@@ -38,6 +55,7 @@ struct GenericPad {
   DWORD min[4] = {0, 0, 0, 0}, max[4] = {65535, 65535, 65535, 65535};  // X, Y, Z, R
 };
 inline GenericPad g_generic_pads[16];
+inline std::mutex g_generic_mutex;  // the pad watch writes g_generic_pads, the frame copies it
 
 // The vendor and product ids of the XInput devices (from the raw input HID list).
 inline std::set<std::pair<unsigned long, unsigned long>> XInputVidPids() {
@@ -71,8 +89,13 @@ inline void FindGenericPads(bool xinput_connected) {
   const auto xinput = XInputVidPids();
   const bool wine = !WineVersion().empty();
   const UINT n = std::min<UINT>(joyGetNumDevs(), 16);
+  GenericPad pads[16];
+  {
+    std::lock_guard lock(g_generic_mutex);
+    std::copy(std::begin(g_generic_pads), std::end(g_generic_pads), pads);
+  }
   for (UINT id = 0; id < 16; ++id) {
-    GenericPad& pad = g_generic_pads[id];
+    GenericPad& pad = pads[id];
     JOYINFOEX info = {sizeof(info), JOY_RETURNALL};
     const bool was = pad.connected && !pad.skip;
     pad.connected = id < n && joyGetPosEx(id, &info) == JOYERR_NOERROR;
@@ -96,16 +119,45 @@ inline void FindGenericPads(bool xinput_connected) {
       pad.max[a] = maxs[a] > mins[a] ? maxs[a] : mins[a] + 65535;
     }
   }
+  std::lock_guard lock(g_generic_mutex);
+  std::copy(std::begin(pads), std::end(pads), g_generic_pads);
+}
+
+// The pads that are there: every XInput slot and the winmm joysticks, every two seconds on a thread
+// of its own, from the first frame on. Asking an empty XInput slot and 16 joysticks takes a while,
+// and on the frame it showed as a hitch every two seconds (the sparks round the chosen card, the
+// owner, 2026-10-25).
+inline void StartPadWatch() {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    std::thread([] {
+      for (;;) {
+        bool any = false;
+        for (DWORD pad = 0; PadGetState() && pad < XUSER_MAX_COUNT; ++pad) {
+          XINPUT_STATE state = {};
+          const bool now = PadGetState()(pad, &state) == ERROR_SUCCESS;
+          if (g_pad_connected[pad].exchange(now) != now) {
+            HubLog("pads: XInput slot " + std::to_string(pad) + (now ? " connected" : " gone"));
+          }
+          any = any || now;
+        }
+        FindGenericPads(any);
+        Sleep(2000);
+      }
+    }).detach();
+  });
+}
+
+// The generic pads as they are now (a copy: the pad watch may change them meanwhile).
+inline void GenericPadsNow(GenericPad (&out)[16]) {
+  std::lock_guard lock(g_generic_mutex);
+  std::copy(std::begin(g_generic_pads), std::end(g_generic_pads), out);
 }
 
 // One generic pad's state as an XInput one, or false if it is gone.
-inline bool ReadGenericPad(UINT id, XINPUT_GAMEPAD& out) {
-  GenericPad& pad = g_generic_pads[id];
+inline bool ReadGenericPad(UINT id, const GenericPad& pad, XINPUT_GAMEPAD& out) {
   JOYINFOEX info = {sizeof(info), JOY_RETURNALL};
-  if (joyGetPosEx(id, &info) != JOYERR_NOERROR) {
-    pad.connected = false;
-    return false;
-  }
+  if (joyGetPosEx(id, &info) != JOYERR_NOERROR) return false;
   out = {};
   const DWORD b = info.dwButtons;
   auto on = [&](int bit, WORD mask) {
@@ -145,7 +197,8 @@ inline bool ReadGenericPad(UINT id, XINPUT_GAMEPAD& out) {
 }
 
 // A connected pad's battery for the start screen: 0 empty .. 3 full, or -1 for a wired pad (or
-// one that doesn't say). Asked at most every ten seconds per pad.
+// one that doesn't say). Asked at most every ten seconds per pad, on a thread of its own (a wireless
+// pad can take a moment to answer, a hitch on the frame).
 inline int PadBattery(DWORD pad) {
   using GetBattery = DWORD(WINAPI*)(DWORD, BYTE, XINPUT_BATTERY_INFORMATION*);
   static GetBattery get_battery = [] {
@@ -156,18 +209,21 @@ inline int PadBattery(DWORD pad) {
     }
     return GetBattery(nullptr);
   }();
-  static int level[XUSER_MAX_COUNT] = {-1, -1, -1, -1};
-  static ULONGLONG asked[XUSER_MAX_COUNT] = {};
+  static std::atomic<int> level[XUSER_MAX_COUNT] = {-1, -1, -1, -1};
+  static std::atomic<ULONGLONG> asked[XUSER_MAX_COUNT] = {};
   if (pad >= XUSER_MAX_COUNT || !get_battery) return -1;
   const ULONGLONG now = GetTickCount64();
-  if (!asked[pad] || now - asked[pad] > 10000) {
-    asked[pad] = now;
-    XINPUT_BATTERY_INFORMATION info = {};
-    level[pad] = -1;
-    if (get_battery(pad, BATTERY_DEVTYPE_GAMEPAD, &info) == ERROR_SUCCESS &&
-        (info.BatteryType == BATTERY_TYPE_ALKALINE || info.BatteryType == BATTERY_TYPE_NIMH)) {
-      level[pad] = info.BatteryLevel;  // BATTERY_LEVEL_EMPTY .. BATTERY_LEVEL_FULL, 0 .. 3
-    }
+  ULONGLONG last = asked[pad];
+  if ((!last || now - last > 10000) && asked[pad].compare_exchange_strong(last, now)) {
+    std::thread([pad] {
+      XINPUT_BATTERY_INFORMATION info = {};
+      int value = -1;
+      if (get_battery(pad, BATTERY_DEVTYPE_GAMEPAD, &info) == ERROR_SUCCESS &&
+          (info.BatteryType == BATTERY_TYPE_ALKALINE || info.BatteryType == BATTERY_TYPE_NIMH)) {
+        value = info.BatteryLevel;  // BATTERY_LEVEL_EMPTY .. BATTERY_LEVEL_FULL, 0 .. 3
+      }
+      level[pad] = value;
+    }).detach();
   }
   return level[pad];
 }
@@ -212,21 +268,8 @@ inline void PadBuzzUpdate() {
 // (IMGUI_IMPL_WIN32_DISABLE_GAMEPAD is set for it). Which slots are connected is looked at every
 // two seconds; polling an empty slot every frame is slow. Call after ImGui_ImplWin32_NewFrame.
 inline void UpdatePads(ImGuiIO& io) {
-  using GetState = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
-  static GetState get_state = [] {
-    for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll"}) {
-      if (HMODULE m = LoadLibraryW(dll)) {
-        return reinterpret_cast<GetState>(GetProcAddress(m, "XInputGetState"));
-      }
-    }
-    return GetState(nullptr);
-  }();
+  StartPadWatch();
   PadBuzzUpdate();
-  bool* connected = g_pad_connected;
-  static ULONGLONG checked = 0;
-  const ULONGLONG now = GetTickCount64();
-  const bool recheck = now - checked > 2000;
-  if (recheck) checked = now;
   XINPUT_GAMEPAD merged = {};
   bool any = false;
   auto merge = [&](const XINPUT_GAMEPAD& g) {
@@ -241,22 +284,18 @@ inline void UpdatePads(ImGuiIO& io) {
     merged.sThumbRX = further(merged.sThumbRX, g.sThumbRX);
     merged.sThumbRY = further(merged.sThumbRY, g.sThumbRY);
   };
-  for (DWORD pad = 0; get_state && pad < XUSER_MAX_COUNT; ++pad) {
-    if (!connected[pad] && !recheck) continue;
+  for (DWORD pad = 0; PadGetState() && pad < XUSER_MAX_COUNT; ++pad) {
+    if (!g_pad_connected[pad]) continue;
     XINPUT_STATE state = {};
-    const bool was = connected[pad];
-    connected[pad] = get_state(pad, &state) == ERROR_SUCCESS;
-    if (connected[pad] != was) {
-      HubLog("pads: XInput slot " + std::to_string(pad) + (connected[pad] ? " connected" : " gone"));
-    }
-    if (connected[pad]) merge(state.Gamepad);
+    if (PadGetState()(pad, &state) == ERROR_SUCCESS) merge(state.Gamepad);
   }
   // The DirectInput pads, merged the same way.
-  if (recheck) FindGenericPads(std::find(connected, connected + XUSER_MAX_COUNT, true) != connected + XUSER_MAX_COUNT);
+  GenericPad generic[16];
+  GenericPadsNow(generic);
   for (UINT id = 0; id < 16; ++id) {
-    if (!g_generic_pads[id].connected || g_generic_pads[id].skip) continue;
+    if (!generic[id].connected || generic[id].skip) continue;
     XINPUT_GAMEPAD g;
-    if (ReadGenericPad(id, g)) merge(g);
+    if (ReadGenericPad(id, generic[id], g)) merge(g);
   }
   io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
   if (!any) return;
@@ -296,25 +335,18 @@ inline void UpdatePads(ImGuiIO& io) {
 
 // A controller button held, or (with `keys`) Enter, Space or Esc.
 inline bool InputHeld(bool keys = true) {
-  using GetState = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
-  static GetState get_state = [] {
-    for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll"}) {
-      if (HMODULE m = LoadLibraryW(dll)) {
-        return reinterpret_cast<GetState>(GetProcAddress(m, "XInputGetState"));
-      }
-    }
-    return GetState(nullptr);
-  }();
-  for (DWORD pad = 0; get_state && pad < XUSER_MAX_COUNT; ++pad) {
+  for (DWORD pad = 0; PadGetState() && pad < XUSER_MAX_COUNT; ++pad) {
     XINPUT_STATE state = {};
-    if (get_state(pad, &state) != ERROR_SUCCESS) continue;
+    if (!g_pad_connected[pad] || PadGetState()(pad, &state) != ERROR_SUCCESS) continue;
     const XINPUT_GAMEPAD& g = state.Gamepad;
     if (g.wButtons || g.bLeftTrigger > 30 || g.bRightTrigger > 30) return true;
   }
+  GenericPad generic[16];
+  GenericPadsNow(generic);
   for (UINT id = 0; id < 16; ++id) {
-    if (!g_generic_pads[id].connected || g_generic_pads[id].skip) continue;
+    if (!generic[id].connected || generic[id].skip) continue;
     XINPUT_GAMEPAD g;
-    if (ReadGenericPad(id, g) && (g.wButtons || g.bLeftTrigger || g.bRightTrigger)) return true;
+    if (ReadGenericPad(id, generic[id], g) && (g.wButtons || g.bLeftTrigger || g.bRightTrigger)) return true;
   }
   for (const int key : {VK_RETURN, VK_SPACE, VK_ESCAPE}) {
     if (keys && (GetAsyncKeyState(key) & 0x8000)) return true;
