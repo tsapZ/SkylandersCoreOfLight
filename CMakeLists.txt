@@ -7,7 +7,7 @@ project(coreoflight LANGUAGES CXX RC)
 
 # The launcher's version: the problem report names it, tools/package_installer.ps1 builds the
 # installer with it, and updates from GitHub Releases (#17) will compare against it.
-set(COREOFLIGHT_VERSION "0.2.0-beta.5")
+set(COREOFLIGHT_VERSION "0.2.0-beta.6")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
