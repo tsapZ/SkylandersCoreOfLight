@@ -2270,7 +2270,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   // Start / F: the figure library (figures_ui.h).
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false) || ImGui::IsKeyPressed(ImGuiKey_F, false)) {
-    figures_screen_.Configure(hub_.figures_only_mine, hub_.figures_marks);
+    figures_screen_.Configure(hub_.figures_only_mine, hub_.figures_marks, hub_.figures_progress);
     figures_screen_.Open(FiguresDir());
   }
   // LB / Q: the launcher's own settings (hub_settings.h); a click on a pad at the top: their

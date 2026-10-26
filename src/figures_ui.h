@@ -25,9 +25,10 @@ namespace coreoflight {
 class FiguresScreen {
  public:
   void Init(ImFont* regular, ImFont* bold, bool german);
-  // The launcher's settings (hub_settings.h): open on the owner's figures or on all, and whether Y
-  // marks a figure without a file as owned. Before Open.
-  void Configure(bool only_mine, bool marks);
+  // The launcher's settings (hub_settings.h): open on the owner's figures or on all, whether Y
+  // marks a figure without a file as owned, and whether the tabs count the figures owned. Before
+  // Open.
+  void Configure(bool only_mine, bool marks, bool progress);
   // Reads the figure folder again and opens the screen.
   void Open(const std::filesystem::path& figures_dir);
   bool is_open() const { return open_; }
@@ -61,6 +62,7 @@ class FiguresScreen {
   std::vector<Figure> catalog_;  // every released Skylander, marked if owned
   int tab_ = 0;                  // 0 = every game, then the games in release order, then items
   bool marks_enabled_ = true;    // "I own it" marks (hub_settings.h)
+  bool progress_ = false;        // each tab shows how many of its figures are owned (#43)
   bool all_ = false;             // every Skylander of the game, not only the owner's
   int selected_ = 0;
   // The chip under the tabs (the owner's wish, 2026-10-25: a game's figures by element, to get

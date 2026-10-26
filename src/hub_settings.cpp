@@ -57,6 +57,7 @@ HubSettings LoadHubSettings() {
   }
   s.figures_only_mine = IsOn(get("figures_only_mine"), s.figures_only_mine);
   s.figures_marks = IsOn(get("figures_marks"), s.figures_marks);
+  s.figures_progress = IsOn(get("figures_progress"), s.figures_progress);
   s.title_music = IsOn(get("title_music"), s.title_music);
   if (const std::string v = get("music_volume"); !v.empty() && std::all_of(v.begin(), v.end(), ::isdigit) && v.size() < 4) {
     s.music_volume = std::clamp(std::stoi(v), 0, 100);
@@ -131,6 +132,13 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
       "An: Y markiert einen Skylander, von dem du keine Datei hast (Figur im Regal), als deinen. Aus: "
       "Nur Figurendateien z\xC3\xA4hlen, Markierungen bleiben weg.",
       settings.figures_marks));
+  page.settings.push_back(Switch(
+      "figures_progress", "Figures: collection progress", "Figuren: Sammlungsstand",
+      "For collectors: each tab of the figure library says how many of its figures you have, e.g. "
+      "84/120, and the library shows every figure, the ones you don't have yet greyed.",
+      "F\xC3\xBCr Sammler: Jeder Reiter der Figuren-Bibliothek zeigt, wie viele seiner Figuren du hast, "
+      "z. B. 84/120, und die Bibliothek zeigt alle Figuren, die fehlenden ausgegraut.",
+      settings.figures_progress));
   page.settings.push_back(Switch(
       "title_music", "Title music", "Titelmusik",
       "A game's title music while its card is chosen, straight from the game's disc.",

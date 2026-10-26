@@ -153,9 +153,11 @@ void FiguresScreen::Init(ImFont* regular, ImFont* bold, bool german) {
   german_ = german;
 }
 
-void FiguresScreen::Configure(bool only_mine, bool marks) {
-  all_ = !only_mine;
+void FiguresScreen::Configure(bool only_mine, bool marks, bool progress) {
+  // The progress counts every figure of a game, so the library opens on all of them then.
+  all_ = !only_mine || progress;
   marks_enabled_ = marks;
+  progress_ = progress;
 }
 
 void FiguresScreen::Open(const fs::path& figures_dir) {
@@ -676,12 +678,35 @@ void FiguresScreen::Draw(float width, float height) {
   // Tabs: every game, then each game.
   const float left = 48 * u, top = 120 * u;
   float tx = left;
-  const float tab_size = 19 * u;
+  std::vector<std::string> names, counts;
   for (int i = 0; i < tabs; ++i) {
-    const std::string name = i == 0                          ? (german_ ? "Alle Spiele" : "Every game")
-                             : i == 1 + int(std::size(kGames)) ? (german_ ? "Magische Objekte" : "Magic items")
-                                                               : std::string(kGames[i - 1]);
-    const float w = TextWidth(bold_, tab_size, name) + 30 * u;
+    names.push_back(i == 0                            ? (german_ ? "Alle Spiele" : "Every game")
+                    : i == 1 + int(std::size(kGames)) ? (german_ ? "Magische Objekte" : "Magic items")
+                                                      : std::string(kGames[i - 1]));
+    // The collection progress (#43, a launcher setting): how many of the tab's figures are owned.
+    if (progress_) {
+      const bool items_tab = i == 1 + int(std::size(kGames));
+      int have = 0, total = 0;
+      for (const Figure& f : catalog_) {
+        const bool item = f.category == "Items";
+        if (items_tab ? !item : item || (i != 0 && f.game != kGames[i - 1])) continue;
+        ++total;
+        have += f.owned ? 1 : 0;
+      }
+      counts.push_back(std::to_string(have) + "/" + std::to_string(total));
+    }
+  }
+  // Narrower when the counts don't fit next to the names.
+  float tab_size = 19 * u;
+  auto tab_width = [&](int i) {
+    return TextWidth(bold_, tab_size, names[i]) + 30 * u +
+           (counts.empty() ? 0.0f : TextWidth(regular_, tab_size * 0.85f, counts[i]) + 8 * u);
+  };
+  float all_tabs = 0;
+  for (int i = 0; i < tabs; ++i) all_tabs += tab_width(i) + 10 * u;
+  if (all_tabs > width - 2 * left) tab_size *= std::max(0.6f, (width - 2 * left) / all_tabs);
+  for (int i = 0; i < tabs; ++i) {
+    const float w = tab_width(i);
     const ImVec2 a{tx, top}, b{tx + w, top + 40 * u};
     if (io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y &&
         ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -689,7 +714,12 @@ void FiguresScreen::Draw(float width, float height) {
       selected_ = 0;
     }
     dl->AddRectFilled(a, b, i == tab_ ? kGold : Rgba(40, 50, 100, 230), 20 * u);
-    Text(dl, bold_, tab_size, {tx + 15 * u, top + 9 * u}, i == tab_ ? Rgba(60, 35, 0) : kWhite, name);
+    const float ty = top + 20 * u - tab_size * 0.58f;
+    Text(dl, bold_, tab_size, {tx + 15 * u, ty}, i == tab_ ? Rgba(60, 35, 0) : kWhite, names[i]);
+    if (!counts.empty()) {
+      Text(dl, regular_, tab_size * 0.85f, {tx + 23 * u + TextWidth(bold_, tab_size, names[i]), ty + tab_size * 0.1f},
+           i == tab_ ? Rgba(110, 75, 10) : Rgba(170, 180, 215), counts[i]);
+    }
     tx += w + 10 * u;
   }
 

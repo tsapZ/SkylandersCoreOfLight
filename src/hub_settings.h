@@ -17,6 +17,7 @@ struct HubSettings {
   std::string language = "auto";  // "auto" (Windows' language), "german", "english"
   bool figures_only_mine = true;  // the figure library opens on the owner's figures, not all
   bool figures_marks = true;      // Y marks a figure without a file as owned ("Hab ich")
+  bool figures_progress = false;  // the library's tabs count the figures owned, "84/120" (#43)
   bool title_music = true;        // a game's title music while its card is chosen
   int music_volume = 60;          // its loudness in percent, 0..100 (a colleague found it loud, 2026-10-23)
   bool animations = true;         // screens slide and fade in
