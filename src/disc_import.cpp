@@ -10,6 +10,7 @@
 #include <optional>
 #include <thread>
 
+#include "game_files.h"
 #include "hub_log.h"
 #include "language_import.h"
 #include "xiso.h"
@@ -126,7 +127,7 @@ std::string DiscImport::message() const {
   return shared_->message;
 }
 
-void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, bool german) {
+void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, bool german, bool repair) {
   if (running()) return;
   auto shared = std::make_shared<Shared>();
   shared->phase = Phase::kReading;
@@ -138,7 +139,7 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
   };
   std::vector<Target> targets;
   for (const Found& f : found) targets.push_back({!f.exe.empty(), f.rom});
-  std::thread([shared, iso, targets, german] {
+  std::thread([shared, iso, targets, german, repair] {
     auto say = [&](const std::string& text, Phase phase) {
       {
         std::lock_guard lock(shared->mutex);
@@ -211,7 +212,7 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
     {
       std::ifstream in(rom / "default.xex", std::ios::binary);
       const std::vector<char> have((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-      if (!have.empty() && Sha256Hex(have.data(), have.size()) == hash) {
+      if (!repair && !have.empty() && Sha256Hex(have.data(), have.size()) == hash) {
         say(name + (german ? ": die Disc ist schon eingerichtet." : ": the disc is set up already."), Phase::kDone);
         return;
       }
@@ -294,6 +295,19 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       }
       return;
     }
+    // The list of what was written, for "Check game files" (game_files.h).
+    std::vector<std::pair<std::string, uint64_t>> list;
+    if (folder) {
+      for (const auto& [relative, size] : files) {
+        const std::u8string u8 = relative.generic_u8string();
+        list.emplace_back(std::string(u8.begin(), u8.end()), size);
+      }
+    } else {
+      for (const XisoImage::Entry& e : image->entries()) {
+        if (!e.directory && !XisoImage::InFolder(e.path, kSystemUpdate)) list.emplace_back(e.path, e.size);
+      }
+    }
+    WriteDiscFileList(rom, list);
     say(name + (german ? ": Disc eingerichtet, bereit zum Spielen." : ": disc set up, ready to play."), Phase::kDone);
   }).detach();
 }

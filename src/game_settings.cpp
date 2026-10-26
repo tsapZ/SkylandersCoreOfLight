@@ -265,6 +265,20 @@ std::shared_ptr<GameSettings> Load(const fs::path& exe, const fs::path& workdir,
   auto page = std::find_if(out->pages.begin(), out->pages.end(),
                            [](const GameSettingsPage& p) { return p.en == "Graphics"; });
   (page != out->pages.end() ? *page : out->pages.back()).settings.push_back(std::move(reset));
+  // And at the end of the first page: whether the game's disc is all there (game_files.h, #41).
+  GameSetting check;
+  check.cvar = "check_game_files";
+  check.en = "Check game files";
+  check.de = "Spieldateien pr\xC3\xBC" "fen";
+  check.help_en = "Checks that the game's disc files are all there and whole (names and sizes, against the "
+                  "list the launcher kept when the disc was set up). If something is missing, it says what "
+                  "and offers to take the disc again.";
+  check.help_de = "Pr\xC3\xBC" "ft, ob die Dateien der Disc alle da und vollst\xC3\xA4ndig sind (Namen und "
+                  "Gr\xC3\xB6\xC3\x9F" "en, mit der Liste, die der Hub beim Einrichten der Disc angelegt hat). "
+                  "Fehlt etwas, sagt er was, und bietet an, die Disc noch einmal einzulesen.";
+  check.type = "action";
+  check.options = {{"", "Check", "Pr\xC3\xBC" "fen"}};
+  if (!out->pages.empty()) out->pages.front().settings.push_back(std::move(check));
   return out;
 }
 

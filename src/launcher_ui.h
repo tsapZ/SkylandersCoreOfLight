@@ -270,6 +270,10 @@ class LauncherUi {
   bool DrawQuitConfirm(float width, float height);
   // The import's question (data_transfer.h, #40): replace the games' settings that are there?
   bool DrawImportQuestion(float width, float height);
+  // "Check game files" found something (#41): set the game's disc up again? Its text, or empty.
+  bool DrawReimportQuestion(float width, float height);
+  std::string ask_reimport_;
+  bool repair_disc_ = false;  // the next disc chosen is written again (DiscImport repair)
   DataTransfer data_transfer_;
   bool ask_import_settings_ = false;
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;

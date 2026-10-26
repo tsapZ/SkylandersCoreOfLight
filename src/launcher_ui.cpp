@@ -24,6 +24,7 @@
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 #include "portal/figure_info.h"
+#include "game_files.h"
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
@@ -1020,6 +1021,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : ask_language_                 ? "language"
                        : setup_.is_open()              ? "setup"
                        : ask_import_settings_          ? "importquestion"
+                       : !ask_reimport_.empty()        ? "reimportquestion"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
                        : crash_code_ != 0              ? "crash"
@@ -1281,6 +1283,52 @@ bool LauncherUi::DrawImportQuestion(float width, float height) {
   } else if (keep || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     ask_import_settings_ = false;
     data_transfer_.StartImport(false);
+  }
+  return true;
+}
+
+bool LauncherUi::DrawReimportQuestion(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("reimportquestion", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, {});
+  const float bw = 720 * u, bh = 290 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Spieldateien fehlen" : "Game files are missing";
+  Text(dl, bold_, 34 * u, {(width - TextWidth(bold_, 34 * u, title)) * 0.5f, a.y + 30 * u}, kGold, title);
+  const std::string text = ask_reimport_ +
+                           (german_ ? ". Die Disc noch einmal einlesen? Spielst\xC3\xA4nde und Einstellungen bleiben."
+                                    : ". Take the disc again? Saves and settings stay.");
+  dl->AddText(regular_, 20 * u, {a.x + 36 * u, a.y + 88 * u}, kWhite, text.c_str(), nullptr, bw - 72 * u);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, b.y - 76 * u}, q{x + 280 * u, b.y - 24 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    ButtonHint(dl, bold_, 24 * u, {p.x + (280 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool again = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Disc einlesen" : "Take the disc");
+  const bool later = button(b.x - 330 * u, "B", Rgba(200, 60, 60), german_ ? "Sp\xC3\xA4ter" : "Later");
+  ImGui::End();
+  if (again || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    // The disc browser (and its search) as from the start screen; the import sees the game's
+    // default.xex missing or wrong and writes the disc again.
+    ask_reimport_.clear();
+    repair_disc_ = true;
+    browse_for_language_ = false;
+    browser_.SetForLanguage(false);
+    browser_.Open();
+  } else if (later || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_reimport_.clear();
   }
   return true;
 }
@@ -2094,6 +2142,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
     return true;
   }
   if (ask_import_settings_) return DrawImportQuestion(width, height);
+  if (!ask_reimport_.empty()) return DrawReimportQuestion(width, height);
   if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (ask_update_ >= 0) return DrawUpdateConfirm(width, height);
   if (crash_code_ != 0) return DrawCrashReport(width, height);
@@ -2114,11 +2163,14 @@ bool LauncherUi::DrawScreens(float width, float height) {
       } else if (browse_for_language_ || IsImaginatorsPs3Disc(chosen)) {
         TakeLanguageDisc(chosen);
       } else if (!import_.running()) {
-        import_.Start(chosen, found_, german_);
+        import_.Start(chosen, found_, german_, repair_disc_);
       }
     }
     // Closed (chosen or not): the next time it is for discs again.
-    if (!browser_.is_open()) browser_.SetForBackup(false);
+    if (!browser_.is_open()) {
+      browser_.SetForBackup(false);
+      repair_disc_ = false;
+    }
     return true;
   }
   if (profiles_screen_.is_open()) {
@@ -2235,7 +2287,41 @@ bool LauncherUi::DrawScreens(float width, float height) {
     if (saved && settings_game_ < loaders_.size()) loaders_[settings_game_] = SettingsLoader();
     // "Shader-Cache leeren" (game_settings.cpp): the game's shaders in the data folder, and in its old
     // folder in Documents for a game from before the move; it builds them again on its next start.
-    if (settings_.TakeAction() == "reset_shader_cache" && settings_game_ < found_.size()) {
+    const std::string game_action = settings_.TakeAction();
+    // "Spieldateien pr\xC3\xBC" "fen" (game_files.h, #41): all there, or what isn't and the offer
+    // to set the disc up again.
+    if (game_action == "check_game_files" && settings_game_ < found_.size()) {
+      const Found& f = found_[settings_game_];
+      const GameFilesCheck check = CheckGameFiles(f.rom, AllGames()[settings_game_].xex_sha256);
+      if (check.ok()) {
+        settings_.ShowMessage(german_ ? "Alles da (" + std::to_string(check.files) + " Dateien)"
+                                      : "Everything's there (" + std::to_string(check.files) + " files)");
+      } else {
+        std::vector<std::string> bad = check.missing;
+        bad.insert(bad.end(), check.changed.begin(), check.changed.end());
+        std::string names;
+        for (size_t i = 0; i < bad.size() && i < 4; ++i) names += (i ? ", " : "") + bad[i];
+        if (bad.size() > 4) names += ", ...";
+        // "2 Dateien fehlen, 1 Datei ist nicht vollständig: ...", only the parts that apply.
+        auto count = [&](size_t n, const char* one_de, const char* many_de, const char* one_en, const char* many_en) {
+          char text[96];
+          std::snprintf(text, sizeof(text), n == 1 ? (german_ ? one_de : one_en) : (german_ ? many_de : many_en), n);
+          return std::string(text);
+        };
+        std::string what;
+        if (!check.missing.empty()) {
+          what = count(check.missing.size(), "%zu Datei fehlt", "%zu Dateien fehlen", "%zu file is missing",
+                       "%zu files are missing");
+        }
+        if (!check.changed.empty()) {
+          what += (what.empty() ? "" : ", ") +
+                  count(check.changed.size(), "%zu Datei ist nicht vollst\xC3\xA4ndig",
+                        "%zu Dateien sind nicht vollst\xC3\xA4ndig", "%zu file isn't whole", "%zu files aren't whole");
+        }
+        ask_reimport_ = what + ": " + names;
+      }
+    }
+    if (game_action == "reset_shader_cache" && settings_game_ < found_.size()) {
       const std::filesystem::path exe = found_[settings_game_].exe;
       std::error_code ec;
       uintmax_t removed = 0;

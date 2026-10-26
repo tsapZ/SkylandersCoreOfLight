@@ -27,7 +27,9 @@ class DiscImport {
 
   // Starts reading `source` (an ISO, or a folder with an unpacked disc) on a thread of its own;
   // `found` are the launcher's games (where each reads its disc). Not while one is running.
-  void Start(const std::filesystem::path& iso, const std::vector<Found>& found, bool german);
+  // `repair`: written again even when its default.xex is there and right ("Check game files"
+  // found other files missing, game_files.h).
+  void Start(const std::filesystem::path& iso, const std::vector<Found>& found, bool german, bool repair = false);
   bool running() const;
   // Stops a running import after the file being written (the disc is then not set up).
   void Cancel() {
