@@ -66,6 +66,7 @@ HubSettings LoadHubSettings() {
   s.fullscreen = IsOn(get("fullscreen"), s.fullscreen);
   s.auto_backup = IsOn(get("auto_backup"), s.auto_backup);
   s.auto_update_games = IsOn(get("auto_update_games"), s.auto_update_games);
+  if (const std::string handheld = get("handheld"); handheld == "on" || handheld == "off") s.handheld = handheld;
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   s.games_dir = get("games_dir");
   s.old_data_kept = IsOn(get("old_data_kept"), s.old_data_kept);
@@ -170,6 +171,27 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                                  "Bildschirme gleiten und blenden ein; Lichtfunken laufen um die gew\xC3\xA4hlte "
                                  "Spielkarte und das Profilbild.",
                                  settings.animations));
+  {
+    // Handheld mode (#39): bigger screens, games set up at 1x.
+    GameSetting handheld;
+    handheld.cvar = "handheld";
+    handheld.en = "Handheld mode";
+    handheld.de = "Handheld-Modus";
+    handheld.help_en = "For handheld PCs (ROG Ally, Legion Go, Steam Deck with Windows): the launcher's screens "
+                       "are drawn bigger, and a game set up here starts with resolution scale 1x, easier on the "
+                       "battery. Automatic: on when the screen is small or the chip is a handheld's. A game's "
+                       "settings you've made stay as they are.";
+    handheld.help_de = "FÃ¼r Handheld-PCs (ROG Ally, Legion Go, Steam Deck mit Windows): Die Bildschirme "
+                       "des Hubs werden grÃ¶Ã" "er gezeichnet, und ein hier eingerichtetes Spiel "
+                       "startet mit AuflÃ¶sungsskala 1x, das schont den Akku. Automatisch: an, wenn der "
+                       "Bildschirm klein ist oder der Chip einer fÃ¼r Handhelds ist. Deine Einstellungen "
+                       "eines Spiels bleiben, wie sie sind.";
+    handheld.type = "string";
+    handheld.category = kCategory;
+    handheld.value = settings.handheld;
+    handheld.options = {{"auto", "Automatic", "Automatisch"}, {"on", "On", "An"}, {"off", "Off", "Aus"}};
+    page.settings.push_back(std::move(handheld));
+  }
   page.settings.push_back(Switch("fullscreen", "Fullscreen (also at start)", "Vollbild (auch beim Start)",
                                  "The launcher fills the screen and starts that way, for the TV or a handheld. F11 or "
                                  "Alt+Enter switch it too; --fullscreen on its command line (Steam's launch options) "

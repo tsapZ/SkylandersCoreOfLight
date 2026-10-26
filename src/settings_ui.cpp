@@ -267,7 +267,7 @@ void SettingsScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   DrawBackdrop(dl, width, height, background_);
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim, german_ ? "EINSTELLUNGEN" : "SETTINGS");
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold, title_);

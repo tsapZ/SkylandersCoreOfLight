@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "hints.h"
 #include "portal/figure_info.h"
 #include "portal/figure_stats.h"
 #include "portal/trap_villain.h"
@@ -63,6 +64,7 @@ class FiguresScreen {
   int tab_ = 0;                  // 0 = every game, then the games in release order, then items
   bool marks_enabled_ = true;    // "I own it" marks (hub_settings.h)
   bool progress_ = false;        // each tab shows how many of its figures are owned (#43)
+  HintRowFit hint_row_;          // the hints at the bottom, smaller when they don't fit
   bool all_ = false;             // every Skylander of the game, not only the owner's
   int selected_ = 0;
   // The chip under the tabs (the owner's wish, 2026-10-25: a game's figures by element, to get

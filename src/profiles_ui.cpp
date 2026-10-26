@@ -254,7 +254,7 @@ void ProfilesScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22),
                               Rgba(3, 7, 22));
   Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim, "SKYLANDERS");

@@ -25,6 +25,7 @@
 #include "portal/figure_file.h"
 #include "portal/figure_info.h"
 #include "game_files.h"
+#include "handheld.h"
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
@@ -148,6 +149,9 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
 
 void LauncherUi::ApplyHubSettings() {
   german_ = HubGerman(hub_);
+  // Handheld mode (#39): bigger screens (hints.h UiScale), games set up at 1x.
+  g_handheld_active = HandheldActive(hub_.handheld);
+  g_ui_zoom = g_handheld_active ? kHandheldZoom : 1.0f;
   // The games' folder chosen in the setup, unless the command line or coreoflight.ini set one.
   if (!hub_.games_dir.empty() && !GamesFolderChosen()) {
     // Under Wine through Z:\var\home rather than the /home link (RealFolder).
@@ -301,7 +305,7 @@ void LauncherUi::GameExitCode(unsigned long code) {
 // A game ended with an error: what happened and the report one press away (the owner, 2026-10-23:
 // "Problem melden" should come up by itself when a game crashes).
 bool LauncherUi::DrawCrashReport(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("crash", nullptr,
@@ -760,7 +764,7 @@ void LauncherUi::TakeLanguageDisc(const std::filesystem::path& chosen) {
 // "Imaginators: language": English, Deutsch, Francais, and the disc's own ones back when another
 // is in; up / down and A, or a click; B back.
 bool LauncherUi::DrawLanguage(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   size_t count = 0;
   const LanguageImport::Language* languages = LanguageImport::Languages(&count);
   const int rows = int(count) + (language_now_.empty() ? 0 : 1);
@@ -1173,7 +1177,7 @@ void LauncherUi::UpdateTitleMusicExport() {
 // While a game starts: its background and name, until its window is up (main.cpp hides the
 // launcher then), so the desktop doesn't show for the seconds before.
 bool LauncherUi::DrawStarting(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("starting", nullptr,
@@ -1202,7 +1206,7 @@ bool LauncherUi::DrawStarting(float width, float height) {
 
 // "Beenden?": A / Enter quits, B / Esc goes back to the start screen; the mouse can click either.
 bool LauncherUi::DrawQuitConfirm(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("quit", nullptr,
@@ -1241,7 +1245,7 @@ bool LauncherUi::DrawQuitConfirm(float width, float height) {
 }
 
 bool LauncherUi::DrawImportQuestion(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("importquestion", nullptr,
@@ -1288,7 +1292,7 @@ bool LauncherUi::DrawImportQuestion(float width, float height) {
 }
 
 bool LauncherUi::DrawReimportQuestion(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("reimportquestion", nullptr,
@@ -1346,7 +1350,7 @@ bool LauncherUi::UpdateAvailable(size_t index) const {
 // saves, figures, the disc and the settings file stay), B plays the installed one for now.
 bool LauncherUi::DrawUpdateConfirm(float width, float height) {
   const size_t index = size_t(ask_update_);
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("update", nullptr,
@@ -1492,7 +1496,7 @@ void LauncherUi::ShowToast(const std::string& text, double seconds) {
 // The note at the bottom right, over every screen: the manual check while it runs, what it found
 // (ShowToast), and "Alle aktualisieren" with its progress where the start screen's button isn't.
 void LauncherUi::DrawToast(float width, float height, bool start_screen) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   std::string text;
   float progress = -1.0f;  // a bar under the text when 0..1
   bool spinning = false;
@@ -1549,7 +1553,7 @@ void LauncherUi::DrawToast(float width, float height, bool start_screen) {
 // "Updates gefunden" after a manual check: each game with its versions; A downloads and installs
 // them one after the other ("Alle aktualisieren"), B leaves them on the cards.
 bool LauncherUi::DrawUpdatesFound(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("updatesfound", nullptr,
@@ -1842,7 +1846,7 @@ void LauncherUi::TakeDataMove() {
 }
 
 bool LauncherUi::DrawDataMove(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("datamove", nullptr,
@@ -1874,7 +1878,7 @@ bool LauncherUi::DrawDataMove(float width, float height) {
 // "Spieldaten umgezogen": the old folders whose every file is in the data folder now. A deletes
 // them (each checked again), B keeps them and isn't asked again (a moved data folder asks anyway).
 bool LauncherUi::DrawOldData(float width, float height) {
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("olddata", nullptr,
@@ -1979,7 +1983,7 @@ void LauncherUi::UpdateDownload() {
 // for this launch.
 bool LauncherUi::DrawHubUpdate(float width, float height) {
   const Release& release = *hub_update_;
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("hubupdate", nullptr,
@@ -2344,7 +2348,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
 
   // Background: the chosen game's dashboard picture from its disc (1920x1080, filling the window),
   // darkened; without one deep blue. The Core of Light glows in the middle either way.
@@ -2574,16 +2578,20 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   float hx = 48 * u;
   const float hy = height - 52 * u;
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Starten" : "Play");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings", "Tab");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc", "D");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "RT", Rgba(80, 90, 140), german_ ? "Spielst\xC3\xA4nde" : "Saves");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles", "P");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Hub" : "Hub");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60),
+  // Smaller when it doesn't fit the window (handheld mode, a narrow window).
+  static HintRowFit hint_row;
+  const float hs = hint_row.Size(22 * u);
+  hx = Hint(dl, bold_, hs, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Starten" : "Play");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Einstellungen" : "Settings", "Tab");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Disc einlesen" : "Add a disc", "D");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "Start", Rgba(80, 90, 140), german_ ? "Figuren" : "Figures");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "RT", Rgba(80, 90, 140), german_ ? "Spielst\xC3\xA4nde" : "Saves");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles", "P");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Hub" : "Hub");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "B", Rgba(200, 60, 60),
             import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));
+  hint_row.End(48 * u, hx, width - 24 * u);
   // The disc being set up: what happens, and how far the unpacking is.
   const DiscImport::Phase phase = import_.phase();  // UpdateImport follows it
   if (import_.running() || (phase != DiscImport::Phase::kIdle && ImGui::GetTime() < import_shown_until_)) {

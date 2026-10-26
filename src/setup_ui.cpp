@@ -305,7 +305,7 @@ void SetupScreen::Draw(float width, float height, const Launcher& launcher) {
 
 void SetupScreen::DrawWelcome(float width, float height) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   DrawBackdrop(dl, width, height, {});
   Title(dl, bold_, u, german_ ? "WILLKOMMEN" : "WELCOME");
   const float left = 48 * u, wrap = std::min(width - 2 * left, 900 * u);
@@ -367,7 +367,7 @@ void SetupScreen::DrawWelcome(float width, float height) {
 
 void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   DrawBackdrop(dl, width, height, {});
   Title(dl, bold_, u, german_ ? "DEINE DISCS" : "YOUR DISCS");
   const float left = 48 * u, right = width - 48 * u;
@@ -609,7 +609,7 @@ void SetupScreen::Advance(const Launcher& launcher) {
 
 void SetupScreen::DrawWork(float width, float height, const Launcher& launcher) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   DrawBackdrop(dl, width, height, {});
   const bool done = page_ == Page::kDone;
   Title(dl, bold_, u, done ? (german_ ? "FERTIG" : "DONE") : (german_ ? "EINRICHTEN" : "SETTING UP"));

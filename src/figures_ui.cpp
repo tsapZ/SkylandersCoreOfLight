@@ -629,7 +629,7 @@ void FiguresScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   // A game's tab over that game's dashboard background (kGames is AllGames' order); every game's
   // over the plain blue.
   DrawBackdrop(dl, width, height,
@@ -969,7 +969,8 @@ void FiguresScreen::Draw(float width, float height) {
         sub_x = x + 32 * u;
       }
     }
-    Text(dl, regular_, 18 * u, {sub_x, y}, kDim, sub, beside - (sub_x - x));
+    // One line, cut with "..." in a narrow panel: wrapped, its second line ran into the next one.
+    Text(dl, regular_, 18 * u, {sub_x, y}, kDim, Fit(regular_, 18 * u, sub, beside - (sub_x - x)));
     y += 28 * u;
     // The badge only when it says more than the group ("Fallen-Meister  ·  Fallen-Meister",
     // "Fahrzeuge  ·  Fahrzeug" said it twice).
@@ -978,7 +979,7 @@ void FiguresScreen::Draw(float width, float height) {
         !badge.empty() && !group.starts_with(badge)) {
       group += "  \xC2\xB7  " + badge;
     }
-    Text(dl, regular_, 18 * u, {x, y}, kDim, group, beside);
+    Text(dl, regular_, 18 * u, {x, y}, kDim, Fit(regular_, 18 * u, group, beside));
     y = std::max(y + 40 * u, below);
     // A trap: the villain caught in it (skylanders-portal trap_villain.h), as Trap Team shows it.
     if (f.trap) {
@@ -1133,20 +1134,23 @@ void FiguresScreen::Draw(float width, float height) {
   }
   float hx = left;
   const float hy = height - 52 * u;
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Spiel" : "Game");
-  if (!elements.empty()) hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LT/RT", Rgba(80, 90, 140), "Element");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220),
+  // Smaller when it doesn't fit the window (handheld mode, a narrow window).
+  const float hs = hint_row_.Size(22 * u);
+  hx = Hint(dl, bold_, hs, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Spiel" : "Game");
+  if (!elements.empty()) hx = Hint(dl, bold_, hs, {hx, hy}, "LT/RT", Rgba(80, 90, 140), "Element");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "Upgrades" : "Upgrades");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "X", Rgba(50, 120, 220),
             all_ ? (german_ ? "Nur meine" : "Only mine") : (german_ ? "Alle Skylander" : "Every Skylander"));
   if (n && (marks_enabled_ || !shown[selected_]->file.empty())) {
     const Figure& f = *shown[selected_];
-    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40),
+    hx = Hint(dl, bold_, hs, {hx, hy}, "Y", Rgba(220, 180, 40),
               !f.file.empty() ? (german_ ? "In anderes Profil kopieren" : "Copy to another profile")
               : f.marked      ? (german_ ? "Hab ich nicht" : "I don't own it")
                               : (german_ ? "Hab ich" : "I own it"));
   }
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Rangliste" : "Leaderboard");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Rangliste" : "Leaderboard");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+  hint_row_.End(left, hx, width - 24 * u);
   ImGui::End();
 }
 

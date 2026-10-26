@@ -271,7 +271,7 @@ void FileBrowser::Draw(float width, float height) {
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float u = std::min(width / 1280.0f, height / 720.0f);
+  const float u = UiScale(width, height);
   DrawBackdrop(dl, width, height, {}, true);
   if (folders_only_) {
     Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim,

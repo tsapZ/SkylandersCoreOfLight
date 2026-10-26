@@ -4,9 +4,30 @@
 // after a pad button or stick, the keyboard's keys after a key, a mouse move or a click, with a
 // short cross-fade between the two (the owner's wish, 2026-10-23).
 
+#include <algorithm>
+
 #include "imgui.h"
 
 namespace coreoflight {
+
+// How much bigger every screen is drawn than its size against 1280x720 says: 1, or more in
+// handheld mode (handheld.h, #39). Set by LauncherUi::ApplyHubSettings.
+inline float g_ui_zoom = 1.0f;
+
+// A screen's size unit: the window against 1280x720, times g_ui_zoom.
+inline float UiScale(float width, float height) { return std::min(width / 1280.0f, height / 720.0f) * g_ui_zoom; }
+
+// A row of hints that gets smaller when it doesn't fit (a narrow window, handheld mode): Size()
+// gives this frame's text size, End() takes where the row started and ended and the right edge it
+// must stay inside; the next frame's size follows. Everything in a row scales with its size.
+struct HintRowFit {
+  float fit = 1.0f;
+  float Size(float size) const { return size * fit; }
+  void End(float start, float end, float limit) {
+    const float full = (end - start) / fit;
+    if (full > 0) fit = std::clamp((limit - start) / full, 0.6f, 1.0f);
+  }
+};
 
 // Once a frame, after ImGui::NewFrame: notes which input was used last.
 void UpdateHintInput();
