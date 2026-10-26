@@ -26,6 +26,7 @@
 #include "portal/figure_info.h"
 #include "problem_report.h"
 #include "textures.h"
+#include "whats_new.h"
 
 namespace sp = skylanders::portal;
 
@@ -684,6 +685,11 @@ void LauncherUi::OpenHubSettings(int page) {
     }
   }
   hub_loader_.SetReady(HubSettingsPages(shown));
+  // What's new in this version, at the bottom right (#44).
+  std::vector<std::pair<std::string, std::string>> news;
+  for (const WhatsNewLine& line : kWhatsNew) news.emplace_back(line.en, line.de);
+  hub_screen_.SetNote({"New in Core of Light " COREOFLIGHT_VERSION, "Neu in Core of Light " COREOFLIGHT_VERSION},
+                      std::move(news));
   hub_screen_.Open(german_ ? "Einstellungen des Hubs" : "Launcher settings", &hub_loader_, {}, page);
   for (int p = 0; p < 2; ++p) rumble_seen_[p].clear();
   language_label_pending_ = true;

@@ -100,6 +100,12 @@ void SettingsScreen::ShowMessage(const std::string& text) {
   message_until_ = ImGui::GetTime() + 6.0;
 }
 
+void SettingsScreen::SetNote(std::pair<std::string, std::string> title,
+                             std::vector<std::pair<std::string, std::string>> lines) {
+  note_title_ = std::move(title);
+  note_lines_ = std::move(lines);
+}
+
 bool SettingsScreen::SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de) {
   if (!edit_) return false;
   for (GameSettingsPage& page : edit_->pages) {
@@ -439,6 +445,29 @@ void SettingsScreen::Draw(float width, float height) {
       help = (german_ ? "Nur mit \xE2\x80\x9E" + needs->de + "\xE2\x80\x9C an. " : "Only with \"" + needs->en + "\" on. ") + help;
     }
     Text(dl, regular_, 20 * u, {px + 20 * u, list_top + 58 * u}, kDim, help, pw - 40 * u);
+    // The note at the bottom (the launcher's "what's new"), below the help when there is room.
+    if (!note_lines_.empty()) {
+      const float line_size = 18 * u, wrap = pw - 64 * u;
+      const float help_bottom =
+          list_top + 58 * u + regular_->CalcTextSizeA(20 * u, FLT_MAX, pw - 40 * u, help.c_str()).y;
+      float note_h = 34 * u;
+      for (const auto& [en, de] : note_lines_) {
+        note_h += regular_->CalcTextSizeA(line_size, FLT_MAX, wrap, (german_ ? de : en).c_str()).y + 8 * u;
+      }
+      float ny = bottom - 30 * u - note_h;
+      if (ny > help_bottom + 24 * u) {
+        dl->AddLine({px + 20 * u, ny - 14 * u}, {px + pw - 20 * u, ny - 14 * u}, kEdge, 1.5f * u);
+        Text(dl, bold_, 20 * u, {px + 20 * u, ny}, kGold, german_ ? note_title_.second : note_title_.first,
+             pw - 40 * u);
+        ny += 34 * u;
+        for (const auto& [en, de] : note_lines_) {
+          const std::string& line = german_ ? de : en;
+          dl->AddCircleFilled({px + 28 * u, ny + line_size * 0.55f}, 3 * u, kGold);
+          Text(dl, regular_, line_size, {px + 40 * u, ny}, kDim, line, wrap);
+          ny += regular_->CalcTextSizeA(line_size, FLT_MAX, wrap, line.c_str()).y + 8 * u;
+        }
+      }
+    }
   }
 
   // Hints, a message, and B: back. With unsaved changes B asks: A saves and closes, X throws the

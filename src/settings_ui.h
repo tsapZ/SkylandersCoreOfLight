@@ -8,6 +8,8 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "game_settings.h"
 
@@ -38,6 +40,9 @@ class SettingsScreen {
   // What a button row shows as its value (the games folder after choosing one).
   // False while the page isn't loaded yet (its first frame makes the copy that is shown).
   bool SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de);
+  // A note at the bottom of the explanation panel on every page: the launcher settings' "what's
+  // new" (#44). A title and short lines, (English, German) each.
+  void SetNote(std::pair<std::string, std::string> title, std::vector<std::pair<std::string, std::string>> lines);
 
  private:
   void Step(int step);
@@ -73,6 +78,8 @@ class SettingsScreen {
   bool confirm_discard_ = false;
   std::string message_;
   double message_until_ = 0;
+  std::pair<std::string, std::string> note_title_;
+  std::vector<std::pair<std::string, std::string>> note_lines_;
 };
 
 }  // namespace coreoflight
