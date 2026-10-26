@@ -80,6 +80,32 @@ inline std::set<std::pair<unsigned long, unsigned long>> XInputVidPids() {
   return out;
 }
 
+// The real Portal of Power on USB, as the pad watch saw it last (every two seconds, #42): 0 none,
+// 1 the PS3 / Wii / Wii U portal (1430:0150, every game's portal from Spyro's Adventure on), 2 the
+// Xbox 360 portal (1430:1F17). The ids skylanders-portal's UsbPortal opens (kKnownPortals). Only
+// looked at in the HID list, never opened: a game may be using it.
+enum class UsbPortalKind { kNone, kPs3WiiU, kXbox360 };
+inline std::atomic<UsbPortalKind> g_usb_portal{UsbPortalKind::kNone};
+
+inline UsbPortalKind FindUsbPortal() {
+  UINT count = 0;
+  if (GetRawInputDeviceList(nullptr, &count, sizeof(RAWINPUTDEVICELIST)) != 0 || !count) return UsbPortalKind::kNone;
+  std::vector<RAWINPUTDEVICELIST> list(count);
+  if (GetRawInputDeviceList(list.data(), &count, sizeof(RAWINPUTDEVICELIST)) == UINT(-1)) return UsbPortalKind::kNone;
+  UsbPortalKind found = UsbPortalKind::kNone;
+  for (UINT i = 0; i < count; ++i) {
+    if (list[i].dwType != RIM_TYPEHID) continue;
+    wchar_t name[512] = L"";
+    UINT size = 512;  // characters for RIDI_DEVICENAME
+    if (GetRawInputDeviceInfoW(list[i].hDevice, RIDI_DEVICENAME, name, &size) == UINT(-1)) continue;
+    std::wstring path(name);
+    for (wchar_t& c : path) c = wchar_t(std::towupper(c));
+    if (path.find(L"VID_1430&PID_0150") != std::wstring::npos) return UsbPortalKind::kPs3WiiU;
+    if (path.find(L"VID_1430&PID_1F17") != std::wstring::npos) found = UsbPortalKind::kXbox360;
+  }
+  return found;
+}
+
 // Looks again which joystick ids have a pad that isn't an XInput one (every two seconds).
 // Under Wine / Proton the "IG_" test doesn't hold: Steam Input's virtual Xbox pad (and the real pad
 // behind it) shows up through winmm as well, in the Xbox layout, which the Dual Action layout below
@@ -145,6 +171,12 @@ inline void StartPadWatch() {
           any = any || now;
         }
         FindGenericPads(any);
+        const UsbPortalKind portal = FindUsbPortal();
+        if (g_usb_portal.exchange(portal) != portal) {
+          HubLog(portal == UsbPortalKind::kNone ? "portal: USB portal gone"
+                                                : portal == UsbPortalKind::kXbox360 ? "portal: Xbox 360 USB portal plugged in"
+                                                                                    : "portal: USB portal (PS3 / Wii / Wii U) plugged in");
+        }
         Sleep(2000);
       }
     }).detach();

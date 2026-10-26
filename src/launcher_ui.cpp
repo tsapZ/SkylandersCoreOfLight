@@ -956,6 +956,51 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
   if (top_focus_ == 0 && px < left - 26 * u) {
     dl->AddRect({px + 2 * u, c.y - 21 * u}, {left - 20 * u, c.y + 21 * u}, kGold, 14 * u, 0, 2.5f * u);
   }
+  // A real USB portal left of them (#42): a small portal, lit while the chosen game uses it (its
+  // Portal setting "Both" or "USB only"), grey while it plays with the virtual one. A click says
+  // which portal it is and how the game gets to use it.
+  if (const UsbPortalKind portal = g_usb_portal.load(); portal != UsbPortalKind::kNone) {
+    std::string mode;
+    if (selected_ < found_.size()) {
+      if (auto it = found_[selected_].settings.find("portal_mode"); it != found_[selected_].settings.end()) {
+        mode = it->second;
+        std::erase(mode, '"');
+      }
+    }
+    const bool used = mode == "hybrid" || mode == "usb";
+    const float w = 46 * u, h = 30 * u;
+    const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
+    const bool over = ImGui::IsMouseHoveringRect(a, b);
+    if (over) dl->AddRectFilled({a.x - 4 * u, a.y - 4 * u}, {b.x + 4 * u, b.y + 4 * u}, Rgba(255, 210, 90, 40), 13 * u);
+    dl->AddRectFilled(a, b, Rgba(40, 50, 100, 230), 10 * u);
+    dl->AddRect(a, b, Rgba(90, 100, 150), 10 * u, 0, 1.5f * u);
+    // The portal: a dark base and its top, glowing in the portal's blue when in use.
+    const ImVec2 m{(a.x + b.x) * 0.5f, c.y + 3 * u};
+    dl->AddEllipseFilled({m.x, m.y + 4 * u}, {15 * u, 6 * u}, Rgba(20, 22, 40));
+    dl->AddRectFilled({m.x - 15 * u, m.y - 1 * u}, {m.x + 15 * u, m.y + 4 * u}, Rgba(20, 22, 40));
+    dl->AddEllipseFilled({m.x, m.y - 1 * u}, {15 * u, 6 * u}, used ? Rgba(70, 150, 255) : Rgba(95, 105, 135));
+    dl->AddEllipse({m.x, m.y - 1 * u}, {15 * u, 6 * u}, Rgba(210, 215, 235), 0, 0, 1.5f * u);
+    if (used) {
+      const float pulse = 0.5f + 0.5f * std::sin(float(ImGui::GetTime()) * 2.5f);
+      dl->AddEllipseFilled({m.x, m.y - 6 * u}, {9 * u, 4 * u}, Rgba(150, 210, 255, int(60 + 80 * pulse)));
+    }
+    if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      const std::string game = selected_ < AllGames().size()
+                                   ? (german_ ? AllGames()[selected_].name_de : AllGames()[selected_].name_en)
+                                   : std::string();
+      std::string text = portal == UsbPortalKind::kXbox360
+                             ? (german_ ? "Xbox-360-Portal am USB (noch nicht getestet). " : "Xbox 360 portal on USB (not tested yet). ")
+                             : (german_ ? "Echtes Portal am USB (PS3 / Wii / Wii U). " : "Real portal on USB (PS3 / Wii / Wii U). ");
+      if (used) {
+        text += german_ ? game + " benutzt es." : game + " uses it.";
+      } else {
+        text += german_ ? game + " spielt mit dem virtuellen Portal. Zum Benutzen: Einstellungen des Spiels (Y / Tab) > Portal > \"Beides\" oder \"Nur echtes USB-Portal\"."
+                        : game + " plays with the virtual portal. To use it: the game's settings (Y / Tab) > Portal > \"Both\" or \"Real USB portal only\".";
+      }
+      ShowToast(text, 10.0);
+    }
+    px = a.x - 8 * u;
+  }
   badge_left_ = px;  // DrawUpdateAll keeps left of it
   return hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 }
