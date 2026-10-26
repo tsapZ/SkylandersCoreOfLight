@@ -36,7 +36,8 @@ class SettingsScreen {
   // heard while it changes); empty when the screen doesn't have it.
   std::string EditedValue(const std::string& cvar) const;
   // What a button row shows as its value (the games folder after choosing one).
-  void SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de);
+  // False while the page isn't loaded yet (its first frame makes the copy that is shown).
+  bool SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de);
 
  private:
   void Step(int step);

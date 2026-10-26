@@ -57,6 +57,8 @@ add_executable(coreoflight WIN32
   src/saves.cpp
   src/saves_ui.cpp
   src/data_move.cpp
+  src/language_import.cpp
+  src/alchemy/lzma_decoder.cpp
   src/coreoflight.rc
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
@@ -65,7 +67,8 @@ add_executable(coreoflight WIN32
   ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
   ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
 )
-target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+# thirdparty/stb: stb_image's zlib decoder for Imaginators' archives (language_import.cpp).
+target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/backends thirdparty/stb)
 # IMGUI_IMPL_WIN32_DISABLE_GAMEPAD: the launcher reads every XInput pad itself (pad_state.h).
 target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
                                                IMGUI_IMPL_WIN32_DISABLE_GAMEPAD

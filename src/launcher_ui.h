@@ -18,6 +18,7 @@
 #include "game_settings.h"
 #include "games.h"
 #include "hub_settings.h"
+#include "language_import.h"
 #include "music.h"
 #include "profiles_ui.h"
 #include "settings_ui.h"
@@ -234,6 +235,25 @@ class LauncherUi {
   // Imaginators figures from a folder (#34): picked in the same browser (FileBrowser::for_figures),
   // from the settings' "Imaginators-Figuren importieren"; what came in shows as a toast.
   FigureImport figure_import_;
+  // Imaginators in another language from its PS3 disc (language_import.h): a PS3 disc picked in
+  // the disc browser, or the settings' "Imaginators-Sprache", asks which language (DrawLanguage);
+  // from the settings the disc is picked after the language (browse_for_language_).
+  LanguageImport language_import_;
+  bool ask_language_ = false;
+  int language_row_ = 0;
+  std::string language_now_;            // ImportedLanguage when the question opened
+  std::filesystem::path language_source_;  // the PS3 disc, empty: pick it after the language
+  std::string language_wanted_;
+  bool browse_for_language_ = false;
+  size_t ImaginatorsIndex() const;
+  bool ImaginatorsReady() const;  // installed with its Xbox 360 disc
+  void AskLanguage(const std::filesystem::path& source);
+  void TakeLanguageDisc(const std::filesystem::path& chosen);
+  // The settings row's value; false while the settings page isn't loaded yet, then it is tried
+  // again the next frame (language_label_pending_).
+  bool LanguageLabel();
+  bool language_label_pending_ = false;
+  bool DrawLanguage(float width, float height);
   DataFolderMove data_move_;
   std::vector<OldData> old_data_;
   bool ask_old_data_ = false;

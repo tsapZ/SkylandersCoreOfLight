@@ -178,6 +178,24 @@ exe and gets out of the way while the game runs; no game needs it.
   `Imaginators` under its own file name (the catalog's name when the file's has fewer than three
   letters), never over a file there; one whose bytes are there already counts as "schon da". A toast
   says what came in and why the rest didn't; the launcher log lists every file.
+- **Imaginators-Sprache** (a row of the launcher's settings, `src/language_import.cpp`; the owner's
+  wish, 2026-10-25): the European 360 disc has only Spanish and Italian, the European PS3 disc ten
+  languages in the same archives (same paths, same IGA format). The row says which one the game
+  speaks; A asks English / Deutsch / Français (or the disc's own back, when another one is in), then
+  the PS3 disc in the disc browser ("Wähle deine PS3-Disc von Imaginators"). A PS3 disc picked in
+  the disc browser from the start screen or the first-run setup asks the language right away
+  instead of being unpacked. A C++ port of ImaginatorsRecomp's `tools/german_text.py`, nothing to
+  install: the text (every `*_es.lng` pointed at the PS3 twin, appended stored, IGZ platform word
+  6 -> 5), the licence (the 360 disc's own), the 360's platform strings (rebuilt by key from
+  `ps3/pcPlatformStrings`, the Xbox Live ones from a table per language), the voices (the PS3's MP3
+  banks) and the movies' spoken Bink track (only where this disc's packets are the PS3's). It reads
+  the .iso directly (its Joliet directory: the primary one cuts names after 31 characters) or the
+  unpacked folder; a dump that is still encrypted is refused with a note (its directory reads, its
+  files don't). About 45 s from the .iso, with a progress note at the bottom right; Imaginators
+  can't be started meanwhile. Everything is undone from `rom\archives\german_text_backup\` (the
+  Python tool's files, so either undoes the other's run; `language.txt` there names the language);
+  another language undoes the first one before it goes in. Setting up a different 360 disc deletes
+  that folder (its files replace the changed ones).
 - **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
   one text file onto the desktop, `Skylanders-problem-report-<date>.txt` (the same name in German), and shows it in Explorer.
   Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with
@@ -424,6 +442,17 @@ folder, the installed launcher starts into its first-run setup, silent uninstall
 its Apps entry.
 
 ## Checked (2026-10-22)
+
+- Imaginators language (2026-10-26), on a copy of the owner's disc folder: undoing the Python
+  tool's German import and doing it again here left all 6018 files byte for byte as
+  `german_text.py --movies --voices` does (1304 texts, 17917 voices, 78 movies, 46 s); English
+  the same but for the Xbox Live texts, which are English now instead of Spanish. French: the
+  same counts. Through the launcher (a stand-in exe, `--offline`): the row showed "Französisch",
+  English then the PS3 .iso in the browser put English in, "Español / Italiano" took it out, the
+  PS3 .iso from the start screen's D asked the language and put German in, and the card said "Die
+  Sprache von Imaginators wird gerade eingespielt" meanwhile; the 360 .iso picked for it said
+  "Das ist keine PS3-Disc von Imaginators". The game on the English copy: "Press START",
+  "STORY / Select / Options / Back", "PLEASE PLACE YOUR SKYLANDER".
 
 - Achievements: Trap Team, run once on a copy, left 46 achievements with 46 pictures and their
   German names; with two of them unlocked in the copy's `trapteamrecomp\achievements\41560911.toml`

@@ -100,8 +100,8 @@ void SettingsScreen::ShowMessage(const std::string& text) {
   message_until_ = ImGui::GetTime() + 6.0;
 }
 
-void SettingsScreen::SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de) {
-  if (!edit_) return;
+bool SettingsScreen::SetActionLabel(const std::string& cvar, const std::string& en, const std::string& de) {
+  if (!edit_) return false;
   for (GameSettingsPage& page : edit_->pages) {
     for (GameSetting& s : page.settings) {
       if (s.cvar != cvar || s.type != "action" || s.options.empty()) continue;
@@ -109,6 +109,7 @@ void SettingsScreen::SetActionLabel(const std::string& cvar, const std::string& 
       s.options[0].de = de;
     }
   }
+  return true;
 }
 
 std::string SettingsScreen::ValueLabel(const GameSetting& s) const {

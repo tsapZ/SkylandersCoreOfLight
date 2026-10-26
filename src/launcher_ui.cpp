@@ -429,6 +429,10 @@ void LauncherUi::Start(size_t index) {
     say(L"Dieses Spiel wird gerade aktualisiert", L"This game is being updated");
     return;
   }
+  if (index == ImaginatorsIndex() && language_import_.running()) {
+    say(L"Die Sprache von Imaginators wird gerade eingespielt", L"Imaginators' language is being put in");
+    return;
+  }
   // A newer setup than the installed game: ask first (once a launch; "Erst spielen" plays).
   if (UpdateAvailable(index) && !install_process_ && index < update_put_off_.size() && !update_put_off_[index]) {
     ask_update_ = int(index);
@@ -682,6 +686,170 @@ void LauncherUi::OpenHubSettings(int page) {
   hub_loader_.SetReady(HubSettingsPages(shown));
   hub_screen_.Open(german_ ? "Einstellungen des Hubs" : "Launcher settings", &hub_loader_, {}, page);
   for (int p = 0; p < 2; ++p) rumble_seen_[p].clear();
+  language_label_pending_ = true;
+}
+
+size_t LauncherUi::ImaginatorsIndex() const {
+  size_t im = 0;
+  while (im < AllGames().size() && std::string_view(AllGames()[im].name_en) != "Imaginators") ++im;
+  return im;
+}
+
+bool LauncherUi::ImaginatorsReady() const {
+  const size_t im = ImaginatorsIndex();
+  std::error_code ec;
+  return im < found_.size() && !found_[im].exe.empty() && !found_[im].rom.empty() &&
+         std::filesystem::exists(found_[im].rom / "archives" / "permanent_xenon.pak", ec);
+}
+
+bool LauncherUi::LanguageLabel() {
+  if (!hub_screen_.is_open()) return true;
+  std::string en = "Imaginators isn't set up", de = "Imaginators ist nicht eingerichtet";
+  if (ImaginatorsReady()) {
+    const std::string now = ImportedLanguage(found_[ImaginatorsIndex()].rom);
+    en = now.empty() ? "The disc's own (Spanish, Italian)" : "Changed (by a tool)";
+    de = now.empty() ? "Wie die Disc (Spanisch, Italienisch)" : "Ge\xC3\xA4ndert (mit einem Werkzeug)";
+    size_t count = 0;
+    const LanguageImport::Language* languages = LanguageImport::Languages(&count);
+    for (size_t i = 0; i < count; ++i) {
+      if (now != languages[i].code) continue;
+      en = languages[i].name_en;
+      de = languages[i].name_de;
+    }
+  }
+  return hub_screen_.SetActionLabel("im_language", en, de);
+}
+
+void LauncherUi::AskLanguage(const std::filesystem::path& source) {
+  if (language_import_.running()) return;  // its note shows how far it is
+  if (!ImaginatorsReady()) {
+    ShowToast(german_ ? "Imaginators braucht zuerst seine Xbox-360-Disc, dann die PS3-Disc f\xC3\xBCr die Sprache."
+                      : "Imaginators needs its Xbox 360 disc first, then the PS3 disc for the language.",
+              10.0);
+    return;
+  }
+  language_source_ = source;
+  language_now_ = ImportedLanguage(found_[ImaginatorsIndex()].rom);
+  language_row_ = 0;
+  ask_language_ = true;
+}
+
+// A disc picked in the disc browser that is a PS3 disc, or one picked for the language chosen in
+// the settings: with that language the import starts, else the question which one.
+void LauncherUi::TakeLanguageDisc(const std::filesystem::path& chosen) {
+  const bool for_language = std::exchange(browse_for_language_, false);
+  browser_.SetForLanguage(false);
+  if (!IsImaginatorsPs3Disc(chosen)) {
+    ShowToast(german_ ? "Das ist keine PS3-Disc von Imaginators." : "That isn't a PS3 disc of Imaginators.", 8.0);
+    return;
+  }
+  if (for_language && !language_wanted_.empty() && ImaginatorsReady() && !language_import_.running()) {
+    language_import_.Start(chosen, found_[ImaginatorsIndex()].rom, language_wanted_, german_);
+    return;
+  }
+  AskLanguage(chosen);
+}
+
+// "Imaginators: language": English, Deutsch, Francais, and the disc's own ones back when another
+// is in; up / down and A, or a click; B back.
+bool LauncherUi::DrawLanguage(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  size_t count = 0;
+  const LanguageImport::Language* languages = LanguageImport::Languages(&count);
+  const int rows = int(count) + (language_now_.empty() ? 0 : 1);
+  language_row_ = std::clamp(language_row_, 0, rows - 1);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("language", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const size_t im = ImaginatorsIndex();
+  DrawBackdrop(dl, width, height, im < background_art_.size() ? background_art_[im] : std::filesystem::path());
+  const float row_h = 54 * u;
+  const float bw = 800 * u, bh = 236 * u + float(rows) * row_h;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Imaginators: Sprache" : "Imaginators: language";
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title)) * 0.5f, a.y + 26 * u}, kGold, title);
+  const char* line = language_source_.empty()
+                         ? (german_ ? "Welche Sprache soll Imaginators sprechen? Danach w\xC3\xA4hlst du deine PS3-Disc "
+                                      "des Spiels (.iso oder entpackter Ordner)."
+                                    : "Which language should Imaginators speak? Then you pick your PS3 disc of the "
+                                      "game (.iso or unpacked folder).")
+                         : (german_ ? "Deine PS3-Disc von Imaginators hat Texte, Stimmen und Filme in mehr Sprachen. "
+                                      "Welche soll Imaginators sprechen?"
+                                    : "Your PS3 disc of Imaginators has texts, voices and movies in more languages. "
+                                      "Which one should Imaginators speak?");
+  Text(dl, regular_, 21 * u, {a.x + 40 * u, a.y + 78 * u}, kWhite, line, bw - 80 * u);
+  const ImGuiIO& io = ImGui::GetIO();
+  int clicked = -1;
+  for (int r = 0; r < rows; ++r) {
+    const bool own = r == int(count);  // the disc's own languages back
+    const ImVec2 p{a.x + 40 * u, a.y + 150 * u + float(r) * row_h}, q{b.x - 40 * u, p.y + row_h - 8 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    if (over && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) language_row_ = r;
+    const bool chosen = r == language_row_;
+    dl->AddRectFilled(p, q, chosen ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 14 * u);
+    if (chosen) dl->AddRect(p, q, kGold, 14 * u, 0, 2 * u);
+    const std::string label =
+        own ? (german_ ? "Espa\xC3\xB1ol / Italiano (wie die Disc)" : "Espa\xC3\xB1ol / Italiano (the disc's own)")
+            : std::string(languages[r].own);
+    Text(dl, bold_, 24 * u, {p.x + 24 * u, p.y + 9 * u}, kWhite, label.c_str());
+    if (!own && language_now_ == languages[r].code) {
+      const char* now = german_ ? "jetzt" : "now";
+      Text(dl, regular_, 20 * u, {q.x - 24 * u - TextWidth(regular_, 20 * u, now), p.y + 12 * u}, kGold, now);
+    }
+    if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) clicked = r;
+  }
+  const char* note = german_ ? "Etwa eine Minute. Spielst\xC3\xA4nde bleiben; zur\xC3\xBC" "ck geht es jederzeit unter "
+                               "Einstellungen des Hubs > Imaginators-Sprache."
+                             : "About a minute. Your saves stay; you can go back any time in Launcher settings > "
+                               "Imaginators language.";
+  Text(dl, regular_, 18 * u, {a.x + 40 * u, b.y - 74 * u}, kDim, note, bw - 80 * u);
+  ButtonHint(dl, bold_, 22 * u, {a.x + 40 * u, b.y - 42 * u}, "A", Rgba(70, 170, 70), german_ ? "W\xC3\xA4hlen" : "Choose");
+  ButtonHint(dl, bold_, 22 * u, {a.x + 250 * u, b.y - 42 * u}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+  ImGui::End();
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadDpadUp) || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickUp) ||
+      ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+    language_row_ = (language_row_ + rows - 1) % rows;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadDpadDown) || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickDown) ||
+      ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+    language_row_ = (language_row_ + 1) % rows;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_language_ = false;
+    return true;
+  }
+  if (clicked >= 0) language_row_ = clicked;
+  if (clicked < 0 && !ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) && !ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    return true;
+  }
+  ask_language_ = false;
+  if (!ImaginatorsReady() || language_import_.running()) return true;
+  const std::filesystem::path rom = found_[im].rom;
+  if (language_row_ == int(count)) {
+    language_import_.StartRestore(rom, german_);
+    return true;
+  }
+  const std::string code = languages[language_row_].code;
+  if (code == language_now_) {
+    ShowToast(german_ ? std::string("Imaginators spricht schon ") + languages[language_row_].name_de + "."
+                      : std::string("Imaginators speaks ") + languages[language_row_].name_en + " already.");
+    return true;
+  }
+  if (!language_source_.empty()) {
+    language_import_.Start(language_source_, rom, code, german_);
+  } else {
+    language_wanted_ = code;
+    browse_for_language_ = true;
+    browser_.SetForLanguage(true);
+    browser_.Open();  // TakeLanguageDisc takes the disc
+  }
+  return true;
 }
 
 bool LauncherUi::DrawProfileBadge(float width, float u) {
@@ -798,6 +966,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : hub_update_ && !hub_update_put_off_ ? "hubupdate"
                        : ask_updates_found_ && !install_process_ ? "updatesfound"
                        : folder_browser_.is_open()     ? "files"
+                       : ask_language_                 ? "language"
                        : setup_.is_open()              ? "setup"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
@@ -822,6 +991,10 @@ bool LauncherUi::Draw(float width, float height) {
   // What the figure import brought in (#34), over whatever screen is open.
   if (const std::string summary = figure_import_.TakeSummary(); !summary.empty()) {
     ShowToast((german_ ? "Imaginators-Figuren: " : "Imaginators figures: ") + summary, 12.0);
+  }
+  if (const std::string summary = language_import_.TakeSummary(); !summary.empty()) {
+    ShowToast(summary, 14.0);
+    language_label_pending_ = true;
   }
   DrawToast(width, height, std::string_view(window) == "launcher");
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
@@ -1174,6 +1347,11 @@ void LauncherUi::DrawToast(float width, float height, bool start_screen) {
   } else if (figure_import_.running()) {
     text = german_ ? "Imaginators pr\xC3\xBC" "ft die Figuren ..." : "Imaginators is checking the figures ...";
     spinning = true;
+  } else if (language_import_.running()) {
+    const std::string step = language_import_.step();
+    text = (german_ ? "Imaginators-Sprache: " : "Imaginators language: ") + (step.empty() ? std::string("...") : step);
+    spinning = true;
+    progress = language_import_.progress();
   } else if (!toast_.empty() && ImGui::GetTime() < toast_until_) {
     text = toast_;
   }
@@ -1715,6 +1893,11 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
 }
 
 bool LauncherUi::DrawScreens(float width, float height) {
+  // The disc browser closed without a disc for the language: the next one it opens for is a disc.
+  if (browse_for_language_ && !browser_.is_open()) {
+    browse_for_language_ = false;
+    browser_.SetForLanguage(false);
+  }
   const ImGuiIO& io = ImGui::GetIO();
   if (starting_) return DrawStarting(width, height);
   // A newer launcher first, before the first-run setup too: the newest one sets the games up.
@@ -1747,11 +1930,19 @@ bool LauncherUi::DrawScreens(float width, float height) {
     }
     return true;
   }
+  if (ask_language_) return DrawLanguage(width, height);
   if (setup_.is_open()) {
     // X on its disc page: the file browser for an ISO the search didn't find, over the setup.
     if (browser_.is_open()) {
       browser_.Draw(width, height);
-      if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) setup_.AddIso(chosen);
+      if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) {
+        // Imaginators' PS3 disc: its languages (TakeLanguageDisc), not a disc to unpack.
+        if (browse_for_language_ || IsImaginatorsPs3Disc(chosen)) {
+          TakeLanguageDisc(chosen);
+        } else {
+          setup_.AddIso(chosen);
+        }
+      }
       return true;
     }
     setup_.Draw(width, height, {&found_, &setups_, install_process_ != nullptr || Downloading(), &import_});
@@ -1791,9 +1982,14 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (crash_code_ != 0) return DrawCrashReport(width, height);
   if (browser_.is_open()) {
     browser_.Draw(width, height);
-    // The chosen disc is recognised by its default.xex and unpacked into its game's rom folder.
-    if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty() && !import_.running()) {
-      import_.Start(chosen, found_, german_);
+    // The chosen disc is recognised by its default.xex and unpacked into its game's rom folder;
+    // Imaginators' PS3 disc brings its languages (TakeLanguageDisc).
+    if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) {
+      if (browse_for_language_ || IsImaginatorsPs3Disc(chosen)) {
+        TakeLanguageDisc(chosen);
+      } else if (!import_.running()) {
+        import_.Start(chosen, found_, german_);
+      }
     }
     return true;
   }
@@ -1821,6 +2017,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   if (hub_screen_.is_open()) {
     hub_screen_.Draw(width, height);
+    if (language_label_pending_) language_label_pending_ = !LanguageLabel();
     // A changed vibration strength buzzes that player's pad (XInput slot 1 / 2) at once (#35).
     for (int p = 0; p < 2; ++p) {
       const std::string v = hub_screen_.EditedValue(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
@@ -1867,6 +2064,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
       folder_browser_.SetForFigures(true);
       folder_browser_.Open();
     }
+    if (action == "im_language") AskLanguage({});  // the language first, then the PS3 disc
     if (action == "check_updates") StartUpdateCheck(true);  // DrawToast shows it and what it finds
     if (action == "report_problem") {
       std::string error;

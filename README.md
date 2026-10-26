@@ -61,7 +61,7 @@ figures should go too.
 | Swap Force (2013) | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | tutorial and Woodburrow played; swappers; real USB portal |
 | Trap Team (2014) | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | Chapter 1 playable; portal menu with the game's collection cards |
 | SuperChargers (2015) | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | first level playable; both European discs (En/De and Es/It) |
-| Imaginators (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | first level playable; German from the PS3 disc |
+| Imaginators (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | first level playable; English, German or French from your PS3 disc |
 
 All six are the Xbox 360 versions, recompiled to native Windows with
 [ReXGlue](https://github.com/rexglue/rexglue-sdk), so they share one toolchain, one portal and one
@@ -90,6 +90,10 @@ pictures of every figure.
   drop an ISO on the window; Y in it finds your discs by itself (the ISOs in Downloads, Desktop,
   Documents and on the drives, each listed by its game). It recognises the game, unpacks the disc into that game's folder and
   leaves the ISO where it is.
+- **Imaginators in English, German or French**: its European Xbox 360 disc only speaks Spanish and
+  Italian. Pick your PS3 disc of the game (a decrypted .iso or the unpacked folder) and the
+  language, and the launcher puts that language's texts, voices and movies into the installed game
+  in about a minute. Settings > Imaginators language takes it back out too.
 - **A card per game** with the active profile's play time, achievements and last save; the game's
   title music plays while its card is chosen (straight from the game's disc, which each game
   decodes in about a second).
@@ -165,6 +169,8 @@ Windows, Visual Studio 2022 (C++), CMake and Ninja, from the **x64 Native Tools 
   fork with the shared menus on top. Submodule; keeps its own license.
 - **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut draws the launcher. Submodule
   (MIT).
+- **[stb_image](https://github.com/nothings/stb)** by Sean Barrett: its zlib decoder unpacks
+  Imaginators' archives for the language import, in `thirdparty/stb` (public domain / MIT).
 - **[Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)** by the Noto Project Authors, the
   font where Windows' Segoe UI isn't there (Wine / Proton), in `fonts/` (SIL Open Font License,
   `fonts/OFL.txt`).

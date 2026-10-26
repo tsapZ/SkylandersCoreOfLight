@@ -37,6 +37,9 @@ class FileBrowser {
   // Set before Open; SetForData(false) or (true) ends it.
   void SetForFigures(bool figures) { for_figures_ = figures; }
   bool for_figures() const { return for_figures_; }
+  // In disc mode: Imaginators' PS3 disc for its languages (language_import.h), not a disc to unpack;
+  // the title and the note say so. Set before Open.
+  void SetForLanguage(bool language) { for_language_ = language; }
   bool is_open() const { return open_; }
   void Draw(float width, float height);
   // The ISO or folder chosen since the last call, or empty.
@@ -60,6 +63,7 @@ class FileBrowser {
   bool folders_only_ = false;  // choosing a folder (the games folder), not a disc
   bool for_data_ = false;      // the folder is the data folder's place (SetForData)
   bool for_figures_ = false;   // the folder has figure files to import (SetForFigures)
+  bool for_language_ = false;  // the disc is Imaginators' PS3 disc (SetForLanguage)
   bool open_ = false;
   std::filesystem::path folder_, last_folder_, chosen_;
   std::vector<Entry> entries_;

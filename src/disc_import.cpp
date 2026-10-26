@@ -11,6 +11,7 @@
 #include <thread>
 
 #include "hub_log.h"
+#include "language_import.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -165,6 +166,14 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       }
     } else {
       image = XisoImage::Open(iso);
+      if (!image && IsPs3Disc(iso)) {
+        say(german ? "Das ist eine PS3-Disc. Die Spiele brauchen ihre Xbox-360-Disc; eine PS3-Disc hilft nur "
+                     "Imaginators, f\xC3\xBCr seine Sprachen (Einstellungen des Hubs > Imaginators-Sprache)."
+                   : "That's a PS3 disc. The games need their Xbox 360 disc; a PS3 disc only helps Imaginators, "
+                     "for its languages (Launcher settings > Imaginators language).",
+            Phase::kFailed);
+        return;
+      }
       if (!image) {
         say(german ? "Das ist keine Xbox-360-Disc (ISO)." : "That isn't an Xbox 360 disc (ISO).", Phase::kFailed);
         return;
@@ -182,8 +191,10 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       if (IsGameDisc(games[i], hash)) game = int(i);
     }
     if (game < 0) {
-      say(german ? "Diese Disc kennt Core of Light nicht (ein anderes Spiel oder eine andere Version)."
-                 : "Core of Light doesn't know this disc (another game or another version).",
+      say(german ? "Diese Disc kennt Core of Light nicht: ein anderes Spiel oder eine andere Version (jedes "
+                   "Spiel ist f\xC3\xBCr eine Disc gemacht, meist die europ\xC3\xA4ische; siehe die Seite des Spiels)."
+                 : "Core of Light doesn't know this disc: another game or another version (each game is made for "
+                   "one disc, mostly the European one; see the game's page).",
           Phase::kFailed);
       return;
     }
@@ -234,6 +245,9 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
           Phase::kFailed);
       return;
     }
+    // Another disc's files replace these: the language import's way back (language_import.h) would
+    // point them at the old disc's entries.
+    fs::remove_all(rom / "archives" / "german_text_backup", ec);
     shared->total = total;
     std::string error;
     bool ok = false;

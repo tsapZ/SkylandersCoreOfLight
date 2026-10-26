@@ -18,9 +18,8 @@ not inferred.
 1. **Finish the three games** on the recompilation path: the owner's play test feedback, ultrawide,
    installers (SSARecomp, GiantsRecomp, SwapForceRecomp).
 2. **The next games, one by one, each in its own repository:** Trap Team, SuperChargers,
-   Imaginators (all three started 2026-10-21, see the table below; the owner's SuperChargers and
-   Imaginators discs are Spanish / Italian pressings, Imaginators' German can come from the
-   owner's PS3 disc).
+   Imaginators (all three started 2026-10-21, see the table below; the owner's Imaginators disc is
+   a Spanish / Italian pressing, its English, German or French can come from a PS3 disc).
 3. **This hub:** launcher, figure library, profiles; it starts the games' own exes, so it doesn't
    care how a game is built.
 4. **A native renderer** (the Xbox 360 D3D layer on D3D12/Vulkan, a shared library, the emulated GPU
@@ -40,7 +39,7 @@ not inferred.
 | Swap Force | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | playable (tutorial and hub), the most complete: native 3D option, 4K, a shorter figure intro as an option |
 | Trap Team | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | boots (logo movies skipped), menus, Chapter 1 with a figure; the portal menu opens by itself (players 1 and 2) and shows the game's collection cards and element symbols; native 3D option, ultrawide |
 | SuperChargers | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | boots (logo movies skipped), menus, the first level; the portal menu opens by itself and shows the game's collection icons; German text and voices from the owner's English / German 360 disc (tools/german_text.py); native 3D option, ultrawide |
-| Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots through the licence (Y) and the menus into the first level; the portal menu opens by itself with the game's icons; German text (and experimentally voices) from the owner's PS3 disc with tools/german_text.py; native 3D option, ultrawide |
+| Imaginators | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | boots through the licence (Y) and the menus into the first level; the portal menu opens by itself with the game's icons; English, German or French text, voices and movies from a PS3 disc (the launcher's Imaginators language, or tools/german_text.py); native 3D option, ultrawide |
 
 All six share the SDK fork (`tsapZ/rexglue-sdk`, branch `skylanders`) and the portal library
 (`tsapZ/skylanders-portal`, branch `feature/portal-menu`): the portal, player, settings and
