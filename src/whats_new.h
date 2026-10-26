@@ -12,11 +12,15 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"The figure library shows the games' own element symbols.",
-     "Die Figuren-Bibliothek zeigt die Element-Symbole aus den Spielen."},
+    {"Move to a new PC: export and import your data here.",
+     "Neuer PC: deine Daten hier exportieren und importieren."},
+    {"Check a game's files in its settings (Y / Tab).",
+     "Spieldateien pr\xC3\xBC" "fen in den Einstellungen des Spiels (Y / Tab)."},
+    {"Handheld mode: bigger screens on a handheld.", "Handheld-Modus: gr\xC3\xB6\xC3\x9F" "ere Bildschirme auf Handhelds."},
+    {"The games' own element symbols in the figure library.",
+     "Die Element-Symbole aus den Spielen in der Figuren-Bibliothek."},
     {"A real USB portal shows in the top bar.", "Ein echtes USB-Portal erscheint oben in der Leiste."},
     {"Figures: collection progress, as an option here.", "Figuren: Sammlungsstand, als Option hier."},
-    {"This little \"what's new\".", "Dieses kleine \xE2\x80\x9EWas ist neu\xE2\x80\x9C."},
 };
 
 }  // namespace coreoflight
