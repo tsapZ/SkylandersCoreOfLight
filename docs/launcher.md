@@ -184,7 +184,8 @@ exe and gets out of the way while the game runs; no game needs it.
   speaks; A asks English / Deutsch / Français (or the disc's own back, when another one is in), then
   the PS3 disc in the disc browser ("Wähle deine PS3-Disc von Imaginators"). A PS3 disc picked in
   the disc browser from the start screen or the first-run setup asks the language right away
-  instead of being unpacked. A C++ port of ImaginatorsRecomp's `tools/add_language.py`
+  instead of being unpacked; the disc search (Y) lists it as "Imaginators (PS3-Disc, für die
+  Sprache)", and the first-run setup leaves it out of its list of discs to set up. A C++ port of ImaginatorsRecomp's `tools/add_language.py`
   (`german_text.py` before), nothing to install: the text (every `*_es.lng` pointed at the PS3 twin, appended stored, IGZ platform word
   6 -> 5), the licence (the 360 disc's own), the 360's platform strings (rebuilt by key from
   `ps3/pcPlatformStrings`, the Xbox Live ones from a table per language), the voices (the PS3's MP3

@@ -15,10 +15,12 @@
 namespace coreoflight {
 
 // A disc the search found: the game (an index of AllGames(), -1 for another disc or another
-// version of one of them) and the ISO.
+// version of one of them) and the ISO; `languages`: Imaginators' PS3 disc, which brings its
+// languages (language_import.h) rather than being set up.
 struct FoundDisc {
   int game;
   std::filesystem::path iso;
+  bool languages = false;
 };
 
 struct DiscSearch {

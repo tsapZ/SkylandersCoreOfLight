@@ -106,8 +106,9 @@ void FileBrowser::ListSearch() {
     const FoundDisc& d = search_->found[listed_found_];
     if (d.game < 0) continue;  // another disc or version: counted, not offered
     const Game& g = AllGames()[size_t(d.game)];
-    entries_.push_back({Entry::Kind::kFound, std::string(german_ ? g.name_de : g.name_en) + "  \xC2\xB7  " + Utf8(d.iso),
-                        d.iso});
+    const std::string name = std::string(german_ ? g.name_de : g.name_en) +
+                             (d.languages ? (german_ ? " (PS3-Disc, f\xC3\xBCr die Sprache)" : " (PS3 disc, for its languages)") : "");
+    entries_.push_back({Entry::Kind::kFound, name + "  \xC2\xB7  " + Utf8(d.iso), d.iso});
   }
 }
 

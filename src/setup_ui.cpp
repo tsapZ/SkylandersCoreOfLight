@@ -203,7 +203,8 @@ void SetupScreen::TakeSearchResults() {
     for (; taken_ < search_->found.size(); ++taken_) found.push_back(search_->found[taken_]);
   }
   for (const FoundDisc& d : found) {
-    if (d.game < 0 || size_t(d.game) >= rows_.size()) continue;
+    // Imaginators' PS3 disc isn't one to set up (its languages come later, in the settings).
+    if (d.game < 0 || d.languages || size_t(d.game) >= rows_.size()) continue;
     Row& r = rows_[size_t(d.game)];
     if (!r.iso.empty() || r.state == State::kReady) continue;
     auto image = XisoImage::Open(d.iso);

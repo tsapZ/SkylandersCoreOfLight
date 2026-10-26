@@ -8,11 +8,13 @@
 #include <functional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <utility>
 
 #include "games.h"
+#include "language_import.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -98,6 +100,13 @@ std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<fs::path, int>
         ++search->isos;
         // Read like a disc being set up (disc_import.cpp): its default.xex, known by its SHA-256.
         auto image = XisoImage::Open(iso);
+        if (!image && IsImaginatorsPs3Disc(iso)) {
+          size_t im = 0;
+          while (im < AllGames().size() && std::string_view(AllGames()[im].name_en) != "Imaginators") ++im;
+          std::lock_guard lock(search->mutex);
+          if (im < AllGames().size()) search->found.push_back({int(im), iso, true});
+          return;
+        }
         const XisoImage::Entry* xex = image ? image->Find("default.xex") : nullptr;
         std::vector<uint8_t> data;
         if (!xex || !image->Read(*xex, data)) return;
