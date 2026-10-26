@@ -227,6 +227,35 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     data.options = {{"", en, de}};
   }
   page.settings.push_back(std::move(data));
+  // Two buttons: everything that's the player's into one file on the desktop, and back on a new PC
+  // (data_transfer.h, #40).
+  GameSetting export_data;
+  export_data.cvar = "export_data";
+  export_data.en = "Export my data";
+  export_data.de = "Meine Daten exportieren";
+  export_data.help_en = "For a new PC: your figures, saves (with their copies), achievements, profiles, the "
+                        "launcher's settings and each game's settings in one file on the desktop. Not in it: the "
+                        "games (set them up from your discs again) and the pictures and HD packs (they come again).";
+  export_data.help_de = "F\xC3\xBCr einen neuen PC: deine Figuren, Spielst\xC3\xA4nde (mit ihren Kopien), Erfolge, "
+                        "Profile, die Einstellungen des Hubs und jedes Spiels in einer Datei auf dem Desktop. Nicht "
+                        "drin: die Spiele (richte sie wieder von deinen Discs ein) und die Bilder und HD-Pakete "
+                        "(die kommen wieder).";
+  export_data.type = "action";
+  export_data.options = {{"", "To the desktop", "Auf den Desktop"}};
+  page.settings.push_back(std::move(export_data));
+  GameSetting import_data;
+  import_data.cvar = "import_data";
+  import_data.en = "Import my data";
+  import_data.de = "Meine Daten importieren";
+  import_data.help_en = "Pick the file from \"Export my data\". What's already here stays: nothing is overwritten. "
+                        "Only when a game has settings of its own here already, you're asked whether the file's "
+                        "replace them.";
+  import_data.help_de = "W\xC3\xA4hle die Datei aus \xE2\x80\x9EMeine Daten exportieren\xE2\x80\x9C. Was schon da "
+                        "ist, bleibt: Nichts wird \xC3\xBC" "berschrieben. Nur wenn ein Spiel hier schon eigene "
+                        "Einstellungen hat, wirst du gefragt, ob die aus der Datei sie ersetzen.";
+  import_data.type = "action";
+  import_data.options = {{"", "Choose the file", "Datei w\xC3\xA4hlen"}};
+  page.settings.push_back(std::move(import_data));
   // A button: Imaginators figures from a folder (figure_import.h, #34), checked by the game itself.
   GameSetting import;
   import.cvar = "import_im_figures";

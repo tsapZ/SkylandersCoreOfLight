@@ -57,6 +57,7 @@ add_executable(coreoflight WIN32
   src/saves.cpp
   src/saves_ui.cpp
   src/data_move.cpp
+  src/data_transfer.cpp
   src/language_import.cpp
   src/alchemy/lzma_decoder.cpp
   src/coreoflight.rc

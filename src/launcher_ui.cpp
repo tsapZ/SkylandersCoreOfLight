@@ -1019,6 +1019,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : folder_browser_.is_open()     ? "files"
                        : ask_language_                 ? "language"
                        : setup_.is_open()              ? "setup"
+                       : ask_import_settings_          ? "importquestion"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
                        : crash_code_ != 0              ? "crash"
@@ -1046,6 +1047,23 @@ bool LauncherUi::Draw(float width, float height) {
   if (const std::string summary = language_import_.TakeSummary(); !summary.empty()) {
     ShowToast(summary, 14.0);
     language_label_pending_ = true;
+  }
+  // The data export (shown in Explorer) or import (#40): the launcher's settings, the profiles
+  // and the games' settings read again after an import.
+  if (const std::string summary = data_transfer_.TakeSummary(); !summary.empty()) {
+    ShowToast(summary, 16.0);
+    if (const std::filesystem::path file = data_transfer_.TakeExported(); !file.empty()) {
+      const std::wstring select = L"/select,\"" + file.wstring() + L"\"";
+      ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+    } else {
+      hub_ = LoadHubSettings();
+      ApplyHubSettings();
+      LoadProfiles(german_);
+      for (Found& f : found_) {
+        if (!f.exe.empty()) f.settings = ReadIni(f.exe.parent_path() / (UserDataName(f.exe) + ".toml"));
+      }
+      for (SettingsLoader& loader : loaders_) loader = SettingsLoader();
+    }
   }
   DrawToast(width, height, std::string_view(window) == "launcher");
   // The chosen game's title music, once it is there (UpdateTitleMusicExport fetches it).
@@ -1216,6 +1234,53 @@ bool LauncherUi::DrawQuitConfirm(float width, float height) {
   }
   if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     confirm_quit_ = false;
+  }
+  return true;
+}
+
+bool LauncherUi::DrawImportQuestion(float width, float height) {
+  const float u = std::min(width / 1280.0f, height / 720.0f);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("importquestion", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, {});
+  const float bw = 720 * u, bh = 290 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Einstellungen ersetzen?" : "Replace the settings?";
+  Text(dl, bold_, 34 * u, {(width - TextWidth(bold_, 34 * u, title)) * 0.5f, a.y + 30 * u}, kGold, title);
+  std::string games;
+  for (const std::string& g : data_transfer_.settings_differ()) games += (games.empty() ? "" : ", ") + g;
+  const std::string text =
+      (german_ ? "Schon mit eigenen Einstellungen auf diesem PC: " : "Already with settings of their own on this PC: ") + games +
+      (german_ ? ". Durch die aus der Datei ersetzen? Die jetzigen bleiben als Kopie daneben. Alles andere kommt so "
+                 "oder so dazu, ohne etwas zu \xC3\xBC" "berschreiben."
+               : ". Replace them with the ones from the file? The ones there now stay as a copy beside them. "
+                 "Everything else comes in either way, without overwriting anything.");
+  dl->AddText(regular_, 20 * u, {a.x + 36 * u, a.y + 88 * u}, kWhite, text.c_str(), nullptr, bw - 72 * u);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, b.y - 76 * u}, q{x + 280 * u, b.y - 24 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    ButtonHint(dl, bold_, 24 * u, {p.x + (280 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool replace = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Ersetzen" : "Replace");
+  const bool keep = button(b.x - 330 * u, "B", Rgba(200, 60, 60), german_ ? "Meine behalten" : "Keep mine");
+  ImGui::End();
+  if (replace || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    ask_import_settings_ = false;
+    data_transfer_.StartImport(true);
+  } else if (keep || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_import_settings_ = false;
+    data_transfer_.StartImport(false);
   }
   return true;
 }
@@ -2028,6 +2093,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
     }
     return true;
   }
+  if (ask_import_settings_) return DrawImportQuestion(width, height);
   if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (ask_update_ >= 0) return DrawUpdateConfirm(width, height);
   if (crash_code_ != 0) return DrawCrashReport(width, height);
@@ -2036,12 +2102,23 @@ bool LauncherUi::DrawScreens(float width, float height) {
     // The chosen disc is recognised by its default.xex and unpacked into its game's rom folder;
     // Imaginators' PS3 disc brings its languages (TakeLanguageDisc).
     if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) {
-      if (browse_for_language_ || IsImaginatorsPs3Disc(chosen)) {
+      if (browser_.for_backup()) {
+        std::string error;
+        if (!data_transfer_.PlanImport(chosen, found_, german_, error)) {
+          ShowToast(error, 8.0);
+        } else if (!data_transfer_.settings_differ().empty()) {
+          ask_import_settings_ = true;
+        } else {
+          data_transfer_.StartImport(false);
+        }
+      } else if (browse_for_language_ || IsImaginatorsPs3Disc(chosen)) {
         TakeLanguageDisc(chosen);
       } else if (!import_.running()) {
         import_.Start(chosen, found_, german_);
       }
     }
+    // Closed (chosen or not): the next time it is for discs again.
+    if (!browser_.is_open()) browser_.SetForBackup(false);
     return true;
   }
   if (profiles_screen_.is_open()) {
@@ -2116,7 +2193,19 @@ bool LauncherUi::DrawScreens(float width, float height) {
       folder_browser_.Open();
     }
     if (action == "im_language") AskLanguage({});  // the language first, then the PS3 disc
-    if (action == "check_updates") StartUpdateCheck(true);  // DrawToast shows it and what it finds
+    if (action == "check_updates") StartUpdateCheck(true);
+    // "Meine Daten exportieren / importieren" (data_transfer.h, #40): the export onto the desktop,
+    // the import from the file picked in the browser.
+    if (action == "export_data" && !data_transfer_.running()) {
+      data_transfer_.StartExport(found_, german_);
+      hub_screen_.ShowMessage(german_ ? "Exportiere ..." : "Exporting ...");
+    }
+    if (action == "import_data" && !data_transfer_.running()) {
+      browse_for_language_ = false;
+      browser_.SetForLanguage(false);
+      browser_.SetForBackup(true);
+      browser_.Open(ExportFolder());  // where the export goes
+    }  // DrawToast shows it and what it finds
     if (action == "report_problem") {
       std::string error;
       const std::filesystem::path report = WriteProblemReport(found_, launcher_dir_, german_, error);

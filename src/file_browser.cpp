@@ -141,7 +141,7 @@ void FileBrowser::List(const fs::path& folder) {
   folder_ = folder;
   if (folder.empty()) {
     // The disc search first, then the usual places, then every drive.
-    if (!folders_only_) {
+    if (!folders_only_ && !for_backup_) {
       entries_.push_back({Entry::Kind::kSearch,
                           german_ ? "Discs suchen (Downloads, Desktop, Dokumente und die Laufwerke)"
                                   : "Find my discs (Downloads, Desktop, Documents and the drives)",
@@ -194,7 +194,7 @@ void FileBrowser::List(const fs::path& folder) {
                         folder});
   }
   // A folder with an unpacked disc can be taken as it is.
-  if (!folders_only_ && IsFile(folder / "default.xex")) {
+  if (!folders_only_ && !for_backup_ && IsFile(folder / "default.xex")) {
     entries_.push_back({Entry::Kind::kThisFolder,
                         german_ ? "Diesen Ordner einlesen (entpackte Disc)" : "Take this folder (an unpacked disc)",
                         folder});
@@ -215,7 +215,8 @@ void FileBrowser::List(const fs::path& folder) {
     } else {
       std::wstring ext = p.extension().wstring();
       std::transform(ext.begin(), ext.end(), ext.begin(), [](wchar_t c) { return wchar_t(std::towlower(c)); });
-      if (ext == L".iso" && !folders_only_) isos.emplace_back(name, p);
+      // An export of "Meine Daten exportieren" (data_transfer.h) instead of a disc in that mode.
+      if (ext == (for_backup_ ? L".zip" : L".iso") && !folders_only_) isos.emplace_back(name, p);
     }
   }
   auto by_name = [](const auto& a, const auto& b) { return LessNoCase(a.first, b.first); };
@@ -283,11 +284,13 @@ void FileBrowser::Draw(float width, float height) {
                       : (german_ ? "Wo liegen deine Spiele?" : "Where are your games?"));
   } else {
     Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim,
-         for_language_ ? (german_ ? "IMAGINATORS-SPRACHE" : "IMAGINATORS LANGUAGE")
-                       : (german_ ? "DISC EINLESEN" : "ADD A DISC"));
+         for_backup_     ? (german_ ? "MEINE DATEN IMPORTIEREN" : "IMPORT MY DATA")
+         : for_language_ ? (german_ ? "IMAGINATORS-SPRACHE" : "IMAGINATORS LANGUAGE")
+                         : (german_ ? "DISC EINLESEN" : "ADD A DISC"));
     Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
-         for_language_ ? (german_ ? "W\xC3\xA4hle deine PS3-Disc von Imaginators" : "Choose your PS3 disc of Imaginators")
-                       : (german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO"));
+         for_backup_     ? (german_ ? "W\xC3\xA4hle die Datei deines Exports" : "Choose the file you exported")
+         : for_language_ ? (german_ ? "W\xC3\xA4hle deine PS3-Disc von Imaginators" : "Choose your PS3 disc of Imaginators")
+                         : (german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO"));
   }
   const float left = 48 * u, top = 128 * u;
   std::string where = folder_.empty() ? (german_ ? "Dieser PC" : "This PC") : Utf8(folder_);
@@ -375,7 +378,7 @@ void FileBrowser::Draw(float width, float height) {
   }
   if (n && (clicked >= 0 || once(ImGuiKey_Enter) || once(ImGuiKey_GamepadFaceDown))) {
     Choose(entries_[clicked >= 0 ? clicked : selected_]);
-  } else if (!folders_only_ && (once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Y))) {
+  } else if (!folders_only_ && !for_backup_ && (once(ImGuiKey_GamepadFaceUp) || once(ImGuiKey_Y))) {
     StartSearch();  // Y: look for the discs from anywhere
   } else if (searching_view_ && (once(ImGuiKey_Backspace) || once(ImGuiKey_GamepadFaceRight))) {
     // B in the results: back to the drives and places.
@@ -409,11 +412,13 @@ void FileBrowser::Draw(float width, float height) {
                    : "Games in this folder and its subfolders are found, with their disc; new ones go here.");
   } else {
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x96" "ffnen / einlesen" : "Open / add");
-    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Discs suchen" : "Find my discs");
+    if (!for_backup_) hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Discs suchen" : "Find my discs");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
     Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
-         for_language_ ? (german_ ? "Eine entschl\xC3\xBCsselte .iso oder ihr entpackter Ordner; sie selbst bleibt, wie sie ist."
+         for_backup_ ? (german_ ? "Die .zip aus \xE2\x80\x9EMeine Daten exportieren\xE2\x80\x9C. Was schon da ist, bleibt."
+                                : "The .zip from \"Export my data\". What's already here stays.")
+         : for_language_ ? (german_ ? "Eine entschl\xC3\xBCsselte .iso oder ihr entpackter Ordner; sie selbst bleibt, wie sie ist."
                                   : "A decrypted .iso or its unpacked folder; the disc itself stays as it is.")
          : german_ ? "Die ISO wird in den rom-Ordner des Spiels entpackt; sie selbst bleibt, wo sie ist."
                    : "The ISO is unpacked into the game's rom folder; the file itself stays where it is.");

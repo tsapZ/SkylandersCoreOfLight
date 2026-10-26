@@ -10,6 +10,7 @@
 
 #include "achievements_ui.h"
 #include "data_move.h"
+#include "data_transfer.h"
 #include "saves_ui.h"
 #include "disc_import.h"
 #include "file_browser.h"
@@ -267,6 +268,10 @@ class LauncherUi {
   double starting_since_ = 0;
   bool DrawStarting(float width, float height);
   bool DrawQuitConfirm(float width, float height);
+  // The import's question (data_transfer.h, #40): replace the games' settings that are there?
+  bool DrawImportQuestion(float width, float height);
+  DataTransfer data_transfer_;
+  bool ask_import_settings_ = false;
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
   double import_shown_until_ = 0;
   double cancel_import_until_ = 0;  // B pressed once while a disc is set up: a second one until then stops it

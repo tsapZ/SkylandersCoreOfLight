@@ -40,6 +40,10 @@ class FileBrowser {
   // In disc mode: Imaginators' PS3 disc for its languages (language_import.h), not a disc to unpack;
   // the title and the note say so. Set before Open.
   void SetForLanguage(bool language) { for_language_ = language; }
+  // In disc mode: the .zip of "Meine Daten exportieren" to import (data_transfer.h, #40)
+  // instead of a disc: .zip files listed, no disc search. Set before Open.
+  void SetForBackup(bool backup) { for_backup_ = backup; }
+  bool for_backup() const { return for_backup_; }
   bool is_open() const { return open_; }
   void Draw(float width, float height);
   // The ISO or folder chosen since the last call, or empty.
@@ -64,6 +68,7 @@ class FileBrowser {
   bool for_data_ = false;      // the folder is the data folder's place (SetForData)
   bool for_figures_ = false;   // the folder has figure files to import (SetForFigures)
   bool for_language_ = false;  // the disc is Imaginators' PS3 disc (SetForLanguage)
+  bool for_backup_ = false;    // the file is a data export to import (SetForBackup)
   bool open_ = false;
   std::filesystem::path folder_, last_folder_, chosen_;
   std::vector<Entry> entries_;
