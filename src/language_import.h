@@ -5,7 +5,7 @@
 // 360 disc that the port is built for only has Spanish and Italian; the European PS3 disc has ten
 // languages. The PS3 disc's archives are the same as the 360's (same paths, same IGA format,
 // big-endian), only their platform data differs, so the text, the voices and the movies' spoken
-// track can be taken from it, as ImaginatorsRecomp's tools/german_text.py does (this is a C++ port
+// track can be taken from it, as ImaginatorsRecomp's tools/add_language.py does (this is a C++ port
 // of it, so nobody needs Python):
 //
 //   - text: every 360 archive with Spanish text (`*_es.lng`) gets the PS3 twin's files of the

@@ -36,7 +36,7 @@ namespace fs = std::filesystem;
 namespace coreoflight {
 namespace {
 
-// The constants of ImaginatorsRecomp's tools/german_text.py (which this ports).
+// The constants of ImaginatorsRecomp's tools/add_language.py, german_text.py before (which this ports).
 constexpr uint32_t kBlock = 0x8000;
 constexpr uint32_t kStored = 0xFFFFFFFF;
 constexpr uint32_t kPlatformPs3 = 6;
@@ -76,7 +76,7 @@ const LanguageInfo* InfoOf(const std::string& code) {
 }
 
 // The 360's own texts whose Spanish differs from both PS3 disc files (they name Xbox Live, the
-// gamertag or the 360's START button), as german_text.py has them, and the same in English.
+// gamertag or the 360's START button), as add_language.py has them, and the same in English.
 const std::map<std::string, std::string> kXenonGerman = {
     {"CGlobalPlatformStrings::_cableUnplugged", "Du musst bei Xbox Live angemeldet sein, um diese Funktion zu nutzen."},
     {"CGlobalPlatformStrings::_friendScoresUnavailable",
@@ -463,7 +463,7 @@ std::string Hex(uint64_t v, int digits) {
   return text;
 }
 
-// german_text.py's write_changes: the record {"size": <original length>, "entries": [[<offset>,
+// add_language.py's write_changes: the record {"size": <original length>, "entries": [[<offset>,
 // "<old entry as hex>"], ...]} first (so an interrupted run can still be undone), then the data.
 bool WriteChanges(const fs::path& path, const Iga& x, const fs::path& backup, const std::vector<Change>& changes) {
   std::error_code ec;
@@ -622,7 +622,7 @@ std::map<std::string, std::string> LngTexts(const std::vector<uint8_t>& data) {
   return out;
 }
 
-// german_text.py's rewrite_lng: the texts are the last section, written anew (each at an even
+// add_language.py's rewrite_lng: the texts are the last section, written anew (each at an even
 // offset, a text used twice stored once, in RSTR's order), the pointers and its length set to match.
 std::optional<std::vector<uint8_t>> RewriteLng(const std::vector<uint8_t>& data,
                                                const std::map<std::string, std::string>& texts) {
@@ -988,7 +988,7 @@ int Movies(Job& job, std::vector<std::string>& skipped) {
 
 // ---- The way back ----
 
-// german_text.py's restore: the movies back, every archive's entries back and cut to its length.
+// add_language.py's restore: the movies back, every archive's entries back and cut to its length.
 bool Restore(const fs::path& archives, int* restored) {
   const fs::path backup = archives / kBackupDir;
   std::error_code ec;

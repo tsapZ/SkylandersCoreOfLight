@@ -184,8 +184,8 @@ exe and gets out of the way while the game runs; no game needs it.
   speaks; A asks English / Deutsch / Français (or the disc's own back, when another one is in), then
   the PS3 disc in the disc browser ("Wähle deine PS3-Disc von Imaginators"). A PS3 disc picked in
   the disc browser from the start screen or the first-run setup asks the language right away
-  instead of being unpacked. A C++ port of ImaginatorsRecomp's `tools/german_text.py`, nothing to
-  install: the text (every `*_es.lng` pointed at the PS3 twin, appended stored, IGZ platform word
+  instead of being unpacked. A C++ port of ImaginatorsRecomp's `tools/add_language.py`
+  (`german_text.py` before), nothing to install: the text (every `*_es.lng` pointed at the PS3 twin, appended stored, IGZ platform word
   6 -> 5), the licence (the 360 disc's own), the 360's platform strings (rebuilt by key from
   `ps3/pcPlatformStrings`, the Xbox Live ones from a table per language), the voices (the PS3's MP3
   banks) and the movies' spoken Bink track (only where this disc's packets are the PS3's). It reads
@@ -445,7 +445,7 @@ its Apps entry.
 
 - Imaginators language (2026-10-26), on a copy of the owner's disc folder: undoing the Python
   tool's German import and doing it again here left all 6018 files byte for byte as
-  `german_text.py --movies --voices` does (1304 texts, 17917 voices, 78 movies, 46 s); English
+  `add_language.py --movies --voices` does (1304 texts, 17917 voices, 78 movies, 46 s); English
   the same but for the Xbox Live texts, which are English now instead of Spanish. French: the
   same counts. Through the launcher (a stand-in exe, `--offline`): the row showed "Französisch",
   English then the PS3 .iso in the browser put English in, "Español / Italiano" took it out, the
