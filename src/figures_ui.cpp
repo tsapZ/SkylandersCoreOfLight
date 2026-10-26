@@ -89,6 +89,20 @@ std::string Fit(ImFont* font, float size, std::string text, float width) {
   return text + "...";
 }
 
+// A card's left edge `w` wide in `col`, for a card from `a` to `b` with corners of radius `r`: it
+// follows the card's own corners. A narrow bar rounded by itself got smaller corners than the card
+// and stood out over the card's corners (the owner, 2026-10-26).
+void LeftStripe(ImDrawList* dl, ImVec2 a, ImVec2 b, float w, float r, ImU32 col) {
+  r = std::min(r, (b.y - a.y) * 0.5f);
+  w = std::min(w, r);
+  // Where a corner's arc is `w` in from the left: the angle from its centre (between pi/2 and pi).
+  constexpr float kPi = 3.14159265f;
+  const float t = std::acos((w - r) / r);
+  dl->PathArcTo({a.x + r, a.y + r}, r, 2.0f * kPi - t, kPi, 10);
+  dl->PathArcTo({a.x + r, b.y - r}, r, kPi, t, 10);
+  dl->PathFillConvex(col);
+}
+
 // A hint: the controller button or the keyboard key (hints.h), and what it does.
 float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* button, ImU32 col,
            const char* label, const char* key = nullptr) {
@@ -839,8 +853,7 @@ void FiguresScreen::Draw(float width, float height) {
       const ImU32 strong = (ec & 0x00FFFFFF) | (ImU32(ea) << 24), clear = ec & 0x00FFFFFF;
       dl->AddRectFilledMultiColor({a.x + 8 * u, a.y + 2 * u}, {a.x + tile_w * 0.62f, b.y - 2 * u}, strong, clear, clear,
                                   strong);
-      dl->AddRectFilled(a, {a.x + 8 * u, b.y}, (ec & 0x00FFFFFF) | (ImU32(f.owned ? 230 : 110) << 24), 16 * u,
-                        ImDrawFlags_RoundCornersLeft);
+      LeftStripe(dl, a, b, 8 * u, 16 * u, (ec & 0x00FFFFFF) | (ImU32(f.owned ? 230 : 110) << 24));
     }
     if (chosen) dl->AddRect(a, b, kGold, 16 * u, 0, 3 * u);
     // The game's picture of the figure, else the element as a coloured disc with the first letter.
@@ -1337,8 +1350,7 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
     const float y = top + (i - board_scroll_) * (row_h + 6 * u);
     dl->AddRectFilled({left, y}, {right, y + row_h}, kPanel, 12 * u);
     if (en.f->element != sp::Element::kNone) {
-      dl->AddRectFilled({left, y}, {left + 8 * u, y + row_h}, ElementColor(en.f->element), 12 * u,
-                        ImDrawFlags_RoundCornersLeft);
+      LeftStripe(dl, {left, y}, {right, y + row_h}, 8 * u, 12 * u, ElementColor(en.f->element));
     }
     // The place: a medal for the first three.
     const ImVec2 mc{left + 44 * u, y + row_h * 0.5f};
