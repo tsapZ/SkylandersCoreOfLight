@@ -2,6 +2,7 @@
 #include "hints.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -193,6 +194,21 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
         // Swap Force and SuperChargers leave all of theirs.
         hat.picture = fs::exists(picture, exists_ec) ? picture : known.picture;
         known = std::move(hat);
+      }
+    }
+  }
+  // The element symbols the same way: the newest game's, an older game's for the ones it has none
+  // of (Light and Dark come only from Trap Team on).
+  element_pictures_.clear();
+  for (const std::string_view game : kGames) {
+    for (size_t root = pictures_dirs_.size(); root-- > 0;) {
+      const fs::path dir = pictures_dirs_[root] / fs::path(std::u8string(game.begin(), game.end()));
+      for (int e = int(sp::Element::kMagic); e <= int(sp::Element::kDark); ++e) {
+        std::string name(sp::ElementName(sp::Element(e)));
+        for (char& c : name) c = char(std::tolower(static_cast<unsigned char>(c)));
+        const fs::path picture = dir / ("element-" + name + ".png");
+        std::error_code exists_ec;
+        if (fs::exists(picture, exists_ec)) element_pictures_[e] = picture;
       }
     }
   }
@@ -715,7 +731,14 @@ void FiguresScreen::Draw(float width, float height) {
       dl->AddRectFilled(a, b, on ? kGold : Rgba(30, 38, 85, 230), 15 * u);
       float label_x = cx + 12 * u;
       if (e > 0) {
-        dl->AddCircleFilled({cx + 17 * u, chip_top + 15 * u}, 7 * u, ElementColor(el), 20);
+        // The game's own element symbol, else a dot in the element's colour.
+        const auto symbol = element_pictures_.find(e);
+        const ImTextureID texture = symbol != element_pictures_.end() ? LoadTexture(symbol->second) : ImTextureID{};
+        if (texture) {
+          dl->AddImage(texture, {cx + 5 * u, chip_top + 3 * u}, {cx + 29 * u, chip_top + 27 * u});
+        } else {
+          dl->AddCircleFilled({cx + 17 * u, chip_top + 15 * u}, 7 * u, ElementColor(el), 20);
+        }
         label_x = cx + 30 * u;
       }
       Text(dl, bold_, chip_size, {label_x, chip_top + 6 * u}, on ? Rgba(60, 35, 0) : Rgba(210, 215, 235), name);
@@ -895,7 +918,15 @@ void FiguresScreen::Draw(float width, float height) {
     std::string sub = f.game;
     const std::string element = german_ ? std::string(ElementDe(f.element)) : std::string(sp::ElementName(f.element));
     if (!element.empty()) sub += (sub.empty() ? "" : "  \xC2\xB7  ") + element;
-    Text(dl, regular_, 18 * u, {x, y}, kDim, sub, beside);
+    // The element's symbol in front, when a game left one.
+    float sub_x = x;
+    if (const auto symbol = element_pictures_.find(int(f.element)); symbol != element_pictures_.end()) {
+      if (const ImTextureID texture = LoadTexture(symbol->second)) {
+        dl->AddImage(texture, {x, y - 2 * u}, {x + 26 * u, y + 24 * u});
+        sub_x = x + 32 * u;
+      }
+    }
+    Text(dl, regular_, 18 * u, {sub_x, y}, kDim, sub, beside - (sub_x - x));
     y += 28 * u;
     // The badge only when it says more than the group ("Fallen-Meister  ·  Fallen-Meister",
     // "Fahrzeuge  ·  Fahrzeug" said it twice).

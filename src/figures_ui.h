@@ -82,6 +82,9 @@ class FiguresScreen {
     std::filesystem::path picture;
   };
   std::map<uint16_t, Hat> hats_;
+  // The element symbols the games left (Pictures\<game>\element-<name>.png), per element the
+  // newest game's; without one the element shows as its colour.
+  std::map<int, std::filesystem::path> element_pictures_;
 
   // A figure's upgrade tree as a game left it (Pictures\<game>\upgrades-<id>-<variant>.txt and its
   // pictures, skylanders-portal StartFigurePictureCache).
