@@ -1,15 +1,16 @@
-# Giants, a copy of the owner's save: title -> the autosave notice -> Story -> the save's slot (the
-# fourth, as the save keeps it) -> where it continues. Every press waits until its screen is surely
-# up: a press that comes early lands on the screen before and the rest of the route slips by one
-# (then slot 1 starts a new game).
+# Giants, a copy of the owner's save: title (it wants A, not Start) -> the autosave notice -> Story
+# -> the slot menu, where the save is the fourth slot (three downs from the first) -> where it
+# continues. Seen in a run with a shot every 6 s: the title until ~34 s, Spiel waehlen from ~45 s,
+# the slot menu 2 s after Story. Every press comes well after its screen is up: an early one lands
+# on the screen before and the rest of the route slips by one (then slot 1 starts a new game).
 # save: yes
-# shots: wait 80, shot slots, wait 80, full a, wait 6, full b
+# shots: wait 70, shot slots, wait 75, full a, wait 6, full b
 wait 10
 place 0 {figures}\Spyro's Adventure\Chop Chop.dump
-wait 15
-tap start; wait 12
+wait 25
 tap a; wait 12
-tap a; wait 40
+tap a; wait 12
+tap a; wait 18
 log slot menu
 tap down; wait 3; tap down; wait 3; tap down; wait 3
 tap a; wait 15; tap a; wait 50
