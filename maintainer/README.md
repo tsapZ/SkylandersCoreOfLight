@@ -49,6 +49,7 @@ saves and figures are never touched.
 | `smoke.ps1 -Repo <Repo> -Route <route>` | one run along a route with window shots, then one verdict line: crash or trouble lines, whether the script reached its end, the FPS samples |
 | `smoke_all.ps1` | `smoke.ps1` for all six games with their usual route, about 15 minutes; after anything that touches every game |
 | `crash_hunt.ps1 -Repo <Repo> -Route <route> [-Seconds 1800] [-Seed 2]` | a route, then random play for that long (`wander.py`), a shot every minute, the threads' call chains every three |
+| `crash_all.ps1 [-Minutes 20] [-Seed 1]` | `crash_hunt.ps1` for all six on their usual routes, one after the other (about 2.5 hours at 20 minutes); for a release candidate |
 | `game_keys.ps1 -Repo <Repo> -Keys "wait:3000,0x73,shot:f4"` | real key presses for what the virtual controller can't reach (ImGui fields, the keyboard binds); stops when another window is in front, and when the game's log doesn't name the scratch user data folder |
 | `hub_keys.ps1 -Docs <scratch> -Out <dir> -Keys "F,wait:700,shot:figures"` | the launcher, always `--offline` on a scratch Documents folder, driven by posted keys and mouse steps, with shots |
 
