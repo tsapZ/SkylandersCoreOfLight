@@ -13,6 +13,7 @@
 #include <string_view>
 #include <thread>
 
+#include "crc32.h"
 #include "hub_log.h"
 
 namespace coreoflight {
@@ -38,20 +39,7 @@ std::string Utf8(const fs::path& p) {
 
 fs::path FromUtf8(const std::string& s) { return fs::path(std::u8string(s.begin(), s.end())); }
 
-uint32_t Crc32(const std::vector<char>& data) {
-  static const std::array<uint32_t, 256> table = [] {
-    std::array<uint32_t, 256> t{};
-    for (uint32_t i = 0; i < 256; ++i) {
-      uint32_t c = i;
-      for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-      t[i] = c;
-    }
-    return t;
-  }();
-  uint32_t crc = 0xFFFFFFFFu;
-  for (char ch : data) crc = table[(crc ^ uint8_t(ch)) & 0xFF] ^ (crc >> 8);
-  return crc ^ 0xFFFFFFFFu;
-}
+uint32_t Crc32(const std::vector<char>& data) { return coreoflight::Crc32(data.data(), data.size()); }
 
 // A path past Windows' 260 characters with the prefix that lets it through (a data folder deep in
 // another folder: a test's import into one lost 108 of 337 figures).

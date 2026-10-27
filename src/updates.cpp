@@ -293,7 +293,8 @@ uint64_t Now() {
 
 }  // namespace
 
-std::optional<Release> FetchLatestRelease(const std::string& repo, const std::string& asset_prefix) {
+std::optional<Release> FetchLatestRelease(const std::string& repo, const std::string& asset_prefix,
+                                          const std::string& extension) {
   // /releases rather than /releases/latest: that one leaves out pre-releases, and ours are betas.
   std::string body;
   const std::string url = "https://api.github.com/repos/" + std::string(kOwner) + "/" + repo + "/releases?per_page=10";
@@ -315,7 +316,7 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
     std::string version = r.String("tag_name");
     if (version.starts_with("v")) version.erase(0, 1);
     if (version.empty() || (best && !VersionLess(best->version, version))) continue;
-    const std::string wanted = asset_prefix + "-" + version + ".exe";
+    const std::string wanted = asset_prefix + "-" + version + extension;
     const Json* assets = r.Get("assets");
     for (size_t i = 0; assets && i < assets->items.size(); ++i) {
       const Json& a = assets->items[i];

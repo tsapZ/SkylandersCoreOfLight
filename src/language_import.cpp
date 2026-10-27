@@ -15,9 +15,10 @@
 
 #include "alchemy/lzma_decoder.h"
 #include "hub_log.h"
+#include "inflate.h"
 
 // stb_image's zlib decoder for the raw deflate blocks, every function static (nothing else of it
-// is used).
+// is used; InflateRaw below gives the rest of the launcher the same decoder).
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
@@ -34,6 +35,15 @@
 namespace fs = std::filesystem;
 
 namespace coreoflight {
+
+bool InflateRaw(const char* data, size_t size, size_t out_size, std::vector<char>& out) {
+  out.assign(out_size, 0);
+  if (size > size_t(INT32_MAX) || out_size > size_t(INT32_MAX)) return false;
+  if (out_size == 0) return true;
+  const int written = stbi_zlib_decode_noheader_buffer(out.data(), int(out_size), data, int(size));
+  return written >= 0 && size_t(written) == out_size;
+}
+
 namespace {
 
 // The constants of ImaginatorsRecomp's tools/add_language.py, german_text.py before (which this ports).

@@ -20,6 +20,7 @@
 #include "hub_settings.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
+#include "portable.h"
 #include "textures.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -282,6 +283,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // named on its command line) is set up at once. Read before the window: --documents decides
   // which settings file says whether it starts in fullscreen.
   std::wstring iso;
+  std::wstring portable_update;
   bool fullscreen_arg = false;
   int argc = 0;
   if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
@@ -305,6 +307,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         // without such a pad).
         coreoflight::ForceHintPad(arg.ends_with(L"playstation") ? coreoflight::HintPad::kPlayStation
                                                                 : coreoflight::HintPad::kNintendo);
+      } else if (arg.starts_with(L"--portable_update=")) {
+        // A test of the portable launcher's update without a release (portable.h): this ZIP's
+        // launcher in this one's place, then started, as the update dialog does after its download.
+        portable_update = arg.substr(18);
       } else if (arg == L"--fullscreen") {
         // Fullscreen for this start, whatever the setting says (Steam's launch options on a
         // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
@@ -314,6 +320,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       }
     }
     LocalFree(argv);
+  }
+  if (!portable_update.empty()) {
+    wchar_t self[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, self, MAX_PATH);
+    const std::filesystem::path exe(self);
+    std::string why = "not a portable launcher (no portable.txt next to it)";
+    const bool done = coreoflight::IsPortable(exe.parent_path()) &&
+                      coreoflight::ApplyPortableUpdate(portable_update, exe.parent_path(), exe.filename(), false, why) &&
+                      coreoflight::StartLauncher(exe);
+    coreoflight::HubLog(done ? "portable update test: done, the new launcher started" : "portable update test: " + why);
+    return done ? 0 : 1;
   }
   const float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
   HWND hwnd = CreateWindowW(wc.lpszClassName, L"Skylanders: Core of Light", WS_OVERLAPPEDWINDOW, 100, 100,

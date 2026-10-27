@@ -127,6 +127,9 @@ void DrawComet(ImDrawList* dl, Along along, float head, float step, int tail, fl
 
 void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular, ImFont* bold) {
   launcher_dir_ = launcher_dir;
+  // The portable launcher (portable.h): what its last update left goes first.
+  portable_ = IsPortable(launcher_dir);
+  if (portable_) RemoveUpdateLeftovers(launcher_dir);
   regular_ = regular;
   bold_ = bold;
   // What is still in the old per-game folders goes into the one data folder first (data_move.h), so
@@ -1432,12 +1435,18 @@ void LauncherUi::StartUpdateCheck(bool manual) {
   }
   if (manual) manual_check_ = true;
   if (work_->checking.exchange(true)) return;
-  std::vector<std::pair<std::string, std::string>> repos = {{"SkylandersCoreOfLight", "CoreOfLightSetup"}};
-  for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo) + "Setup"});
+  // The repository, its asset's name before "-<version>" and the asset's extension: the launcher's
+  // setup, or its ZIP for the portable one (portable.h), and each game's setup.
+  struct Wanted {
+    std::string repo, prefix, extension;
+  };
+  std::vector<Wanted> repos = {portable_ ? Wanted{"SkylandersCoreOfLight", kPortablePrefix, kPortableExtension}
+                                         : Wanted{"SkylandersCoreOfLight", "CoreOfLightSetup", ".exe"}};
+  for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo) + "Setup", ".exe"});
   std::thread([work = work_, repos] {
     std::vector<Release> found;
-    for (const auto& [repo, prefix] : repos) {
-      if (auto release = FetchLatestRelease(repo, prefix)) found.push_back(*release);
+    for (const Wanted& w : repos) {
+      if (auto release = FetchLatestRelease(w.repo, w.prefix, w.extension)) found.push_back(*release);
     }
     // Nothing at all: no network (or GitHub down); the releases known before stay.
     if (!found.empty()) SaveKnownReleases(found);
@@ -1621,11 +1630,16 @@ void LauncherUi::ApplyReleases() {
     }
   }
   hub_update_.reset();
-  // Only a launcher its setup installed updates itself (a developer's build is left alone).
+  // Only a launcher its setup installed, or the portable one, updates itself (a developer's build is
+  // left alone), each from its own kind of asset (a release kept from before the switch may be the
+  // other one).
   std::error_code ec;
-  if (!std::filesystem::exists(launcher_dir_ / "unins000.exe", ec)) return;
+  if (!portable_ && !std::filesystem::exists(launcher_dir_ / "unins000.exe", ec)) return;
+  const std::string extension = portable_ ? kPortableExtension : ".exe";
   for (const Release& r : releases_) {
-    if (r.repo == "SkylandersCoreOfLight" && VersionLess(COREOFLIGHT_VERSION, r.version)) hub_update_ = r;
+    if (r.repo == "SkylandersCoreOfLight" && r.asset.ends_with(extension) && VersionLess(COREOFLIGHT_VERSION, r.version)) {
+      hub_update_ = r;
+    }
   }
 }
 
@@ -2002,8 +2016,11 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
   std::snprintf(line, sizeof(line), german_ ? "Installiert: %s   \xC2\xB7   Download: %.1f MB" : "Installed: %s   \xC2\xB7   Download: %.1f MB",
                 COREOFLIGHT_VERSION, double(release.size) / (1024.0 * 1024.0));
   Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, line)) * 0.5f, a.y + 84 * u}, kWhite, line);
-  const char* keeps = german_ ? "Der Hub l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
-                              : "The launcher downloads it, installs it and starts again. Games and saves stay.";
+  const char* keeps =
+      portable_ ? (german_ ? "Der Hub l\xC3\xA4" "dt sie, tauscht seine Dateien aus und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+                           : "The launcher downloads it, swaps its files and starts again. Games and saves stay.")
+                : (german_ ? "Der Hub l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+                           : "The launcher downloads it, installs it and starts again. Games and saves stay.");
   Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, keeps)) * 0.5f, a.y + 118 * u}, kDim, keeps);
   const bool downloading = Downloading() && work_->hub;
   const int state = work_->download.load();
@@ -2013,7 +2030,21 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
     dl->AddRectFilled(p, q, Rgba(30, 40, 90, 240), 13 * u);
     dl->AddRectFilled(p, {p.x + (q.x - p.x) * DownloadProgress(), q.y}, kGold, 13 * u);
     ImGui::End();
-    if (state == 2) {
+    if (state == 2 && portable_) {
+      // The portable launcher swaps its own files (portable.h) and starts the new one.
+      work_->download = 0;
+      wchar_t self[MAX_PATH] = {};
+      GetModuleFileNameW(nullptr, self, MAX_PATH);
+      const std::filesystem::path exe_name = std::filesystem::path(self).filename();
+      std::string why;
+      if (ApplyPortableUpdate(work_->file, launcher_dir_, exe_name, german_, why)) {
+        if (StartLauncher(launcher_dir_ / exe_name)) return false;  // the launcher quits; the new one runs
+        why = german_ ? "Der neue Hub lie\xC3\x9F sich nicht starten; starte ihn bitte selbst." : "Couldn't start the new launcher; please start it yourself.";
+      }
+      error_ = Wide(why);
+      error_until_ = ImGui::GetTime() + 8.0;
+      hub_update_put_off_ = true;
+    } else if (state == 2) {
       work_->download = 0;
       STARTUPINFOW startup = {sizeof(startup)};
       PROCESS_INFORMATION info = {};

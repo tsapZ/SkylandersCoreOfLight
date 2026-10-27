@@ -442,6 +442,18 @@ folder (where the launcher looks first), and asks in English or German. Uninstal
 folder, the installed launcher starts into its first-run setup, silent uninstall removes it and
 its Apps entry.
 
+The same script packs the portable launcher (#46, `src/portable.h`),
+`installer\Output\CoreOfLightPortable-<version>.zip`: the staged files without the games' setups,
+plus `portable.txt` next to the exe, for launcher managers (Quiver Launcher) that can't run a setup.
+That file makes the launcher update itself from the release's ZIP instead of its setup: it writes
+the new files next to the old ones (`<name>.new`), renames the old ones to `<name>.old` (a running
+exe and its DLLs can be renamed, not overwritten), puts the new ones in place, starts the new
+launcher with the same arguments and quits; the next start deletes the `.old` files. A step that
+fails puts everything back. `coreoflight.exe --portable_update=<zip>` does the same with a local
+ZIP, for testing without a release. Checked 2026-10-27 on a scratch copy (`--offline`, a scratch
+`--documents`): a newer ZIP with one more file swapped in, the new launcher started with the same
+arguments, no `.old` left; a cut-off ZIP refused with nothing touched.
+
 ## Checked (2026-10-22)
 
 - Imaginators language (2026-10-26), on a copy of the owner's disc folder: undoing the Python

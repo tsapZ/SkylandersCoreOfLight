@@ -21,6 +21,7 @@
 #include "hub_settings.h"
 #include "language_import.h"
 #include "music.h"
+#include "portable.h"
 #include "profiles_ui.h"
 #include "settings_ui.h"
 #include "setup_ui.h"
@@ -86,6 +87,7 @@ class LauncherUi {
   std::vector<float> lift_;
 
   std::filesystem::path launcher_dir_;
+  bool portable_ = false;  // the portable launcher (portable.h): updates from its ZIP, not the setup
   std::vector<Found> found_;
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;

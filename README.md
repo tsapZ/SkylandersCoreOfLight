@@ -52,6 +52,12 @@ Then:
 Uninstalling goes through Windows' Apps list; it asks whether the games, your saves and your
 figures should go too.
 
+**No setup wanted?** Each release also has `CoreOfLightPortable-<version>.zip`: unzip it anywhere
+and run `coreoflight.exe`. It's the same launcher; it updates itself from the next release's ZIP
+(keep `portable.txt` next to the exe), so launcher managers like Quiver can handle it too. Your
+data is in `Documents\Skylanders` either way. The games themselves still come with their setups,
+which the launcher runs for you.
+
 ## The games
 
 | Game | Project | State |
