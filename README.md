@@ -110,7 +110,7 @@ pictures of every figure.
   launcher asks before the old folders go.
 - **Gets out of the way while you play**: it hides while a game runs and takes no input, so one
   controller drives only the game.
-- **The launcher's own settings**: language (German / English), the library's defaults, title
+- **The launcher's own settings**: language (English / German), the library's defaults, title
   music and its volume, animations, fullscreen (also `--fullscreen` for Steam's launch options),
   the games folder, the data folder. A game's settings can empty its shader cache.
 - **Controller, keyboard or mouse** everywhere: the button hints at the bottom follow what you use
