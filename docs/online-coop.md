@@ -1,4 +1,4 @@
-# Online co-op with two real portals (proposal)
+# Online co-op, PC to PC (proposal)
 
 Status: proposal, nothing built (Phase 4, #1 #2 #3). Building it is a separate decision.
 Written for SwapForceRecomp and moved here (its #28, #29, #30): every recompiled game has the
@@ -6,68 +6,101 @@ same software portal from `skylanders-portal`, so the design applies to all of t
 
 ## Goal
 
-Two players in two homes play a recompiled Skylanders game together (Swap Force first). The
-host runs the game; the guest sees and
-hears it and plays with their own controller, and puts **their own real figures on their own
-portal**. Progress the game writes (XP, gold, upgrades, hats) ends up on the guest's real figure,
-as if it had been on the host's portal.
+Two players in two homes play a recompiled Skylanders game together. The host runs the game; the
+guest sees and hears it, plays with their own controller, and brings **their own figures**: files
+from their figure folder, or the real figures on their own portal. Progress the game writes (XP,
+gold, upgrades, hats) ends up on the guest's figure, as if it had been on the host's portal.
+
+## Direction (2026-10-27)
+
+- **Our own connection, made by Core of Light.** No Parsec or Steam in between, and nothing
+  hosted: no server, no relay, no lobby list. The two PCs connect directly, 1:1.
+- **A "lobby" is a join code.** The host's Core of Light shows a code (address, port, a key); the
+  guest pastes it, e.g. from Discord. If the host can't be reached directly, the guest sends a
+  reply code back and both sides open the connection at the same time.
+- **The guest needs no copy of the game,** only Core of Light: it shows the stream, sends the pad
+  and lends the figures.
+- **No netplay.** Two copies of the game kept in sync don't work for these ports: they are
+  multithreaded, timing-dependent and have no savestates. Co-op mods that sync two copies (Super
+  Mario 64, Ocarina of Time) build on full decompilations.
+- SuperChargers and Imaginators have Xbox Live online code of their own (racing, among other
+  things). Making it run is a separate research track: it needs the 360's network and session
+  layer in the SDK.
 
 ## Shape
 
 ```
- guest PC                                        host PC
- ┌───────────────────────┐   video, audio,       ┌──────────────────────────────┐
- │ Parsec / Steam client │◄──controller──────────┤ Parsec / Steam host          │
- │                       │   (their channel)     │                              │
- │ portal client         │                       │ the game (its own exe)       │
- │  ├ real USB portal    │   figure channel      │  ├ software portal           │
- │  │ (skylanders-portal)│◄─────────────────────►│  │  slots for the guest      │
- │  └ figure journal     │   (ours, small)       │  └ write callback            │
- └───────────────────────┘                       └──────────────────────────────┘
+ host PC: the game                                 guest PC: Core of Light (no game)
+ +--------------------------------------+          +--------------------------------+
+ | presenter (after the menus) -> H.264 | picture  | viewer: H.264 decoder, window  |
+ | audio output -> Opus ----------------+- sound ->| Opus -> speakers               |
+ | network pad = player 2 <-------------+-- pad ---| the guest's controller         |
+ | software portal: guest's slots <-----+-figures->| figure files / real portal     |
+ +--------------------------------------+  one UDP +--------------------------------+
+                                          connection, encrypted
 ```
 
-- **Picture, sound, controller:** an existing remote play tool (below). The guest's controller
-  arrives on the host as a normal controller, so the game, the portal menu and the player menu
-  see a second player like a local one.
-- **Figures:** our own small channel, not the remote play tool. The guest runs a *portal client*
-  (a small exe built from the same `skylanders-portal` library this app uses): it reads the
-  guest's real portal (the same USB code as `portal_mode = usb`) and sends figure events; the host
-  puts them into its software portal (`SoftwarePortal::PlaceFigure` / `RemoveFigure`, as the
-  portal menu does today), in slots that belong to the guest's player.
-- **Writes back:** the host's software portal already reports every block the game writes
-  (`SoftwarePortal::SetWriteCallback`). The host forwards them; the portal client writes them to
-  the real figure (the USB portal's write path).
+- **Picture:** taken from the SDK's presenter after the menus are drawn (so the portal menu is in
+  the stream) and encoded by the GPU through Windows' own H.264 encoders (NVIDIA, AMD, Intel).
+- **Sound:** the SDK already has a tap on its audio output; it goes out as Opus.
+- **Pad:** a network input device merges in like the scripted input does and plays as player 2,
+  so the game, the portal menu and the player menu see a second local player.
+- **Figures:** a reliable lane on the same connection (below). The game always talks to the
+  host's own software portal: it tolerates no delay (late portal replies made Swap Force reset its
+  portal every 20 s), while figure data is small and not urgent (1 KB when placed, about 200 bytes
+  per save).
+- **Latency:** about the ping plus 15-35 ms in a first version, plus 8-15 ms tuned; Parsec is about
+  the ping plus 10 ms. Fine for co-op Skylanders.
 
-Nothing of the game changes; the host side is a new portal source next to the menu, the guest
-side a separate small program.
+## Finding each other without a server
 
-## Remote play options (#2)
+1. **Same network:** Core of Light lists hosts on the LAN.
+2. **Port opened automatically:** UPnP, NAT-PMP or PCP on the host's router. Works for roughly a
+   third to a half of home routers (a FRITZ!Box allows it per device only).
+3. **IPv6:** no NAT, and common in Germany (about 74% of traffic). The firewall still needs a
+   pinhole or both sides sending at once (the reply code).
+4. **Both sides at once** (invite code plus reply code) for most of the rest.
+5. **When none of that works** (both behind carrier NAT without IPv6, mobile hotspots: roughly
+   10-30% of pairs): forward the port by hand, or a VPN the players run themselves (Tailscale,
+   ZeroTier). A public STUN server would bring that down to about 5-15%, but it's a third party,
+   so at most an opt-in setting.
 
-| | Parsec | Steam Remote Play Together |
+The key in the code encrypts and authenticates the connection; a code works once.
+
+## Phases
+
+| Step | What | Effort (weeks) |
 |---|---|---|
-| Controllers | guest pads arrive through Parsec's virtual USB driver as an Xbox 360 pad (default) or a DualShock 4 [1] | through Steam Input, as a Steam virtual pad |
-| Needs | Parsec on both PCs; the host shares the screen or the app | the game in the host's Steam library (a non-Steam shortcut works for Remote Play, not reliably for "Together"), Steam on the guest |
-| USB devices other than pads | not documented in Parsec's own help; third-party blogs claim more [2], unverified | not supported |
-| Latency | built for low latency, up to 240 FPS streams [2] | "works really well" with a good connection [2] |
+| 1 LAN | picture, sound and pad over plain UDP on the same network, the viewer in Core of Light | 3-5 |
+| 2 Robust | loss handling (FEC, resends), bitrate adapting, encryption, the figure lane | 3-4 |
+| 3 Internet | join and reply codes, port opening, IPv6, diagnostics with plain advice | 2-4 |
+| 4 Hub and figures | "Play together" and "Join" pages; figure files, then the real portal | 3-5 |
+| 5 Polish | other codecs, more GPUs and networks tested | 2-6 |
 
-Conclusion: neither passes a Portal of Power through reliably, which is why figures get their own
-channel. Parsec is the better fit: no Steam dependency, the guest's pad is a plain Xbox 360 pad on
-the host, and 240 FPS streams suit the high frame rate work. Steam Remote Play is the fallback
-when both players already use Steam. A third option without any streaming tool would be two
-copies of the game in a network session, but the games have no online play; that would mean
-writing netcode for an engine we don't know well enough.
+Main risks: differences between GPU encoders, Windows N editions without media codecs, firewall
+prompts, the security of an open UDP port (authenticate before reading anything), and the host's
+upload speed. GPL projects (Sunshine, Moonlight, OBS, Dolphin) are for learning only; nothing is
+copied from them into these MIT repositories.
+
+## Until then: a remote play tool
+
+Without any of this, two players can already play with a remote play tool and the host's figures.
+
+| | Parsec | Moonlight + Sunshine | Steam Remote Play Together |
+|---|---|---|---|
+| Pad | arrives as an Xbox 360 pad [1] | arrives as a pad | through Steam Input |
+| Other USB devices | experimental USB passthrough (validated for security keys only) | no | no |
+| Cost | free plan (60 FPS) | free, open source | free, only for games in the Steam library |
 
 [1] Parsec help, "Setup Gamepad" (support.parsec.app, article 32381705301908).
-[2] AnyViewer remote gaming comparisons 2026 (anyviewer.com), secondary sources.
 
 ## Figure channel
 
-- **Transport:** one TCP connection from the guest's portal client to the host (port configurable,
-  default e.g. 27015). The guest needs to reach the host: port forwarding, or a VPN both already
-  use (Tailscale, ZeroTier). A relay is possible later; the data is tiny (1 KB per figure,
+- **Transport:** a reliable lane on the connection above (with a remote play tool instead: one
+  TCP connection from a small portal client to the host). The data is tiny (1 KB per figure,
   16 bytes per write).
-- **Pairing:** the host shows a short code in the settings menu; the client sends it first.
-  Nothing but figure messages is accepted, every size is checked, at most 8 guest figures.
+- **Pairing:** through the join code. Nothing but figure messages is accepted, every size is
+  checked, at most 8 guest figures.
 - **Messages:**
 
 | From | Message | Content |
@@ -110,9 +143,10 @@ and after events such as a level-up, and it writes the two save areas in turn (s
 6. **Backups:** the client saves the figure's 1 KB before the first write of a session
    (`<client folder>/backup/<uid>-<date>.dump`).
 
-What is not covered: two hosts using the same real figure at the same time (the second `place`
-of a UID that is already placed is refused), traps and their villains (they write differently,
-see the fork's `trap_villain`), and the Imaginators' creation crystals.
+Traps and creation crystals need nothing special: the game writes them like any other figure.
+Writes still queued when a figure is lifted from the guest's real portal wait in the journal and
+reach the figure the next time it is placed. What is not covered: two hosts using the same real
+figure at the same time (the second `place` of a UID that is already placed is refused).
 
 ## Effort
 

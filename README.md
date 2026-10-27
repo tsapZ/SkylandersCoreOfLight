@@ -117,7 +117,7 @@ drag that file in. After a crash the launcher offers it by itself.
 | Part | Issues |
 |---|---|
 | HD textures made on your own PC: the launcher upscales a game's textures, can be stopped and picked up again, says how much room they take | [SwapForceRecomp#62](https://github.com/tsapZ/SwapForceRecomp/issues/62) |
-| Online co-op with each player's own real portal (proposal) | #1, #2, #3, [docs/online-coop.md](docs/online-coop.md) |
+| Online co-op, PC to PC with each player's own figures (proposal) | #1, #2, #3, [docs/online-coop.md](docs/online-coop.md) |
 
 The order and what is next: [docs/roadmap.md](docs/roadmap.md).
 
