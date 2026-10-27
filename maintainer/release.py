@@ -139,8 +139,10 @@ def cmd_bump(a):
         paths = [p for p in wanted if (d / p / ".git").exists()]
         if not paths:
             continue
-        if not is_clean(repo):
-            raise SystemExit(f"{repo}: not clean, nothing done there")
+        # Changes other than these submodules (moved there already for a local test) stop it.
+        other = [l for l in sk.git(repo, "status", "--porcelain").splitlines() if l[3:].strip() not in paths]
+        if other:
+            raise SystemExit(f"{repo}: not clean ({other[:3]}), nothing done there")
         for p in paths:
             slug, branch = sk.SUBMODULES[p]
             sub = d / p

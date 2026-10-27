@@ -48,30 +48,69 @@ function New-TestRun([string]$Repo, [string]$Tool, [string]$Tag, [switch]$Save, 
   @{ Run = $run; UserData = $ud }
 }
 
-# The route (an input script, see src/dev/input_script.h in a game) with {figures} pointing at a
-# fresh copy of the figure folder, written into the run folder.
-function Expand-Route([string]$Route, [string]$Run) {
+function Get-RoutePath([string]$Route) {
   $path = if (Test-Path $Route) { $Route } else { Join-Path $PSScriptRoot "routes\$Route.txt" }
   if (-not (Test-Path $path)) { throw "no route '$Route'" }
+  $path
+}
+
+# The route (an input script, see thirdparty/skylanders-portal/src/dev/input_script.h in a game)
+# with {figures} pointing at a fresh copy of the figure folder, written into the run folder. -Then
+# appends a second route (e.g. menus) in place of the first one's quit.
+function Expand-Route([string]$Route, [string]$Run, [string]$Then = "") {
+  $path = Get-RoutePath $Route
   $figures = Join-Path $Run "figures"
   $real = Join-Path $script:Skylanders "Figures"
   if (Test-Path $real) { Copy-Item -Recurse $real $figures } else { New-Item -ItemType Directory -Force $figures | Out-Null }
   # Comment lines are left out: the game's script reader splits at every ';', comments too.
-  $lines = Get-Content $path | Where-Object { $_ -notmatch '^\s*#' } | ForEach-Object { $_ -replace '\{figures\}', $figures }
+  $lines = @(Get-Content $path | Where-Object { $_ -notmatch '^\s*#' })
+  if ($Then) {
+    $lines = @($lines | Where-Object { $_.Trim() -ne "quit" }) + @(Get-Content (Get-RoutePath $Then) | Where-Object { $_ -notmatch '^\s*#' })
+  }
+  $lines = $lines | ForEach-Object { $_ -replace '\{figures\}', $figures }
   $out = Join-Path $Run "route.txt"
   [IO.File]::WriteAllLines($out, [string[]]$lines)
   $out
 }
 
-# A route's "# save:" and "# shots:" header lines (shots are comma-separated there).
-function Get-RouteHeader([string]$Route) {
-  $path = if (Test-Path $Route) { $Route } else { Join-Path $PSScriptRoot "routes\$Route.txt" }
-  $head = @{ Save = $false; Shots = "" }
-  foreach ($line in Get-Content $path) {
-    if ($line -match '^#\s*save:\s*yes') { $head.Save = $true }
-    if ($line -match '^#\s*shots:\s*(.*)$') { $head.Shots = $Matches[1] -replace ',', ';' }
+# A route's header lines: "# save: yes", "# shots: ..." (comma-separated there) and
+# "# expect: <log text>, ..." (log lines the run must have, e.g. a menu that opened).
+function Get-RouteHeader([string]$Route, [string]$Then = "") {
+  $head = @{ Save = $false; Shots = ""; Expect = @() }
+  foreach ($r in @($Route, $Then) | Where-Object { $_ }) {
+    foreach ($line in Get-Content (Get-RoutePath $r)) {
+      if ($line -match '^#\s*save:\s*yes') { $head.Save = $true }
+      if ($line -match '^#\s*shots:\s*(.*)$') { $head.Shots = $Matches[1] -replace ',', ';' }
+      if ($line -match '^#\s*expect:\s*(.*)$') { $head.Expect += @($Matches[1].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+    }
   }
   $head
+}
+
+# Window shots at the route's own "log shot <name>" marks, one second after each: the times come
+# from adding up the commands before it (wait, tap 0.12 s, hold / stick their ms, fps its seconds).
+# Empty without marks.
+function Get-ScriptShots([string]$Script) {
+  $t = 0.0; $last = 0.0; $steps = @()
+  foreach ($cmd in ((Get-Content $Script) -join ";").Split(";")) {
+    $w = $cmd.Trim() -split '\s+'
+    switch ($w[0]) {
+      "wait" { $t += [double]::Parse($w[1], [Globalization.CultureInfo]::InvariantCulture) }
+      "tap" { $t += 0.12 }
+      "key" { $t += 0.12 }
+      "hold" { $t += [double]$w[2] / 1000 }
+      "stick" { $t += [double]$w[3] / 1000 }
+      "fps" { $t += [double]$w[1] }
+      "log" {
+        if ($w.Count -ge 3 -and $w[1] -eq "shot") {
+          $at = $t + 1.0
+          $steps += ("wait {0}; shot {1}" -f ([Math]::Round($at - $last, 2)).ToString([Globalization.CultureInfo]::InvariantCulture), $w[2])
+          $last = $at
+        }
+      }
+    }
+  }
+  $steps -join "; "
 }
 
 # The game started through its tools\run_scripted.ps1 (window shots on a timeline), muted (only the
@@ -104,16 +143,19 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   $copy
 }
 
-# One line per run: crash lines, whether the script reached its quit, the FPS samples' range.
-function Get-Verdict([string]$Repo, [string]$Log) {
+# One line per run: crash lines, whether the script reached its quit, the FPS samples' range, and
+# any expected log line (Get-RouteHeader's Expect) that never came.
+function Get-Verdict([string]$Repo, [string]$Log, [string[]]$Expect = @()) {
   if (-not $Log) { return "${Repo}: NO LOG" }
   $lines = Get-Content $Log
   $trouble = @($lines | Select-String $script:TroublePattern)
   $quit = @($lines | Select-String "Input script: quit").Count
+  $missing = @($Expect | Where-Object { -not ($lines | Select-String -SimpleMatch $_ -Quiet) })
   $fps = @($lines | Select-String "guest FPS" | ForEach-Object { [double]($_.Line -replace '^.*Input script: ([\d.]+) guest FPS.*$', '$1') })
   $range = if ($fps.Count) { "fps {0:N0}-{1:N0}" -f ($fps | Measure-Object -Minimum).Minimum, ($fps | Measure-Object -Maximum).Maximum } else { "no fps samples" }
-  $state = if ($trouble.Count) { "TROUBLE" } elseif ($quit) { "ok" } else { "NO QUIT" }
+  $state = if ($trouble.Count) { "TROUBLE" } elseif ($missing.Count) { "MISSING" } elseif ($quit) { "ok" } else { "NO QUIT" }
   $text = "{0}: {1} ({2} log lines, {3} trouble lines, {4})" -f $Repo, $state, $lines.Count, $trouble.Count, $range
   foreach ($t in $trouble | Select-Object -First 3) { $text += "`n    " + $t.Line.Substring(0, [Math]::Min(200, $t.Line.Length)) }
+  foreach ($m in $missing) { $text += "`n    never in the log: $m" }
   $text
 }

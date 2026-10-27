@@ -54,7 +54,12 @@ saves and figures are never touched.
 
 Real key presses and `rclick` reach whatever window is in front: only while nobody uses the PC.
 
-`routes/` holds the routes: input scripts with `{figures}` for the copied figure folder, and two
-header lines, `# save: yes` (start from a copy of the owner's saves) and `# shots: ...` (when the
-shots are taken). `ssa_new` and `im_new` start new games; the others continue the owner's saves
-(Giants' slot 4, Swap Force's and Trap Team's slot 1, SuperChargers on the ship).
+`routes/` holds the routes: input scripts with `{figures}` for the copied figure folder, and header
+lines: `# save: yes` (start from a copy of the owner's saves), `# shots: ...` (when the shots are
+taken) and `# expect: <log text>, ...` (lines the log must have, else the verdict says MISSING). A
+`log shot <name>` line in a route takes a window shot one second later (the test kit adds up the
+waits before it). `ssa_new` and `im_new` start new games; the others continue the owner's saves
+(Giants' slot 4, Swap Force's and Trap Team's slot 1, SuperChargers on the ship). `menus` goes on
+top of any of them (`smoke.ps1 -Then menus`, `smoke_all.ps1 -Menus`): it opens, shoots and closes
+the portal menu and its next tab, the portal overview, the settings and their next page, the
+achievements and the player menu.

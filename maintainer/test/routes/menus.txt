@@ -1,0 +1,47 @@
+# The shared menus on top of a game, each opened, shot and closed again: the portal menu (F6) and
+# its next tab, the portal overview (F5), the settings (F4) and their next page, the achievements
+# (F7), the player menu (F9). Appended to a game's route with smoke.ps1 -Then menus (the route's
+# own quit goes). A "log shot <name>" line marks a window shot one second later.
+# expect: Portal menu: opened, Settings menu: opened, Achievements: list opened, Player menu: opened
+log menus
+key F6
+wait 3
+log shot portal_menu
+wait 2
+tap rb
+wait 2
+log shot portal_menu_tab
+wait 2
+tap b
+wait 3
+key F5
+wait 3
+log shot portal_overview
+wait 2
+tap b
+wait 3
+key F4
+wait 3
+log shot settings
+wait 2
+tap rb
+wait 2
+log shot settings_page
+wait 2
+tap b
+wait 3
+key F7
+wait 3
+log shot achievements
+wait 2
+key F7
+wait 3
+key F9
+wait 3
+log shot player_menu
+wait 2
+tap b
+wait 3
+log shot back_in_game
+wait 2
+quit
