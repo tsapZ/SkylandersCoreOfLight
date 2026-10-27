@@ -48,13 +48,17 @@ def pick_repos(names, default=None):
     return list(dict.fromkeys(out))
 
 
-def run(cmd, cwd=None, log=None):
-    """A command; its output goes to `log` (a path) if given. Returns the exit code."""
+def run(cmd, cwd=None, log=None, path_first=None):
+    """A command; its output goes to `log` (a path) if given; `path_first` goes in front of PATH.
+    Returns the exit code."""
+    env = None
+    if path_first:
+        env = dict(os.environ, PATH=str(path_first) + os.pathsep + os.environ.get("PATH", ""))
     if log:
         log.parent.mkdir(parents=True, exist_ok=True)
         with open(log, "w", encoding="utf-8", errors="replace") as f:
-            return subprocess.run(cmd, cwd=cwd, stdout=f, stderr=subprocess.STDOUT).returncode
-    return subprocess.run(cmd, cwd=cwd).returncode
+            return subprocess.run(cmd, cwd=cwd, stdout=f, stderr=subprocess.STDOUT, env=env).returncode
+    return subprocess.run(cmd, cwd=cwd, env=env).returncode
 
 
 def gh(*args):
@@ -235,7 +239,9 @@ def cmd_build(a):
         for name, command in steps:
             log = logs / f"{repo}_{name}.log"
             started = datetime.datetime.now()
-            code = run(command, cwd=d, log=log)
+            # A codegen run starts the SDK's rexglue.exe, which needs amd_fidelityfx_dx12.dll: it
+            # sits in the game's build folder (0xC0000135 without it).
+            code = run(command, cwd=d, log=log, path_first=d / "out" / "build" / "win-amd64-release")
             took = (datetime.datetime.now() - started).total_seconds()
             print(f"{repo}: {name} {'ok' if code == 0 else 'FAILED'} in {took:.0f} s ({log})")
             if code:
