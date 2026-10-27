@@ -433,6 +433,17 @@ void SettingsScreen::Draw(float width, float height) {
       Text(dl, bold_, vs, {b.x - 28 * u, y + 10 * u}, kDim, ">");
     }
   }
+  // Small arrows at the list's right end when rows are hidden above or below: the launcher's
+  // settings go on past the screen (export and import at the end), which nothing showed before.
+  const float arrow_x = left + list_w - 26 * u;
+  if (first > 0) {
+    const float ay = list_top - 6 * u;
+    dl->AddTriangleFilled({arrow_x - 9 * u, ay}, {arrow_x + 9 * u, ay}, {arrow_x, ay - 10 * u}, kDim);
+  }
+  if (first + visible < n) {
+    const float ay = list_top + visible * row_h;
+    dl->AddTriangleFilled({arrow_x - 9 * u, ay}, {arrow_x + 9 * u, ay}, {arrow_x, ay + 10 * u}, kDim);
+  }
   // The explanation.
   const float px = left + list_w + 24 * u, pw = width - px - left;
   if (pw > 160 * u && row_ < n) {
