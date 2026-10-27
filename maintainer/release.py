@@ -140,7 +140,9 @@ def cmd_bump(a):
         if not paths:
             continue
         # Changes other than these submodules (moved there already for a local test) stop it.
-        other = [l for l in sk.git(repo, "status", "--porcelain").splitlines() if l[3:].strip() not in paths]
+        # (sk.git strips the output, so the first line may have lost the status's leading blank)
+        other = [l for l in sk.git(repo, "status", "--porcelain").splitlines()
+                 if l.split(None, 1)[-1] not in paths]
         if other:
             raise SystemExit(f"{repo}: not clean ({other[:3]}), nothing done there")
         for p in paths:
