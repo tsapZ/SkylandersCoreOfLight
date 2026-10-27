@@ -1,0 +1,10 @@
+# Swap Force, a copy of the owner's save: title -> Story -> the first slot -> where it continues,
+# Grim Creeper on the portal.
+# save: yes
+# shots: wait 100, full a, wait 6, full b
+wait 14
+place 0 {figures}\Swap Force\Grim Creeper.dump
+wait 4; tap start; wait 8; tap a; wait 12; tap a; wait 12; tap a; wait 60
+log in the level
+fps 2; wait 10
+quit

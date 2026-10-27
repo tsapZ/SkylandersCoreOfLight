@@ -1,0 +1,12 @@
+# Trap Team, a copy of the owner's save: title -> slot 1 -> Story -> the Skylanders Academy, Enigma
+# on the portal.
+# save: yes
+# shots: wait 68, full a, wait 6, full b
+wait 10
+place 0 {figures}\Trap Team\Enigma.dump
+wait 4; tap start; wait 5; tap a; wait 5; tap a; wait 5; tap a; wait 5; tap a; wait 5; tap a
+log academy wait
+wait 35
+log in the academy
+fps 2; wait 10
+quit

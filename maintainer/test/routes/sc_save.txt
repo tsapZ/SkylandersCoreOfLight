@@ -1,0 +1,10 @@
+# SuperChargers, a copy of the owner's save: title -> the first slot -> the ship (the game's hub),
+# A presses 8 s apart (an A on a screen that isn't up yet does no harm), Chop Chop on the portal.
+# save: yes
+# shots: wait 100, full a, wait 6, full b
+wait 10
+place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+wait 4; tap start; wait 8; tap a; wait 8; tap a; wait 8; tap a; wait 8; tap a; wait 60
+log on the ship
+fps 2; wait 10
+quit

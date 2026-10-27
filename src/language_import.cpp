@@ -399,7 +399,7 @@ class Iga {
       std::vector<uint8_t> block(packed);
       if (!read_(at + 2, packed, block.data())) return std::nullopt;
       if (comp == 2) {
-        auto data = alchemy::LzmaDecode(block.data(), block.size(), want);
+        auto data = skylanders::alchemy::LzmaDecode(block.data(), block.size(), want);
         if (!data) return std::nullopt;
         out.insert(out.end(), data->begin(), data->end());
       } else if (comp == 1) {

@@ -1,0 +1,12 @@
+# Imaginators, a new game: the licence agreement, the opening cutscene (skipped with Y) and the first
+# level, Chop Chop on the portal.
+# save: no
+# shots: wait 150, full a, wait 10, full b
+wait 8
+place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+wait 32; tap start; wait 8; tap y; wait 6; tap a; wait 6; tap a; wait 6; tap a; wait 6; tap a; wait 8
+tap y; wait 6; tap y; wait 6; tap y; wait 6; tap y; wait 6; tap y; wait 6
+tap y; wait 6; tap y; wait 6; tap y; wait 6; tap y; wait 6; tap y; wait 40
+log in the level
+fps 2; wait 10
+quit

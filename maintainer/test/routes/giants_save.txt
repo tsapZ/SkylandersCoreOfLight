@@ -1,0 +1,18 @@
+# Giants, a copy of the owner's save: title -> the autosave notice -> Story -> the save's slot (the
+# fourth, as the save keeps it) -> where it continues. Every press waits until its screen is surely
+# up: a press that comes early lands on the screen before and the rest of the route slips by one
+# (then slot 1 starts a new game).
+# save: yes
+# shots: wait 80, shot slots, wait 80, full a, wait 6, full b
+wait 10
+place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+wait 15
+tap start; wait 12
+tap a; wait 12
+tap a; wait 40
+log slot menu
+tap down; wait 3; tap down; wait 3; tap down; wait 3
+tap a; wait 15; tap a; wait 50
+log in the level
+fps 2; wait 10
+quit

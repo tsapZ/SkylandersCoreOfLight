@@ -27,6 +27,9 @@ set(PORTAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/skylanders-portal)
 if(NOT EXISTS ${PORTAL_DIR}/CMakeLists.txt)
   message(FATAL_ERROR "thirdparty/skylanders-portal is missing: git submodule update --init")
 endif()
+# Its skylanders_alchemy (the games' archive readers, here the LZMA decoder for Imaginators'
+# archives) takes stb_image's zlib decoder from thirdparty/stb.
+set(SKYLANDERS_STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/stb)
 add_subdirectory(${PORTAL_DIR} skylanders-portal EXCLUDE_FROM_ALL)
 
 add_executable(coreoflight WIN32
@@ -62,7 +65,6 @@ add_executable(coreoflight WIN32
   src/handheld.cpp
   src/portable.cpp
   src/language_import.cpp
-  src/alchemy/lzma_decoder.cpp
   src/coreoflight.rc
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
@@ -77,7 +79,7 @@ target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/bac
 target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
                                                IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
                                                COREOFLIGHT_VERSION="${COREOFLIGHT_VERSION}")
-target_link_libraries(coreoflight PRIVATE skylanders_portal_figures d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
+target_link_libraries(coreoflight PRIVATE skylanders_portal_figures skylanders_alchemy d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
 # The fallback font next to the exe (main.cpp LoadFont: where Segoe UI isn't there, under Wine).
 add_custom_command(TARGET coreoflight POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:coreoflight>/fonts)

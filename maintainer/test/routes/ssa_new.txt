@@ -1,0 +1,14 @@
+# Spyro's Adventure, a new game: the intro to Chapter 1, a figure at the portal prompt, then two
+# figure swaps in the level with FPS samples around each (a swap used to stall the game).
+# save: no
+# shots: wait 124, full a, wait 6, full b
+wait 12; tap start; wait 6; tap a; wait 8; tap a; wait 14; tap a; wait 8; tap a; wait 40
+place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+wait 4; tap b; wait 12; tap a; wait 3; tap a; wait 25
+log swap1
+place 0 {figures}\Spyro's Adventure\Eruptor.dump
+fps 1; wait 1; fps 1; wait 1; fps 1; wait 1; fps 1; wait 8
+log swap2
+place 0 {figures}\Spyro's Adventure\Drill Sergeant.dump
+fps 1; wait 1; fps 1; wait 1; fps 1; wait 1; fps 1; wait 8
+quit

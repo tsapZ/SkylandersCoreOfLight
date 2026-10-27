@@ -1,0 +1,24 @@
+# Trap Team (TrapTeamRecomp #12), a copy of the owner's save: the Academy, straight ahead to the
+# villain vault, its trigger (RT), Eon's talk on a first visit, the vault again and a villain
+# picked: the game then asks for a trap and the portal menu should open on the villain's element.
+# save: yes
+# shots: wait 100, full a
+wait 10
+place 0 {figures}\Trap Team\Enigma.dump
+wait 4; tap start; wait 5; tap a; wait 5; tap a; wait 5; tap a; wait 5; tap a; wait 5; tap a
+log academy wait
+wait 35
+log walk to the vault
+stick 0 1 9000
+wait 1
+log at the vault
+tap rt; wait 4
+log Eon explains the vault (first visit)
+tap a; wait 4; tap a; wait 4; tap a; wait 4; tap a; wait 4
+log the vault again
+stick 0 1 1500
+wait 1
+tap rt; wait 4
+log pick a villain (after RT)
+tap a; wait 12
+quit
