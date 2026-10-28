@@ -1,0 +1,30 @@
+name: Idea or request
+description: Something you'd like the games or the launcher to do (a feature, an option, a change)
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Small or big, every idea is welcome. Say what you'd like and when you'd use it; a picture, or a game where you saw something like it, helps.
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      options:
+        - All games
+        - Spyro's Adventure
+        - Giants
+        - Swap Force
+        - Trap Team
+        - SuperChargers
+        - Imaginators
+        - Core of Light (the launcher)
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What should it do, and when would you use it?
+    validations:
+      required: true
