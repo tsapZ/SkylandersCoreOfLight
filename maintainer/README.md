@@ -57,7 +57,8 @@ Real key presses and `rclick` reach whatever window is in front: only while nobo
 
 `routes/` holds the routes: input scripts with `{figures}` for the copied figure folder, and header
 lines: `# save: yes` (start from a copy of the owner's saves), `# shots: ...` (when the shots are
-taken) and `# expect: <log text>, ...` (lines the log must have, else the verdict says MISSING). A
+taken), `# expect: <log text>, ...` (lines the log must have, else the verdict says MISSING) and
+`# reject: <log text>, ...` (lines it must not have, e.g. a fixed bug's message: REJECTED). A
 `log shot <name>` line in a route takes a window shot one second later (the test kit adds up the
 waits before it). `ssa_new` and `im_new` start new games; the others continue the owner's saves
 (Giants' slot 4, Swap Force's and Trap Team's slot 1, SuperChargers on the ship). `menus` goes on

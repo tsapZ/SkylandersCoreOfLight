@@ -73,15 +73,17 @@ function Expand-Route([string]$Route, [string]$Run, [string]$Then = "") {
   $out
 }
 
-# A route's header lines: "# save: yes", "# shots: ..." (comma-separated there) and
-# "# expect: <log text>, ..." (log lines the run must have, e.g. a menu that opened).
+# A route's header lines: "# save: yes", "# shots: ..." (comma-separated there),
+# "# expect: <log text>, ..." (log lines the run must have, e.g. a menu that opened) and
+# "# reject: <log text>, ..." (log lines it must not have, e.g. a fixed bug's message).
 function Get-RouteHeader([string]$Route, [string]$Then = "") {
-  $head = @{ Save = $false; Shots = ""; Expect = @() }
+  $head = @{ Save = $false; Shots = ""; Expect = @(); Reject = @() }
   foreach ($r in @($Route, $Then) | Where-Object { $_ }) {
     foreach ($line in Get-Content (Get-RoutePath $r)) {
       if ($line -match '^#\s*save:\s*yes') { $head.Save = $true }
       if ($line -match '^#\s*shots:\s*(.*)$') { $head.Shots = $Matches[1] -replace ',', ';' }
       if ($line -match '^#\s*expect:\s*(.*)$') { $head.Expect += @($Matches[1].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+      if ($line -match '^#\s*reject:\s*(.*)$') { $head.Reject += @($Matches[1].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
     }
   }
   $head
@@ -147,19 +149,22 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   $copy
 }
 
-# One line per run: crash lines, whether the script reached its quit, the FPS samples' range, and
-# any expected log line (Get-RouteHeader's Expect) that never came.
-function Get-Verdict([string]$Repo, [string]$Log, [string[]]$Expect = @()) {
+# One line per run: crash lines, whether the script reached its quit, the FPS samples' range, any
+# expected log line (Get-RouteHeader's Expect) that never came and any rejected one (Reject) that
+# did.
+function Get-Verdict([string]$Repo, [string]$Log, [string[]]$Expect = @(), [string[]]$Reject = @()) {
   if (-not $Log) { return "${Repo}: NO LOG" }
   $lines = Get-Content $Log
   $trouble = @($lines | Select-String $script:TroublePattern)
   $quit = @($lines | Select-String "Input script: quit").Count
   $missing = @($Expect | Where-Object { -not ($lines | Select-String -SimpleMatch $_ -Quiet) })
+  $rejected = @($Reject | Where-Object { $lines | Select-String -SimpleMatch $_ -Quiet })
   $fps = @($lines | Select-String "guest FPS" | ForEach-Object { [double]($_.Line -replace '^.*Input script: ([\d.]+) guest FPS.*$', '$1') })
   $range = if ($fps.Count) { "fps {0:N0}-{1:N0}" -f ($fps | Measure-Object -Minimum).Minimum, ($fps | Measure-Object -Maximum).Maximum } else { "no fps samples" }
-  $state = if ($trouble.Count) { "TROUBLE" } elseif ($missing.Count) { "MISSING" } elseif ($quit) { "ok" } else { "NO QUIT" }
+  $state = if ($trouble.Count) { "TROUBLE" } elseif ($rejected.Count) { "REJECTED" } elseif ($missing.Count) { "MISSING" } elseif ($quit) { "ok" } else { "NO QUIT" }
   $text = "{0}: {1} ({2} log lines, {3} trouble lines, {4})" -f $Repo, $state, $lines.Count, $trouble.Count, $range
   foreach ($t in $trouble | Select-Object -First 3) { $text += "`n    " + $t.Line.Substring(0, [Math]::Min(200, $t.Line.Length)) }
+  foreach ($r in $rejected) { $text += "`n    in the log, but must not be: $r" }
   foreach ($m in $missing) { $text += "`n    never in the log: $m" }
   $text
 }

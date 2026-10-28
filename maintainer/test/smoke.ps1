@@ -14,4 +14,4 @@ $script = Expand-Route $Route $t.Run $Then
 if (-not $Shots) { $Shots = Get-ScriptShots $script }
 if (-not $Shots) { $Shots = $head.Shots }
 $log = Invoke-Game $Repo $script $t.UserData $t.Run $Shots $Extra -Build $Build
-Get-Verdict $Repo $log $head.Expect
+Get-Verdict $Repo $log $head.Expect $head.Reject
