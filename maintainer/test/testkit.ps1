@@ -126,6 +126,9 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
           "--audio_mute=true --skip_intro=true --input_script=$Script $Extra"
   # The shots run alongside the route; once they are done the game keeps going until the route's
   # quit, at most $QuitTimeout more seconds (then it is stopped and the verdict says NO QUIT).
+  # SDL keeps the display on while a game runs (ES_DISPLAY_REQUIRED), which switches monitors back
+  # on that were turned off for a night of test runs; the games inherit this hint.
+  $env:SDL_VIDEO_ALLOW_SCREENSAVER = "1"
   Push-Location $repoDir
   # The shared runner in the game's skylanders-portal; an older checkout still has its own copy.
   $runner = ".\thirdparty\skylanders-portal\tools\run_scripted.ps1"
