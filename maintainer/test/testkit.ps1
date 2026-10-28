@@ -115,11 +115,12 @@ function Get-ScriptShots([string]$Script) {
 
 # The game started through its tools\run_scripted.ps1 (window shots on a timeline), muted (only the
 # samples are zeroed: SDL and the sound driver run as usual), then its newest log copied to the run.
+# -Build: the build folder's name after win-amd64- (release, or devkit for the developer kit's build).
 function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]$Run, [string]$Shots,
-                     [string]$Extra = "", [int]$QuitTimeout = 180) {
+                     [string]$Extra = "", [int]$QuitTimeout = 180, [string]$Build = "release") {
   if (Get-Process *recompiled* -ErrorAction SilentlyContinue) { throw "a game is already running" }
   $repoDir = Get-RepoDir $Repo
-  $logDir = Join-Path $repoDir "out\build\win-amd64-release\logs"
+  $logDir = Join-Path $repoDir "out\build\win-amd64-$Build\logs"
   $before = Get-Date
   $gameArgs = "--user_data_root=$UserData --portal_mode=software --fullscreen=false --resolution=1920x1080 " +
           "--audio_mute=true --skip_intro=true --input_script=$Script $Extra"
@@ -129,7 +130,7 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   # The shared runner in the game's skylanders-portal; an older checkout still has its own copy.
   $runner = ".\thirdparty\skylanders-portal\tools\run_scripted.ps1"
   if (-not (Test-Path $runner)) { $runner = ".\tools\run_scripted.ps1" }
-  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $Shots -KeepRunning 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
+  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $Shots -Config $Build -KeepRunning 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
   finally { Pop-Location }
   $exe = $script:Games[$Repo].Exe
   for ($i = 0; $i -lt 2 * $QuitTimeout -and (Get-Process $exe -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }

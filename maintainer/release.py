@@ -292,6 +292,17 @@ def check_repo(repo, history=False):
                 if n.lower().encode("ascii") in data or n.lower().encode("utf-16-le") in data:
                     problems.append(f"{f.name} holds a build machine path ({n})")
                     break
+            # The developer kit's log lines all start like this (SkylandersDevKit).
+            if b"dev kit: " in data:
+                problems.append(f"{f.name} holds the developer kit")
+    # The private repositories (the developer kit, GiantsDecomp) must never be built into a
+    # release: their CMake variables stay empty in the release build folder.
+    cache = d / "out" / "build" / "win-amd64-release" / "CMakeCache.txt"
+    if cache.exists():
+        for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+            name, _, value = line.partition("=")
+            if name.split(":")[0] in ("SKYLANDERS_DEVKIT_DIR", "GIANTS_DECOMP_DIR") and value.strip():
+                problems.append(f"the release build has {name.split(':')[0]} set (private code would ship)")
     return problems
 
 

@@ -14,7 +14,7 @@ are in [RULES.md](RULES.md).
 | `bump --sdk <sha> --lib <sha> -m <msg file> [--status "<line>"] [--push]` | moves the shared submodules to those commits in every repository that has them, with a STATUS entry, commits (and pushes) |
 | `version <x.y.z-beta.N> [--repos ...] [--status "<line>"] [--push]` | sets the release version (a game's `installer/<Repo>.iss`, the launcher's `CMakeLists.txt`), commits (and pushes) |
 | `build [--recipe package-installer] [--test]` | builds in the Visual Studio environment: the games with `just`, the launcher with CMake and `tools/package_installer.ps1`; a log per repository |
-| `check [--history]` | what would stop a release: uncommitted changes, game data or figure files in git, the Windows user name in tracked files (or, with `--history`, in any commit), a private e-mail in a commit, a build machine path in a staged exe or DLL |
+| `check [--history]` | what would stop a release: uncommitted changes, game data or figure files in git, the Windows user name in tracked files (or, with `--history`, in any commit), a private e-mail in a commit, a build machine path in a staged exe or DLL, the developer kit in a staged exe, or a private repository (the developer kit, GiantsDecomp) built into the release build folder |
 | `publish --notes <folder> [--dry-run]` | the GitHub releases, each with its setup (the launcher: setup and portable ZIP). The notes come from `<folder>\<Repo>.md` and `common.md`; the install, problem and disclaimer paragraphs are added. Refuses what fails `check`, isn't pushed or is already released |
 
 `--repos` takes repository names, `games` or `all` (the default). A release then goes:
@@ -46,7 +46,7 @@ saves and figures are never touched.
 
 | Script | What it does |
 |---|---|
-| `smoke.ps1 -Repo <Repo> -Route <route>` | one run along a route with window shots, then one verdict line: crash or trouble lines, whether the script reached its end, the FPS samples |
+| `smoke.ps1 -Repo <Repo> -Route <route> [-Build devkit]` | one run along a route with window shots, then one verdict line: crash or trouble lines, whether the script reached its end, the FPS samples. `-Build devkit` runs the developer kit's build (`out\build\win-amd64-devkit`, the private SkylandersDevKit: level loading and level sweeps) |
 | `smoke_all.ps1` | `smoke.ps1` for all six games with their usual route, about 15 minutes; after anything that touches every game |
 | `crash_hunt.ps1 -Repo <Repo> -Route <route> [-Seconds 1800] [-Seed 2]` | a route, then random play for that long (`wander.py`), a shot every minute, the threads' call chains every three |
 | `crash_all.ps1 [-Minutes 20] [-Seed 1]` | `crash_hunt.ps1` for all six on their usual routes, one after the other (about 2.5 hours at 20 minutes); for a release candidate |
