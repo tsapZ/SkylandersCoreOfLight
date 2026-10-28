@@ -12,7 +12,7 @@ Native Windows ports, no emulator, made for a controller.
 </p>
 
 <p>
-<sub><a href="#getting-started">Getting started</a> · <a href="#the-six-games">The games</a> · <a href="#controls">Controls</a> · <a href="#help">Help</a> · <a href="https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose">Report a problem</a></sub>
+<sub><a href="#screenshots">Screenshots</a> · <a href="#getting-started">Getting started</a> · <a href="#the-six-games">The games</a> · <a href="#controls">Controls</a> · <a href="#help">Help</a> · <a href="https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose">Report a problem</a></sub>
 </p>
 
 </div>
@@ -28,6 +28,39 @@ asks for a Skylander, the portal menu opens by itself.
 > Unofficial fan project. Not affiliated with or endorsed by Activision, Toys for Bob or Vicarious
 > Visions. It ships no game data and no artwork: the pictures, texts and music it shows come from
 > your own discs.
+
+<br>
+
+## Screenshots
+
+<img src=".github/images/screens/main.png" alt="The six games, one card each">
+
+<table>
+<tr>
+<td width="33%"><img src=".github/images/screens/figures.png" alt="The figure library"></td>
+<td width="33%"><img src=".github/images/screens/achievements.png" alt="Achievements"></td>
+<td width="33%"><img src=".github/images/screens/profiles.png" alt="Profiles"></td>
+</tr>
+<tr>
+<td align="center"><sub>Every figure, by game and element</sub></td>
+<td align="center"><sub>The achievements of all six</sub></td>
+<td align="center"><sub>Profiles</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src=".github/images/screens/game_settings.png" alt="A game's settings"></td>
+<td width="33%"><img src=".github/images/screens/saves.png" alt="Saves and backups"></td>
+<td width="33%"></td>
+</tr>
+<tr>
+<td align="center"><sub>A game's settings, before you start it</sub></td>
+<td align="center"><sub>Saves and their older versions</sub></td>
+<td></td>
+</tr>
+</table>
+
+<sub>The games' own artwork is left out of these pictures (the launcher's `--no_game_art`), so the
+cards, figures and achievements show plain placeholders. With your discs set up, each card has the
+game's logo and background, and every figure, hat and achievement its picture.</sub>
 
 <br>
 
@@ -152,8 +185,8 @@ drag that file in. After a crash the launcher offers it by itself.
 
 **Does it run on Linux?** The launcher works under Wine / Proton; the games are mainly tested on Windows.
 
-**Why are there no screenshots?** They'd show the games' artwork, which belongs to Activision. The
-picture at the top is our own drawing.
+**Why do the screenshots look so plain?** The games' artwork belongs to Activision, so the
+pictures here leave it out. The banner at the top is our own drawing.
 
 <br>
 

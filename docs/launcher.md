@@ -415,8 +415,12 @@ exe and gets out of the way while the game runs; no game needs it.
 
 `coreoflight.exe --no_game_art` leaves out every picture of the games (the disc tiles and
 backgrounds, figure, hat and achievement pictures): the screens draw their own placeholders, an
-element's colour with the initial and the plain backdrop. Only for screenshots that may be shown
-(the artwork is Activision's); not a setting. With `--documents=<copy>` for made-up data.
+element's colour with the initial and the plain backdrop, and the button hints stay the
+controller's while a script presses keys. Only for screenshots that may be shown (the artwork is
+Activision's); not a setting. With `--documents=<copy>` for made-up data. The README's
+screenshots were taken that way: a scratch Documents with made-up profiles, the games' texts
+exported in English (`--export_pictures=<scratch Pictures\<game>> --language=english`, run from
+the game's repository folder), the screens driven by `maintainer\test\hub_keys.ps1`.
 
 ## Build
 
