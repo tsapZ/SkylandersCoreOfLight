@@ -1,5 +1,8 @@
 # Xbox-360-Decompilierung: Recherche und Einschätzung (2026-10-22)
 
+**Nicht weiter verfolgt (2026-10-28):** Das Ziel sind bessere und fehlerfreie Ports, kein
+Neuschreiben der Spiele ([roadmap.md](roadmap.md), Schritt 5). Diese Seite bleibt als Nachschlag.
+
 Recherche der Nacht vom 21. auf den 22.10.2026 als Grundlage für Schritt 5 des Gesamtplans
 (Decompilierung, „pro Spiel, mit dem kleinsten anfangen“; [roadmap.md](roadmap.md)). Belege sind
 verlinkt; was nicht geprüft wurde, steht als solches da.

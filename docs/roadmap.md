@@ -25,10 +25,10 @@ not inferred.
 4. **A native renderer** (the Xbox 360 D3D layer on D3D12/Vulkan, a shared library, the emulated GPU
    kept as fallback): research in docs/ai-recomp.md, measurements in SwapForceRecomp
    docs/native-renderer.md. Its cheap first step, a counting build, can come earlier.
-5. **Decompilation:** an open decision for after that, per game, starting with the smallest
-   (Giants: 23,632 functions; Spyro's Adventure 31,215; Swap Force 81,745). Research, the
-   approach that fits (step by step on the running recompilation, not byte-matching: the original
-   compiler isn't available) and a rough estimate for Giants: docs/decompilation.md (2026-10-22).
+5. **Decompilation: dropped (2026-10-28).** The goal is to make the ports run better and fix their
+   bugs, not to rewrite the games. Instead each game gets test tools that load any level and put
+   the player anywhere, so problems are found before players hit them and reproduced in seconds.
+   The research and the Giants pilot from 2026-10-22 stay in docs/decompilation.md for reference.
 
 ## The games (2026-10-21, afternoon)
 
