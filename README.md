@@ -1,16 +1,35 @@
-# Skylanders: Core of Light
+<div align="center">
 
-One launcher for the six recompiled Xbox 360 Skylanders games. It sets them up from your own discs,
-keeps them up to date and holds your figures, saves and achievements in one place. Made for a
-controller, like a console's dashboard.
+<img src=".github/images/banner.png" alt="Skylanders: Core of Light" width="100%">
 
-**[Download](https://github.com/tsapZ/SkylandersCoreOfLight/releases)** ·
-**[The games](#the-games)** ·
-**[Report a problem](https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose)**
+<p>
+For Spyro's Adventure, Giants, Swap Force, Trap Team, SuperChargers and Imaginators.<br>
+Native Windows ports, no emulator, made for a controller.
+</p>
+
+<p>
+<a href="https://github.com/tsapZ/SkylandersCoreOfLight/releases"><img src=".github/images/download.png" alt="Download for Windows" width="300" height="56"></a>
+</p>
+
+<p>
+<sub><a href="#getting-started">Getting started</a> · <a href="#the-six-games">The games</a> · <a href="#controls">Controls</a> · <a href="#help">Help</a> · <a href="https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose">Report a problem</a></sub>
+</p>
+
+</div>
+
+<br>
+
+**One launcher for the six recompiled Xbox 360 Skylanders games. It sets them up from your own
+discs, keeps them up to date and holds your figures, saves and achievements in one place.**
+
+It's made for a controller, like a console's dashboard: pick a game, press **A**, and when the game
+asks for a Skylander, the portal menu opens by itself.
 
 > Unofficial fan project. Not affiliated with or endorsed by Activision, Toys for Bob or Vicarious
 > Visions. It ships no game data and no artwork: the pictures, texts and music it shows come from
 > your own discs.
+
+<br>
 
 ## Getting started
 
@@ -19,7 +38,7 @@ controller, like a console's dashboard.
 2. Start Core of Light. On the first start it asks for your language, then for your discs as ISO
    files (one per game; it finds the others in the same folder by itself). It says how much room
    each game needs, then downloads and installs them one after the other.
-3. Pick a game and press **A**. When the game asks for a Skylander, the portal menu opens by itself.
+3. Pick a game and press **A**.
 
 What you need:
 
@@ -38,33 +57,54 @@ to the exe), so launcher managers like Quiver can handle it too.
 Uninstalling goes through Windows' Apps list; it asks whether the games, your saves and your
 figures should go too.
 
-## The games
+<br>
+
+## The six games
 
 | Game | Page | How far it is |
 |---|---|---|
-| Spyro's Adventure (2011) | [SSARecomp](https://github.com/tsapZ/SSARecomp) | Chapter 1, played a lot |
-| Giants (2012) | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | the intro and Chapter 1; real 5.1 sound |
-| Swap Force (2013) | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | the tutorial and Woodburrow; swappers, real USB portals |
-| Trap Team (2014) | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | Chapter 1 and the Academy, with traps and villains |
-| SuperChargers (2015) | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | the first level and the ship; both European discs |
-| Imaginators (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | the first level; English, German or French from your PS3 disc |
+| **Spyro's Adventure** (2011) | [SSARecomp](https://github.com/tsapZ/SSARecomp) | Chapter 1, played a lot |
+| **Giants** (2012) | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | the intro and Chapter 1; real 5.1 sound |
+| **Swap Force** (2013) | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | the tutorial and Woodburrow; swappers, real USB portals |
+| **Trap Team** (2014) | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | Chapter 1 and the Academy, with traps and villains |
+| **SuperChargers** (2015) | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | the first level and the ship; both European discs |
+| **Imaginators** (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | the first level; English, German or French from your PS3 disc |
 
 None of them has been played to the end yet. Each one runs on its own as well; the launcher just
-makes it easier. All six share one portal and one settings menu: 60 FPS and more, 2x or 3x the
-console's resolution with sharpening, ultrawide, no portal needed (a menu with every figure opens
-when the game asks), or a real USB portal.
+makes it easier.
+
+All six share one portal and one settings menu:
+
+- **60 FPS and more**, and **2x or 3x the console's resolution** with sharpening
+- **ultrawide**
+- **no portal needed:** a menu with every figure opens when the game asks; or a **real USB portal**
+
+<br>
 
 ## What the launcher does
 
-- **Sets the games up:** checks each disc, unpacks it and installs the game. Y in its file browser
-  finds the ISOs on your PC by itself. The games can go to any drive.
-- **Keeps everything up to date:** a game with a new version says so on its card; *Update all* does
-  every game in one go, and the launcher updates itself too. Saves, figures and settings stay.
-- **A figure library:** every figure you have, by game, with its level, gold, hat, upgrade tree and
-  nickname. "I own it" marks for the figures on your shelf, and a leaderboard.
-- **Profiles**, like Xbox accounts: each with its own saves, figures and achievements, and the games
-  show its name.
-- **Achievements** of every game in one list, with a platinum one when a game is done.
+### Your discs in, six games out
+
+Show it your ISOs once and it does the rest: checks each disc, unpacks it and installs the game,
+on any drive you like. **Y** in its file browser finds the ISOs on your PC by itself. When a game
+has a new version, its card says so; *Update all* does every game in one go, and the launcher
+updates itself too. Saves, figures and settings stay.
+
+### One shelf for every figure
+
+Your figures live in one folder, shared by all six games like real figures next to the portal. The
+**figure library** shows every one you have, by game, with its level, gold, hat, upgrade tree and
+nickname. Mark the ones on your real shelf with "I own it"; there's a leaderboard too.
+
+### Like a console's dashboard
+
+**Profiles** work like Xbox accounts: each has its own saves, figures and achievements, and the
+games show its name. **Achievements** of every game sit in one list, with a platinum one when a
+game is done. While you play, the launcher hides and takes no input, so the controller only drives
+the game.
+
+### Everything else
+
 - **Saves with backups:** each save's earlier versions, and putting one back.
 - **Moving to a new PC:** *Export my data* puts all your saves, figures and settings into one ZIP,
   *Import my data* takes it back without overwriting anything.
@@ -72,12 +112,12 @@ when the game asks), or a real USB portal.
 - **The title music** of the chosen game, straight from its disc.
 - **Imaginators in English, German or French** from your PS3 disc (the European 360 disc only has
   Spanish and Italian).
-- **Gets out of the way while you play:** it hides and takes no input, so the controller only
-  drives the game.
 - **Controller, keyboard or mouse:** the button hints at the bottom follow what you use, and can be
   clicked.
 
 Everything in detail: [docs/launcher.md](docs/launcher.md).
+
+<br>
 
 ## Controls
 
@@ -95,8 +135,10 @@ Everything in detail: [docs/launcher.md](docs/launcher.md).
 ## Your data
 
 Everything that's yours is in `Documents\Skylanders` (or wherever you move it in the settings):
-the figures in `Figures`, shared by all six games like real figures next to the portal, and one
-folder per game with its saves and achievements.
+the figures in `Figures`, shared by all six games, and one folder per game with its saves and
+achievements.
+
+<br>
 
 ## Help
 
@@ -110,7 +152,10 @@ drag that file in. After a crash the launcher offers it by itself.
 
 **Does it run on Linux?** The launcher works under Wine / Proton; the games are mainly tested on Windows.
 
-**Why are there no screenshots?** They'd show the games' artwork, which belongs to Activision.
+**Why are there no screenshots?** They'd show the games' artwork, which belongs to Activision. The
+picture at the top is our own drawing.
+
+<br>
 
 ## Planned
 
@@ -120,6 +165,8 @@ drag that file in. After a crash the launcher offers it by itself.
 | Online co-op, PC to PC with each player's own figures (proposal) | #1, #2, #3, [docs/online-coop.md](docs/online-coop.md) |
 
 The order and what is next: [docs/roadmap.md](docs/roadmap.md).
+
+<br>
 
 ## Why this exists
 
@@ -145,14 +192,21 @@ AI-made projects aren't your thing, that's fair.
   `feature/portal-menu`), the recompilation runtime in
   [`tsapZ/rexglue-sdk`](https://github.com/tsapZ/rexglue-sdk) (branch `skylanders`).
 
+<br>
+
 ## For developers
 
 Windows, Visual Studio 2022 (C++), CMake and Ninja, from the **x64 Native Tools Command Prompt**:
 
-    git clone --recursive https://github.com/tsapZ/SkylandersCoreOfLight.git
-    cd SkylandersCoreOfLight
-    cmake --preset release
-    cmake --build --preset release
+```
+git clone --recursive https://github.com/tsapZ/SkylandersCoreOfLight.git
+cd SkylandersCoreOfLight
+cmake --preset release
+cmake --build --preset release
+```
+
+The pictures at the top of this page are drawn by `tools/make_banner.ps1`, the icon by
+`tools/make_icon.ps1`.
 
 ## Credits
 
@@ -164,8 +218,8 @@ Windows, Visual Studio 2022 (C++), CMake and Ninja, from the **x64 Native Tools 
 - **[stb_image](https://github.com/nothings/stb)** by Sean Barrett: its zlib decoder unpacks
   Imaginators' archives for the language import, in `thirdparty/stb` (public domain / MIT).
 - **[Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)** by the Noto Project Authors, the
-  font where Windows' Segoe UI isn't there (Wine / Proton), in `fonts/` (SIL Open Font License,
-  `fonts/OFL.txt`).
+  font where Windows' Segoe UI isn't there (Wine / Proton) and on the pictures at the top, in
+  `fonts/` (SIL Open Font License, `fonts/OFL.txt`).
 - Figure save-data decoding builds on public reverse-engineering of the Skylanders NFC format,
   among others **[SkyReader](https://github.com/reedstrm/SkyReader)**.
 - Reading the Xbox discs follows the XDVDFS format as [extract-xiso](https://github.com/XboxDev/extract-xiso)
