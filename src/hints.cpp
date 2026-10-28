@@ -14,6 +14,8 @@ namespace {
 float g_wanted = 0.0f;
 float g_shown = 0.0f;
 constexpr float kFadeSeconds = 0.25f;
+// KeepControllerHints: the controller's buttons whatever the input.
+bool g_controller_only = false;
 
 // The keys the launcher's screens take for a controller button (each screen's input code checks
 // both, e.g. Start or F for the figures); a screen with other keys names them itself.
@@ -137,6 +139,7 @@ void UpdateHintInput() {
       ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     g_wanted = 1.0f;
   }
+  if (g_controller_only) g_wanted = 0.0f;
   const float step = io.DeltaTime / kFadeSeconds;
   g_shown = g_wanted > g_shown ? std::min(g_wanted, g_shown + step) : std::max(g_wanted, g_shown - step);
   // A click's press (queued last frame, down this one) is let go; then this frame's click on one
@@ -169,6 +172,8 @@ void ForceHintPad(HintPad pad) {
   g_pad = pad;
   g_pad_forced = true;
 }
+
+void KeepControllerHints() { g_controller_only = true; }
 
 void KeepClickedButton(ImGuiIO& io) {
   // Dear ImGui clears the controller's buttons each frame while the backend has no controller (no

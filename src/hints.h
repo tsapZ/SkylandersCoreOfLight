@@ -39,6 +39,9 @@ enum class HintPad { kXbox, kPlayStation, kNintendo };
 void SetHintPad(HintPad pad);
 // That kind for the whole run, whatever pad is used (--hint_pad=playstation / nintendo).
 void ForceHintPad(HintPad pad);
+// The controller's buttons for the whole run, also after keys or the mouse: screenshots to show
+// (--no_game_art), taken with posted key presses, show the launcher as it is meant, with a pad.
+void KeepControllerHints();
 
 // Draws a hint's glyph at `pos` (the text line's top left at `size`): the controller button
 // (`button`, "A", "LB/RB", ... in `col`) or the keyboard key (`key`; nullptr: the key the launcher

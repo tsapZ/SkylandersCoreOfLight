@@ -295,8 +295,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         // A library folder for games installed from the launcher (games.h StartGameInstall).
         coreoflight::SetInstallDir(arg.substr(14));
       } else if (arg == L"--no_game_art") {
-        // Screenshots to show: none of the games' pictures (textures.h).
+        // Screenshots to show: none of the games' pictures (textures.h), and the hints stay the
+        // controller's while the screenshot script presses keys (hints.h).
         coreoflight::SetNoGameArt(true);
+        coreoflight::KeepControllerHints();
       } else if (arg == L"--own_font") {
         g_own_font = true;  // the fallback font (Noto Sans) as under Wine
       } else if (arg == L"--offline") {
