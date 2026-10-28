@@ -383,10 +383,17 @@ const FiguresScreen::UpgradeTree* FiguresScreen::TreeOf(const Figure& f) {
   std::shared_ptr<UpgradeTree> tree;
   char name[48];
   std::snprintf(name, sizeof(name), "upgrades-%u-%u.txt", unsigned(f.id), unsigned(f.variant));
-  for (size_t at = 0; at < pictures_dirs_.size() * std::size(kGames) && !tree; ++at) {
-    const size_t i = std::size(kGames) - 1 - at % std::size(kGames);
-    const fs::path dir =
-        pictures_dirs_[at / std::size(kGames)] / fs::path(std::u8string(kGames[i].begin(), kGames[i].end()));
+  // The figure's own game first, as for its picture, then the newest. A later game that knows the
+  // figure from an older one can leave the path names and the descriptions empty (Imaginators' and
+  // SuperChargers' trees of the first games' Skylanders), so the tree with the most text wins, the
+  // earlier one in this order on a tie.
+  std::vector<std::string_view> games;
+  if (const auto* info = skylanders::portal::FindSkylander(f.id, f.variant)) games.push_back(info->game);
+  for (size_t i = std::size(kGames); i-- > 0;) games.push_back(kGames[i]);
+  size_t best_text = 0;
+  for (size_t at = 0; at < pictures_dirs_.size() * games.size(); ++at) {
+    const std::string_view game = games[at % games.size()];
+    const fs::path dir = pictures_dirs_[at / games.size()] / fs::path(std::u8string(game.begin(), game.end()));
     std::ifstream in(dir / name, std::ios::binary);
     if (!in) continue;
     auto read = std::make_shared<UpgradeTree>();
@@ -408,7 +415,16 @@ const FiguresScreen::UpgradeTree* FiguresScreen::TreeOf(const Figure& f) {
         read->paths.back().upgrades.push_back(std::move(up));
       }
     }
-    if (!read->paths.empty()) tree = read;
+    if (read->paths.empty()) continue;
+    size_t text = 1;
+    for (const auto& path : read->paths) {
+      text += !path.name.empty() + !path.description.empty();
+      for (const auto& up : path.upgrades) text += !up.name.empty() + !up.description.empty();
+    }
+    if (text > best_text) {
+      best_text = text;
+      tree = read;
+    }
   }
   return (trees_[key] = tree).get();
 }

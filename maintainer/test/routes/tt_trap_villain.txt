@@ -1,0 +1,47 @@
+# Trap Team (TrapTeamRecomp #17), a copy of the owner's save: two traps with villains, as the
+# portal developer tools make them, each shows who it holds: the portal overview (F5) names the
+# villain of the trap on the portal, and in the portal menu (F6) the Trap Team tab (RT four times
+# from Recent) has the traps as its last group (LB from the first wraps round to it), each card
+# with its villain; X opens a trap's details ("Holds ..."). Window shots of each.
+# save: yes
+# expect: trap with Chompy Mage placed in slot, trap with Chef Pepper Jack placed in slot, Portal menu: opened
+wait 10
+place 0 {figures}\Trap Team\Enigma.dump
+wait 4; tap start; wait 5; tap a; wait 5; tap a; wait 5; tap a; wait 5; tap a; wait 5; tap a
+log academy wait
+wait 35
+log in the academy
+trap 2 Chef Pepper Jack
+wait 6
+remove 2
+wait 4
+trap 2 Chompy Mage
+wait 8
+key F5
+wait 3
+log shot overview
+wait 2
+tap b
+wait 3
+key F6
+wait 3
+tap rt; wait 1; tap rt; wait 1; tap rt; wait 1; tap rt; wait 2
+tap lb; wait 2
+log shot traps
+wait 1
+tap down; wait 0.6; tap down; wait 0.6; tap down; wait 2
+log shot traps_fire
+wait 1
+tap x; wait 2
+log shot details_fire
+wait 1
+tap b; wait 2
+tap down; wait 0.6; tap down; wait 0.6; tap down; wait 0.6; tap down; wait 2
+log shot traps_life
+wait 1
+tap x; wait 2
+log shot details_life
+wait 1
+tap b; wait 1; tap b
+wait 3
+quit
