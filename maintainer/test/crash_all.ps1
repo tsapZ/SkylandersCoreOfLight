@@ -5,8 +5,8 @@
 param([int]$Minutes = 20, [int]$Seed = 1, [string[]]$Repos = @())
 . (Join-Path $PSScriptRoot "testkit.ps1")
 $routes = [ordered]@{
-  SSARecomp = "ssa_new"; GiantsRecomp = "giants_save"; SwapForceRecomp = "sf_save"
-  TrapTeamRecomp = "tt_save"; SuperChargersRecomp = "sc_save"; ImaginatorsRecomp = "im_new"
+  SSARecomp = "ssa_save"; GiantsRecomp = "giants_save"; SwapForceRecomp = "sf_save"
+  TrapTeamRecomp = "tt_save"; SuperChargersRecomp = "sc_save"; ImaginatorsRecomp = "im_save"
 }
 $verdicts = @()
 foreach ($repo in $routes.Keys) {

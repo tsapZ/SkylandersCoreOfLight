@@ -87,7 +87,18 @@ for ($i = 0; $i -lt $status.games.Count; $i++) {
     $g.SetClip($frame)
     Add-Text $g $info.Name ($x + 20) ($y + 18) 28 $bold (Get-Color 255 255 255 255)
     $tested = if ($game.tested -and $game.tested -ne "-") { $game.tested } else { "" }
-    if ($tested) { Add-Text $g $tested ($x + $cw - 20 - (Get-TextWidth $g $tested 16 $regular)) ($y + 28) 16 $regular (Get-Color 255 150 160 200) }
+    if ($tested) {
+      # Right of the name; a long name (Spyro's Adventure) leaves room for the version without the
+      # date, or only in a smaller size.
+      $nameRight = $x + 20 + (Get-TextWidth $g $info.Name 28 $bold) + 12
+      $short = $tested -replace '\s*\(.*\)$', ''
+      foreach ($try in @(@($tested, 16), @($short, 16), @($short, 13))) {
+        $text, $size = $try
+        $tx = $x + $cw - 20 - (Get-TextWidth $g $text $size $regular)
+        if ($tx -ge $nameRight) { break }
+      }
+      Add-Text $g $text $tx ($y + 28 + (16 - $size) / 2) $size $regular (Get-Color 255 150 160 200)
+    }
     $levels, $lk = Get-Count $game.levels
     $figures, $fk = Get-Count $game.figures
     $credits, $ck = if ($null -eq $game.credits) { "not yet", "none" } elseif ($game.credits) { "to the end", "ok" } else { "stopped", "bad" }

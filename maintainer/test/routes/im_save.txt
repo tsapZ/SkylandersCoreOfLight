@@ -1,0 +1,10 @@
+# Imaginators, a copy of the owner's save: title -> Start -> the first slot loaded -> Story -> the
+# overland map, Chop Chop on the portal. No Y on the slot screen: there it is Delete.
+# save: yes
+# shots: wait 80, full a, wait 6, full b
+wait 8
+place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+wait 32; tap start; wait 8; tap a; wait 6; tap a; wait 6; tap a; wait 20
+log on the overland map
+fps 2; wait 10
+quit

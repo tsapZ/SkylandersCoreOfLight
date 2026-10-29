@@ -1,0 +1,18 @@
+# Spyro's Adventure, a copy of the owner's save: title -> his slot (the fourth; the first three are
+# empty) -> the Ruins, Chop Chop on the portal, then two figure swaps with FPS samples around each
+# (a swap used to stall the game).
+# save: yes
+# shots: wait 120, full a, wait 6, full b
+wait 12; tap start; wait 10; tap a; wait 8; tap a; wait 8; tap a; wait 8; tap down; wait 0.5; tap down; wait 0.5; tap down; wait 1; tap a; wait 25
+wait 2
+place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+wait 12; tap a; wait 4; tap a; wait 25
+log in the ruins
+fps 2; wait 4
+log swap1
+place 0 {figures}\Spyro's Adventure\Eruptor.dump
+fps 1; wait 1; fps 1; wait 1; fps 1; wait 1; fps 1; wait 8
+log swap2
+place 0 {figures}\Spyro's Adventure\Drill Sergeant.dump
+fps 1; wait 1; fps 1; wait 1; fps 1; wait 1; fps 1; wait 8
+quit

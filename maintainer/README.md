@@ -60,8 +60,11 @@ lines: `# save: yes` (start from a copy of the owner's saves), `# shots: ...` (w
 taken), `# expect: <log text>, ...` (lines the log must have, else the verdict says MISSING) and
 `# reject: <log text>, ...` (lines it must not have, e.g. a fixed bug's message: REJECTED). A
 `log shot <name>` line in a route takes a window shot one second later (the test kit adds up the
-waits before it). `ssa_new` and `im_new` start new games; the others continue the owner's saves
-(Giants' slot 4, Swap Force's and Trap Team's slot 1, SuperChargers on the ship). `menus` goes on
+waits before it). smoke_all and crash_all continue the owner's saves, from where he is: Spyro's
+Adventure slot 4 (the Ruins), Giants slot 4, Swap Force slot 3 (Woodburrow; slot 1 is empty and
+starts a new game), Trap Team slot 1 (the Academy), SuperChargers (the Academy), Imaginators slot 1
+(the overland map; no Y on its slot screen, Y is Delete there). `ssa_new` and `im_new` start new
+games, for a check of the intros now and then. `menus` goes on
 top of any of them (`smoke.ps1 -Then menus`, `smoke_all.ps1 -Menus`): it opens, shoots and closes
 the portal menu and its next tab, the portal overview, the settings and their next page, the
 achievements and the player menu.

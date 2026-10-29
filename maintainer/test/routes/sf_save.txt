@@ -1,10 +1,11 @@
-# Swap Force, a copy of the owner's save: title -> Story -> the first slot -> where it continues,
-# Grim Creeper on the portal.
+# Swap Force, a copy of the owner's save: title -> Story -> the third slot (his current one,
+# SWAPFORCE_2; the first is empty and started a new game, the opening scenes) -> Woodburrow, Grim
+# Creeper on the portal.
 # save: yes
-# shots: wait 100, full a, wait 6, full b
+# shots: wait 116, full a, wait 6, full b
 wait 14
 place 0 {figures}\Swap Force\Grim Creeper.dump
-wait 4; tap start; wait 8; tap a; wait 12; tap a; wait 12; tap a; wait 60
-log in the level
+wait 4; tap start; wait 8; tap a; wait 12; tap down; wait 2; tap down; wait 2; tap a; wait 12; tap a; wait 60
+log in woodburrow
 fps 2; wait 10
 quit
