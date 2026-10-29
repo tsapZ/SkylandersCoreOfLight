@@ -104,7 +104,8 @@ figures should go too.
 | **Imaginators** (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | the first level; English, German or French from your PS3 disc |
 
 None of them has been played to the end yet. Each one runs on its own as well; the launcher just
-makes it easier.
+makes it easier. Every level of each game gets loaded and played by an automatic test: the
+[test status](TESTING.md) shows how the last runs went.
 
 All six share one portal and one settings menu:
 

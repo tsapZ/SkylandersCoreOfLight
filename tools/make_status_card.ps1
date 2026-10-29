@@ -23,7 +23,7 @@ $keys = @{ ssa = "ssa"; giants = "giants"; sf = "swapforce"; tt = "trapteam"; sc
 # A mark in a circle: "ok" a tick, "bad" a cross, anything else a dash.
 function Add-Mark($g, [double]$cx, [double]$cy, [string]$kind) {
     $r = 13
-    $fill = switch ($kind) { "ok" { Get-Color 255 70 175 90 } "bad" { Get-Color 255 215 60 60 } default { Get-Color 255 80 88 120 } }
+    $fill = switch ($kind) { "ok" { Get-Color 255 70 175 90 } "bad" { Get-Color 255 215 60 60 } "partial" { Get-Color 255 225 160 40 } default { Get-Color 255 80 88 120 } }
     $g.FillEllipse((New-Object System.Drawing.SolidBrush $fill), [single]($cx - $r), [single]($cy - $r), [single](2 * $r), [single](2 * $r))
     $pen = New-Object System.Drawing.Pen (Get-Color 255 255 255 255), 3.2
     $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
@@ -32,6 +32,8 @@ function Add-Mark($g, [double]$cx, [double]$cy, [string]$kind) {
     switch ($kind) {
         "ok" { $g.DrawLines($pen, [System.Drawing.PointF[]]@((Get-Point ($cx - 6) ($cy + 0.5)), (Get-Point ($cx - 1.5) ($cy + 5)), (Get-Point ($cx + 6.5) ($cy - 5)))) }
         "bad" { $g.DrawLine($pen, [single]($cx - 5), [single]($cy - 5), [single]($cx + 5), [single]($cy + 5)); $g.DrawLine($pen, [single]($cx + 5), [single]($cy - 5), [single]($cx - 5), [single]($cy + 5)) }
+        # Not all of them, but nothing crashed (a level that took longer than the test waits).
+        "partial" { $g.DrawLine($pen, [single]$cx, [single]($cy - 6), [single]$cx, [single]($cy + 1.5)); $g.FillEllipse((New-Object System.Drawing.SolidBrush (Get-Color 255 255 255 255)), [single]($cx - 2), [single]($cy + 4), 4, 4) }
         default { $g.DrawLine($pen, [single]($cx - 5), [single]$cy, [single]($cx + 5), [single]$cy) }
     }
 }
@@ -45,10 +47,13 @@ function Add-Line($g, [double]$x, [double]$y, [double]$w, [string]$name, [string
     Add-Text $g $value ($x + $w - $vw) $y 22 $bold $color
 }
 
-function Get-Count($pair) {
+# A count's text and mark: all of them a tick, a crash among them a cross, else (some didn't get
+# far enough in the time the test gives) the amber mark.
+function Get-Count($pair, $crashed) {
     $ok = [int]$pair[0]; $n = [int]$pair[1]
     if ($n -eq 0) { return "not yet", "none" }
-    return ("{0} of {1}" -f $ok, $n), $(if ($ok -eq $n) { "ok" } else { "bad" })
+    $kind = if ($ok -eq $n) { "ok" } elseif ([int]$crashed -gt 0) { "bad" } else { "partial" }
+    return ("{0} of {1}" -f $ok, $n), $kind
 }
 
 $W = 1280; $H = 560
@@ -66,7 +71,7 @@ for ($i = 0; $i -lt 70; $i++) {
 
 Add-Text $g "SKYLANDERS" 48 38 22 $bold $gold 6
 Add-Text $g "Test status" 46 66 56 $bold (Get-Color 255 255 255 255)
-$sub = "The last runs of the test kit, $($status.date)"
+$sub = "Testing in progress, updated $($status.date)"
 Add-Text $g $sub ($W - 48 - (Get-TextWidth $g $sub 22 $regular)) 92 22 $regular (Get-Color 255 196 206 240)
 
 # Six cards, three to a row, in release order.
@@ -86,7 +91,8 @@ for ($i = 0; $i -lt $status.games.Count; $i++) {
     $g.FillRectangle((New-Object System.Drawing.SolidBrush (Get-Color 255 $accent[0] $accent[1] $accent[2])), [single]$x, [single]$y, [single]$cw, 6)
     $g.SetClip($frame)
     Add-Text $g $info.Name ($x + 20) ($y + 18) 28 $bold (Get-Color 255 255 255 255)
-    $tested = if ($game.tested -and $game.tested -ne "-") { $game.tested } else { "" }
+    # The day of the last run (the build's version is on the page under the picture).
+    $tested = if ($game.tested_date) { $game.tested_date } elseif ($game.tested -and $game.tested -ne "-") { $game.tested } else { "" }
     if ($tested) {
       # Right of the name; a long name (Spyro's Adventure) leaves room for the version without the
       # date, or only in a smaller size.
@@ -99,8 +105,8 @@ for ($i = 0; $i -lt $status.games.Count; $i++) {
       }
       Add-Text $g $text $tx ($y + 28 + (16 - $size) / 2) $size $regular (Get-Color 255 150 160 200)
     }
-    $levels, $lk = Get-Count $game.levels
-    $figures, $fk = Get-Count $game.figures
+    $levels, $lk = Get-Count $game.levels $game.levels_crashed
+    $figures, $fk = Get-Count $game.figures $game.figures_crashed
     $credits, $ck = if ($null -eq $game.credits) { "not yet", "none" } elseif ($game.credits) { "to the end", "ok" } else { "stopped", "bad" }
     Add-Line $g ($x + 20) ($y + 68) ($cw - 40) "Levels" $levels $lk
     Add-Line $g ($x + 20) ($y + 102) ($cw - 40) "Figures" $figures $fk
