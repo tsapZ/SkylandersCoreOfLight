@@ -12,10 +12,10 @@ It doesn't replace playing: quests, bosses and two players still need people. [R
 
 | Game | Tested build | Levels | Figures | End credits |
 |---|---|---|---|---|
-| Spyro's Adventure | 0.3.0-beta.3+ (2026-10-28) | **69 of 69** | **45 of 45** | not yet |
+| Spyro's Adventure | 0.3.0-beta.3+ (2026-10-28) | **69 of 69** | **45 of 45** | to the end |
 | Giants | 0.3.0-beta.6, not out yet (2026-10-29) | **24 of 24** | not yet | not yet |
-| Swap Force | 0.3.0-beta.6, not out yet (2026-10-29) | **18 of 18** | not yet | not yet |
-| Trap Team | 0.3.0-beta.6, not out yet (2026-10-29) | **26 of 26** | not yet | not yet |
+| Swap Force | 0.3.0-beta.6, not out yet (2026-10-29) | **18 of 18** | **66 of 66** | not yet |
+| Trap Team | 0.3.0-beta.6, not out yet (2026-10-29) | **26 of 26** | **81 of 81** | not yet |
 | SuperChargers | 0.3.0-beta.6, not out yet (2026-10-29) | **14 of 14** | not yet | not yet |
 | Imaginators | 0.3.0-beta.6, not out yet (2026-10-29) | **40 of 40** | not yet | not yet |
 
@@ -33,6 +33,7 @@ Tested build: 0.3.0-beta.3+ (2026-10-28)
 | Skylanders, each as a new figure | 32 of 32 |
 | Variants, each as a new figure | 5 of 5 |
 | Magic items, each as a new figure | 8 of 8 |
+| End credits | played to the end |
 
 Found on the way:
 
@@ -60,6 +61,10 @@ Tested build: 0.3.0-beta.6, not out yet (2026-10-29)
 |---|---|
 | Levels | 18 of 18 loaded and played |
 | Lowest frame rate in a level | 56 FPS |
+| Skylanders, each as a new figure | 32 of 32 |
+| Swappers, each as a new figure | 16 of 16 |
+| LightCore Skylanders, each as a new figure | 8 of 8 |
+| Variants, each as a new figure | 10 of 10 |
 
 ## Trap Team
 
@@ -69,6 +74,11 @@ Tested build: 0.3.0-beta.6, not out yet (2026-10-29)
 |---|---|
 | Levels | 26 of 26 loaded and played |
 | Lowest frame rate in a level | 59 FPS |
+| Skylanders, each as a new figure | 23 of 23 |
+| Trap Masters, each as a new figure | 18 of 18 |
+| Eon's Elite, each as a new figure | 8 of 8 |
+| Minis, each as a new figure | 16 of 16 |
+| Variants, each as a new figure | 16 of 16 |
 
 ## SuperChargers
 
