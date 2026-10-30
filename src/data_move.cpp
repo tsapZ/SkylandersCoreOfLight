@@ -129,6 +129,24 @@ fs::path DataFolderFor(const fs::path& picked) {
   return picked.filename() == "Skylanders" ? picked : picked / "Skylanders";
 }
 
+fs::path SetAsideCopiedFolder(const fs::path& dir) {
+  std::error_code ec;
+  if (!fs::exists(dir / skylanders::kMovedNote, ec)) return {};
+  for (int i = 1; i < 100; ++i) {
+    const fs::path aside =
+        dir.parent_path() / (dir.filename().wstring() + (i == 1 ? L" (old)" : L" (old " + std::to_wstring(i) + L")"));
+    if (fs::exists(aside, ec)) continue;
+    fs::rename(dir, aside, ec);
+    if (ec) {
+      HubLog("data folder: could not rename " + U8(dir) + ": " + ec.message());
+      return {};
+    }
+    HubLog("data folder: " + U8(dir) + " (copied away before) is now " + U8(aside));
+    return aside;
+  }
+  return {};
+}
+
 bool DataFolderMove::Start(const fs::path& from, const fs::path& to, std::string& error) {
   if (running()) {
     error = "a move is running";

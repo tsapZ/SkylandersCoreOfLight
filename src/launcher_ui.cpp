@@ -1831,13 +1831,26 @@ void LauncherUi::TogglePortableData() {
     const bool on = portable.empty();
     const std::filesystem::path from = SkylandersDir();
     const std::filesystem::path to = on ? launcher_dir_ / "Skylanders" : DocumentsDir() / "Skylanders";
+    // Off, with the folder from before still in Documents (kept when the launcher asked): it was
+    // copied to the stick then, so what comes back is newer. Set aside under another name, not
+    // deleted (a game set up on this PC may have played on in it since).
+    const std::filesystem::path aside = on ? std::filesystem::path() : SetAsideCopiedFolder(to);
     std::string error;
     if (data_move_.Start(from, to, error)) {
       portable_move_ = on ? 1 : -1;
       HubLog(std::string("portable: ") + (on ? "on" : "off") + ", moving " +
              reinterpret_cast<const char*>(from.u8string().c_str()) + " to " +
              reinterpret_cast<const char*>(to.u8string().c_str()));
+      if (!aside.empty()) {
+        const std::string name = reinterpret_cast<const char*>(aside.filename().u8string().c_str());
+        ShowToast(german_ ? "Der Ordner von vorher hei\xC3\x9Ft jetzt " + name : "The folder from before is now called " + name, 8.0);
+      }
       return;
+    }
+    // Nothing moved: the folder from before gets its name back.
+    if (!aside.empty()) {
+      std::error_code ec;
+      std::filesystem::rename(aside, to, ec);
     }
     message = (german_ ? "Geht nicht: " : "Not possible: ") + error;
   }

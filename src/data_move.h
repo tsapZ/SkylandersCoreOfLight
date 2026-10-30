@@ -65,4 +65,9 @@ class DataFolderMove {
 // it is called Skylanders itself.
 std::filesystem::path DataFolderFor(const std::filesystem::path& picked);
 
+// A data folder that was copied somewhere else (its MOVED_TO.txt says so), renamed to a free name
+// next to it ("Skylanders (old)", "Skylanders (old 2)", ...) so the copy coming back can have its
+// name; nothing in it is deleted. The new name, or empty when it has no such note or can't be renamed.
+std::filesystem::path SetAsideCopiedFolder(const std::filesystem::path& dir);
+
 }  // namespace coreoflight
