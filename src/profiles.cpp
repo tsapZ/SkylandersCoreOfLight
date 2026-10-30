@@ -10,6 +10,7 @@
 #include <map>
 
 #include "games.h"
+#include "portal/data_folder.h"
 #include "portal/figure_file.h"
 
 namespace coreoflight {
@@ -301,8 +302,9 @@ int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
 
 std::wstring ProfileArguments(const fs::path& exe) {
   const Profile& p = ActiveProfile();
-  // The main profile is the games' own default, unless the launcher runs on a copy (--documents).
-  if (IsMainProfile(p) && !DocumentsMoved()) return {};
+  // The main profile is the games' own default, unless the launcher runs on a copy (--documents)
+  // or keeps its data portable (#47): a game set up on this PC finds no portable-data.txt by itself.
+  if (IsMainProfile(p) && !DocumentsMoved() && skylanders::PortableFolder().empty()) return {};
   const fs::path name = GameFolderName(exe);
   return L" \"--user_data_root=" + (p.root / name).wstring() + L"\" \"--cache_root=" +
          (SkylandersDir() / name / "cache").wstring() + L"\"";

@@ -21,6 +21,7 @@
 #include "launcher_ui.h"
 #include "pad_state.h"
 #include "portable.h"
+#include "portal/data_folder.h"
 #include "textures.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -365,6 +366,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     const std::string wine = coreoflight::WineVersion();
     coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION + (wine.empty() ? std::string(", Windows") : ", Wine " + wine) +
                         (start_fullscreen ? ", fullscreen" : ", window"));
+    // Where the player's data is, by kind only: the log goes along with a problem report.
+    std::error_code ec;
+    coreoflight::HubLog(std::string("data folder: ") +
+                        (!skylanders::PortableFolder().empty() ? "portable, next to the launcher"
+                         : std::filesystem::equivalent(skylanders::DataFolder(), skylanders::DefaultDataFolder(), ec) ||
+                                   skylanders::DataFolder() == skylanders::DefaultDataFolder()
+                               ? "standard"
+                               : "moved"));
   }
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);

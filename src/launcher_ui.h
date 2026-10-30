@@ -262,6 +262,11 @@ class LauncherUi {
   bool ask_old_data_ = false;
   void ApplyDataFolder(const std::filesystem::path& picked);
   void TakeDataMove();
+  // Portable data on or off (#47): the data folder moved next to the launcher or back to
+  // Documents\Skylanders; portable-data.txt written or removed once the copy is done
+  // (TakeDataMove). Not portable_ (the ZIP launcher, whose data stays in Documents).
+  void TogglePortableData();
+  int portable_move_ = 0;  // while TogglePortableData's move runs: +1 on, -1 off
   bool DrawDataMove(float width, float height);
   bool DrawOldData(float width, float height);
   // A game was just started: its launch screen, until its window is up (main.cpp).

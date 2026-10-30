@@ -134,7 +134,8 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   bold_ = bold;
   // What is still in the old per-game folders goes into the one data folder first (data_move.h), so
   // the figures, saves and profiles below are read from there; the old ones are offered for deleting.
-  MoveOldData();
+  // Not with portable data (#47): a PC the stick visits keeps its own old folders.
+  if (skylanders::PortableFolder().empty()) MoveOldData();
   hub_ = LoadHubSettings();
   ApplyHubSettings();
   old_data_ = OldDataToDelete();
@@ -158,7 +159,7 @@ void LauncherUi::ApplyHubSettings() {
   // The games' folder chosen in the setup, unless the command line or coreoflight.ini set one.
   if (!hub_.games_dir.empty() && !GamesFolderChosen()) {
     // Under Wine through Z:\var\home rather than the /home link (RealFolder).
-    SetInstallDir(RealFolder(std::filesystem::path(std::u8string(hub_.games_dir.begin(), hub_.games_dir.end()))));
+    SetInstallDir(RealFolder(FolderFromStored(hub_.games_dir)));
   }
   settings_.Init(regular_, bold_, german_);
   hub_screen_.Init(regular_, bold_, german_);
@@ -1768,8 +1769,7 @@ void LauncherUi::ApplyGamesFolder(const std::filesystem::path& chosen) {
   SetInstallDir(dir);
   std::error_code ec;
   std::filesystem::create_directories(HubSettingsFile().parent_path(), ec);  // a first start: not there yet
-  const std::u8string u8 = dir.u8string();
-  hub_.games_dir = std::string(u8.begin(), u8.end());
+  hub_.games_dir = StoredFolder(dir);
   WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", hub_.games_dir);
   if (!install_process_ && !Downloading()) Refresh();
   size_t found = 0;
@@ -1819,26 +1819,89 @@ void LauncherUi::ApplyDataFolder(const std::filesystem::path& picked) {
   }
 }
 
-// The move has finished: the games told where the data is now (the pointer file), the launcher's
-// settings, profiles and figures read from there, the old folder offered for deleting.
+void LauncherUi::TogglePortableData() {
+  const std::filesystem::path portable = skylanders::PortableFolder();
+  std::string message;
+  if (!portable.empty() && portable != launcher_dir_) {
+    // Turned on in a folder above the launcher's: off there, by hand.
+    const std::string where = reinterpret_cast<const char*>(portable.u8string().c_str());
+    message = std::string(skylanders::kPortableMarker) + (german_ ? " liegt in " + where + ": dort l\xC3\xB6schen"
+                                                                  : " is in " + where + ": delete it there");
+  } else {
+    const bool on = portable.empty();
+    const std::filesystem::path from = SkylandersDir();
+    const std::filesystem::path to = on ? launcher_dir_ / "Skylanders" : DocumentsDir() / "Skylanders";
+    std::string error;
+    if (data_move_.Start(from, to, error)) {
+      portable_move_ = on ? 1 : -1;
+      HubLog(std::string("portable: ") + (on ? "on" : "off") + ", moving " +
+             reinterpret_cast<const char*>(from.u8string().c_str()) + " to " +
+             reinterpret_cast<const char*>(to.u8string().c_str()));
+      return;
+    }
+    message = (german_ ? "Geht nicht: " : "Not possible: ") + error;
+  }
+  if (hub_screen_.is_open()) {
+    hub_screen_.ShowMessage(message);
+  } else {
+    error_ = Wide(message);
+    error_until_ = ImGui::GetTime() + 8.0;
+  }
+}
+
+// The move has finished: the games told where the data is now (the pointer file, or
+// portable-data.txt for TogglePortableData's), the launcher's settings, profiles and figures read
+// from there, the old folder offered for deleting.
 void LauncherUi::TakeDataMove() {
   std::string error;
   std::filesystem::path old_dir, new_dir;
   bool old_deleted = false;
   if (!data_move_.TakeResult(error, old_dir, new_dir, old_deleted)) return;
   const std::string to = reinterpret_cast<const char*>(new_dir.u8string().c_str());
+  const int portable_move = std::exchange(portable_move_, 0);
   std::string message;
+  bool told = true;
+  if (error.empty() && portable_move > 0) {
+    // On: the data folder follows portable-data.txt (the pointer stays, for this PC's other copies).
+    std::ofstream marker(launcher_dir_ / skylanders::kPortableMarker, std::ios::binary | std::ios::trunc);
+    marker << "Core of Light and the games keep their data in the Skylanders folder next to this file.\r\n"
+              "Turn it off in Core of Light's settings (Portable data), which moves the data back.\r\n";
+    told = bool(marker);
+  } else if (error.empty() && portable_move < 0) {
+    // Off: portable-data.txt goes, the pointer to where the data went (none for Documents\Skylanders).
+    std::error_code ec;
+    std::filesystem::remove(launcher_dir_ / skylanders::kPortableMarker, ec);
+    told = !std::filesystem::exists(launcher_dir_ / skylanders::kPortableMarker, ec) &&
+           (DocumentsMoved() || skylanders::SetDataFolder(new_dir));
+  } else if (error.empty()) {
+    told = DocumentsMoved() || skylanders::SetDataFolder(new_dir);
+  }
   if (!error.empty()) {
     HubLog("data folder: the move failed: " + error);
     message = (german_ ? "Verschieben fehlgeschlagen: " : "The move failed: ") + error;
-  } else if (!DocumentsMoved() && !skylanders::SetDataFolder(new_dir)) {
+  } else if (!told) {
     HubLog("data folder: copied to " + to + ", but the pointer file couldn't be written");
     message = german_ ? "Kopiert, aber die Spiele lie\xC3\x9F" "en sich nicht umstellen" : "Copied, but the games couldn't be told";
   } else {
     if (DocumentsMoved()) SetSkylandersDirOverride(new_dir);
     HubLog("data folder: now " + to + (old_deleted ? " (the old one held only the settings and is gone)" : ""));
+    if (portable_move > 0) {
+      // New games next to it too (GamesFolder), not into a folder of this PC picked before.
+      WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", "");
+      SetInstallDir({});
+    } else if (portable_move < 0) {
+      // A games folder kept relative to the portable folder (StoredFolder) needs its whole path now.
+      const HubSettings moved = LoadHubSettings();
+      const std::filesystem::path games(std::u8string(moved.games_dir.begin(), moved.games_dir.end()));
+      if (!games.empty() && games.is_relative()) {
+        const std::u8string full = (launcher_dir_ / games).u8string();
+        WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", std::string(full.begin(), full.end()));
+      }
+    }
     hub_ = LoadHubSettings();
     ApplyHubSettings();
+    // Portable or not decides which copy of a game counts (games.cpp FindExe).
+    if (portable_move != 0 && !install_process_ && !Downloading()) Refresh();
     LoadProfiles(german_);
     figures_ = CountFigures();
     CountAchievements();
@@ -1852,6 +1915,10 @@ void LauncherUi::TakeDataMove() {
     std::string en, de;
     DataFolderLabels(en, de);
     hub_screen_.SetActionLabel("choose_data_dir", en, de);
+    PortableDataLabels(en, de);
+    hub_screen_.SetActionLabel("portable_data", en, de);
+    GamesFolderLabels(en, de);
+    hub_screen_.SetActionLabel("choose_games_dir", en, de);
     hub_screen_.ShowMessage(message);
   } else {
     error_ = Wide(message);
@@ -2273,6 +2340,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
       folder_browser_.SetForData(true);
       folder_browser_.Open(SkylandersDir().parent_path());
     }
+    if (action == "portable_data" && !data_move_.running()) TogglePortableData();
     if (action == "import_im_figures" && !figure_import_.running()) {
       folder_for_data_ = false;
       folder_browser_.SetForData(false);

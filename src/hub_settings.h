@@ -48,5 +48,8 @@ void GamesFolderLabels(std::string& en, std::string& de);
 // What the "Spieldaten-Ordner" row shows: the data folder (games.h SkylandersDir), "Standard: ..."
 // for Documents\Skylanders.
 void DataFolderLabels(std::string& en, std::string& de);
+// What the "Spieldaten mitnehmen" row shows: "Aus", or "An: <folder>" with the folder
+// portable-data.txt is in.
+void PortableDataLabels(std::string& en, std::string& de);
 
 }  // namespace coreoflight

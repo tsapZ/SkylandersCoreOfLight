@@ -117,7 +117,27 @@ fs::path g_skylanders_override;  // SetSkylandersDirOverride
 
 fs::path SkylandersDir() {
   if (!g_skylanders_override.empty()) return g_skylanders_override;
+  // Portable data (#47): next to Core of Light, on a --documents copy too (portable-data.txt is on
+  // purpose).
+  if (const fs::path portable = skylanders::PortableFolder(); !portable.empty()) return portable / "Skylanders";
   return g_documents_dir.empty() ? skylanders::DataFolder() : g_documents_dir / "Skylanders";
+}
+
+std::string StoredFolder(const fs::path& dir) {
+  const fs::path portable = skylanders::PortableFolder();
+  const std::wstring inside = portable.native() + L"\\";
+  const fs::path keep = !portable.empty() && dir.native().starts_with(inside) ? dir.lexically_relative(portable) : dir;
+  const std::u8string u8 = keep.u8string();
+  return std::string(u8.begin(), u8.end());
+}
+
+fs::path FolderFromStored(const std::string& text) {
+  fs::path dir = Utf8Path(text);
+  if (dir.is_relative()) {
+    const fs::path portable = skylanders::PortableFolder();
+    if (!portable.empty()) dir = portable / dir;
+  }
+  return dir;
 }
 
 void SetSkylandersDirOverride(const fs::path& dir) { g_skylanders_override = dir; }
@@ -231,12 +251,20 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
     if (fs::is_directory(p)) p /= game.exe;
     if (IsFile(p)) return p;
   }
-  if (fs::path p = InstalledByEntry(game); !p.empty()) return p;
+  // Portable (#47): the stick's own copy before one this PC has set up.
+  const bool portable = !skylanders::PortableFolder().empty();
+  if (!portable) {
+    if (fs::path p = InstalledByEntry(game); !p.empty()) return p;
+  }
   if (!games_folder.empty()) {
     if (fs::path p = FindInGamesFolder(game, games_folder); !p.empty()) {
-      copied = true;  // no uninstall entry points there (InstalledByEntry came first)
+      // No uninstall entry points there (InstalledByEntry came first), or one of another PC.
+      copied = portable ? InstalledByEntry(game) != p : true;
       return p;
     }
+  }
+  if (portable) {
+    if (fs::path p = InstalledByEntry(game); !p.empty()) return p;
   }
   const fs::path installed = KnownFolder(FOLDERID_LocalAppData) / "Programs" / game.app_name / game.exe;
   if (IsFile(installed)) return installed;
@@ -275,10 +303,11 @@ fs::path g_install_dir;  // --install_dir, or "library" in coreoflight.ini
 void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   const auto ini = ReadIni(launcher_dir / kConfigFile);
   if (auto it = ini.find("figures"); it != ini.end()) g_figures_dir = Utf8Path(it->second);
-  if (auto it = ini.find("library"); it != ini.end() && g_install_dir.empty()) g_install_dir = Utf8Path(it->second);
+  if (auto it = ini.find("library"); it != ini.end() && g_install_dir.empty()) g_install_dir = FolderFromStored(it->second);
+  const fs::path games_folder = g_install_dir.empty() && !skylanders::PortableFolder().empty() ? GamesFolder() : g_install_dir;
   found = std::vector<Found>(kGames.size());
   for (size_t i = 0; i < kGames.size(); ++i) {
-    found[i].exe = FindExe(kGames[i], launcher_dir, ini, g_install_dir, found[i].copied);
+    found[i].exe = FindExe(kGames[i], launcher_dir, ini, games_folder, found[i].copied);
     if (found[i].exe.empty()) continue;
     FindRom(found[i].exe, found[i].workdir, found[i].rom);
     // ssarecompiled.exe reads ssarecomp.toml next to it.
@@ -358,14 +387,16 @@ fs::path RealFolder(const fs::path& dir) {
   return same ? real : dir;
 }
 
-fs::path GamesFolder() { return g_install_dir.empty() ? KnownFolder(FOLDERID_LocalAppData) / "Programs" : g_install_dir; }
+fs::path GamesFolder() {
+  if (!g_install_dir.empty()) return g_install_dir;
+  // Portable (#47): the games next to Core of Light as well.
+  if (const fs::path portable = skylanders::PortableFolder(); !portable.empty()) return portable / "Games";
+  return KnownFolder(FOLDERID_LocalAppData) / "Programs";
+}
 
 bool GamesFolderChosen() { return !g_install_dir.empty(); }
 
-fs::path InstallFolder(const Game& game) {
-  return (g_install_dir.empty() ? KnownFolder(FOLDERID_LocalAppData) / "Programs" : g_install_dir) /
-         Utf8Path(game.app_name);
-}
+fs::path InstallFolder(const Game& game) { return GamesFolder() / Utf8Path(game.app_name); }
 
 std::string SetupVersion(const Game& game, const fs::path& setup) {
   const std::string name = setup.stem().string();

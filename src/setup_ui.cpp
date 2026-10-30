@@ -180,8 +180,7 @@ void SetupScreen::ChooseGameFolder(int choice) {
   SetInstallDir(dir);
   std::error_code ec;
   std::filesystem::create_directories(HubSettingsFile().parent_path(), ec);  // a first start: not there yet
-  const std::u8string u8 = dir.u8string();
-  WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", std::string(u8.begin(), u8.end()));
+  WriteGameSetting(HubSettingsFile(), "Hub", "games_dir", "string", StoredFolder(dir));
 }
 
 void SetupScreen::UseGamesFolder(const std::filesystem::path& dir) {

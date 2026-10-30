@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "games.h"
+#include "portal/data_folder.h"
 
 namespace coreoflight {
 namespace {
@@ -99,6 +100,19 @@ void DataFolderLabels(std::string& en, std::string& de) {
   const bool standard = !DocumentsMoved() && SkylandersDir() == DocumentsDir() / "Skylanders";
   en = standard ? "Default: " + path : path;
   de = standard ? "Standard: " + path : path;
+}
+
+void PortableDataLabels(std::string& en, std::string& de) {
+  const std::filesystem::path portable = skylanders::PortableFolder();
+  if (portable.empty()) {
+    en = "Off";
+    de = "Aus";
+    return;
+  }
+  const std::u8string u8 = portable.u8string();
+  const std::string path(u8.begin(), u8.end());
+  en = "On: " + path;
+  de = "An: " + path;
 }
 
 std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
@@ -249,6 +263,31 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     data.options = {{"", en, de}};
   }
   page.settings.push_back(std::move(data));
+  // A button: portable data on or off (#47), the data folder and the games folder next to the
+  // launcher (skylanders-portal data_folder.h PortableFolder), moved there or back. Not the ZIP
+  // launcher (portable.h), whose data stays in Documents.
+  GameSetting portable;
+  portable.cvar = "portable_data";
+  portable.en = "Portable data (USB stick)";
+  portable.de = "Spieldaten mitnehmen (USB-Stick)";
+  portable.help_en = "For a stick or a drive that goes from PC to PC: your saves, achievements, figures, profiles "
+                     "and settings move into a Skylanders folder next to Core of Light, and new games go into a "
+                     "Games folder there. Any PC, any drive letter. Games already set up somewhere else stay "
+                     "there: copy their folders into Games to take them along. Off moves your data back to "
+                     "Documents\\Skylanders.";
+  portable.help_de = "F\xC3\xBCr einen Stick oder ein Laufwerk, das von PC zu PC geht: Spielst\xC3\xA4nde, Erfolge, "
+                     "Figuren, Profile und Einstellungen ziehen in einen Ordner Skylanders neben Core of Light, "
+                     "neue Spiele kommen in einen Ordner Games daneben. Jeder PC, jeder Laufwerksbuchstabe. "
+                     "Woanders eingerichtete Spiele bleiben, wo sie sind: Kopier ihre Ordner nach Games, um sie "
+                     "mitzunehmen. Aus holt die Daten zur\xC3\xBC"
+                     "ck nach Dokumente\\Skylanders.";
+  portable.type = "action";
+  {
+    std::string en, de;
+    PortableDataLabels(en, de);
+    portable.options = {{"", en, de}};
+  }
+  page.settings.push_back(std::move(portable));
   // Two buttons: everything that's the player's into one file on the desktop, and back on a new PC
   // (data_transfer.h, #40).
   GameSetting export_data;

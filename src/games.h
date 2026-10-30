@@ -93,13 +93,13 @@ void SetInstallDir(const std::filesystem::path& dir);
 // folder (Fedora Atomic systems such as Bazzite link /home to /var/home; through the link the
 // discs couldn't be unpacked, 2026-10-24); else `dir` as it is.
 std::filesystem::path RealFolder(const std::filesystem::path& dir);
-// The folder new games go into (each into its own folder there): the one set, else
-// %LOCALAPPDATA%\Programs, as its setups do by default.
+// The folder new games go into (each into its own folder there): the one set, else in portable
+// mode Games next to Core of Light, else %LOCALAPPDATA%\Programs, as its setups do by default.
 std::filesystem::path GamesFolder();
 // Whether one is set at all (--install_dir, coreoflight.ini's "library" or the hub's "games_dir").
 bool GamesFolderChosen();
-// Where an install of `game` goes: <library>\<app name>, else the setup's default,
-// %LOCALAPPDATA%\Programs\<app name>.
+// Where an install of `game` goes: <GamesFolder>\<app name> (the setup's default
+// %LOCALAPPDATA%\Programs\<app name> while none is chosen and the data isn't portable).
 std::filesystem::path InstallFolder(const Game& game);
 // The setup with the highest version of the folders above (by its name's version, then its time).
 std::filesystem::path FindSetup(const Game& game, const std::filesystem::path& launcher_dir);
@@ -165,6 +165,11 @@ std::filesystem::path SkylandersDir();
 // On a --documents copy a moved data folder stays this launch's own (the real pointer file that
 // tells the games is left alone).
 void SetSkylandersDirOverride(const std::filesystem::path& dir);
+// A folder as the hub's settings keep it: relative to the portable folder when it is in there
+// (portable mode, skylanders-portal data_folder.h, #47: the drive letter changes from PC to PC),
+// else as it is; and back, a relative one from the portable folder.
+std::string StoredFolder(const std::filesystem::path& dir);
+std::filesystem::path FolderFromStored(const std::string& text);
 // A game's folder in it, by its exe ("Spyro's Adventure" for ssarecompiled.exe).
 std::filesystem::path GameFolderName(const std::filesystem::path& exe);
 
