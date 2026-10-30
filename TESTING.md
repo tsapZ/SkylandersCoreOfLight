@@ -17,7 +17,7 @@ It doesn't replace playing: quests, bosses and two players still need people. [R
 | Swap Force | 0.3.0-beta.6 (2026-10-29) | **18 of 18** | **66 of 66** | not yet |
 | Trap Team | 0.3.0-beta.6 (2026-10-29) | **26 of 26** | **81 of 81** | to the end |
 | SuperChargers | 0.3.0-beta.6 (2026-10-29) | **14 of 14** | **30 of 30** | not yet |
-| Imaginators | 0.3.0-beta.6 (2026-10-29) | **40 of 40** | not yet | not yet |
+| Imaginators | 0.3.0-beta.6 (2026-10-30) | **40 of 40** | **44 of 44** | not yet |
 
 ## Spyro's Adventure
 
@@ -100,9 +100,17 @@ Found on the way:
 
 ## Imaginators
 
-Tested build: 0.3.0-beta.6 (2026-10-29)
+Tested build: 0.3.0-beta.6 (2026-10-30)
 
 | What | Result |
 |---|---|
 | Levels | 40 of 40 loaded and played |
 | Lowest frame rate in a level | 53 FPS |
+| Senseis, each on the portal | 20 of 20 |
+| Villain Senseis, each on the portal | 11 of 11 |
+| Sensei variants, each on the portal | 7 of 7 |
+| Villain variants, each on the portal | 6 of 6 |
+
+Found on the way:
+
+- Imaginators turns down a figure its toy maker didn't make, so a blank one made by the test can't go on. Its figures were tested with the files of real figures instead.
