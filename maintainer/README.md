@@ -30,7 +30,7 @@ are in [RULES.md](RULES.md).
 
 | Script | What it does |
 |---|---|
-| `find_mojibake.py <root> ... [--fix]` | double-encoded UTF-8 ("Ã¼" for "ü") in the text files, after a patch went through a shell |
+| `find_mojibake.py <root> ... [--fix]` | double-encoded UTF-8 (an umlaut shown as two odd characters) in the text files, after a patch went through a shell |
 | `find_late_starts.py <code.bin> <code base> <codegen.partition.json>` | functions the analyzer starts one instruction late ("Call to invalid or unregistered function"): the code section saved with the input script's `save`, the starts to register under `[functions]` |
 | `leak_scan.py <mirror dir> <repo> [--word W ...]` | every file version of a mirror clone searched for personal words (default: the Windows user name), ASCII and UTF-16, and the commit identities; run before calling a repository clean |
 

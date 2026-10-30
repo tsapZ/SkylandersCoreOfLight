@@ -195,10 +195,10 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                        "are drawn bigger, and a game set up here starts with resolution scale 1x, easier on the "
                        "battery. Automatic: on when the screen is small or the chip is a handheld's. A game's "
                        "settings you've made stay as they are.";
-    handheld.help_de = "FÃ¼r Handheld-PCs (ROG Ally, Legion Go, Steam Deck mit Windows): Die Bildschirme "
-                       "des Hubs werden grÃ¶Ã" "er gezeichnet, und ein hier eingerichtetes Spiel "
-                       "startet mit AuflÃ¶sungsskala 1x, das schont den Akku. Automatisch: an, wenn der "
-                       "Bildschirm klein ist oder der Chip einer fÃ¼r Handhelds ist. Deine Einstellungen "
+    handheld.help_de = "F\xC3\xBCr Handheld-PCs (ROG Ally, Legion Go, Steam Deck mit Windows): Die Bildschirme "
+                       "des Hubs werden gr\xC3\xB6\xC3\x9F" "er gezeichnet, und ein hier eingerichtetes Spiel "
+                       "startet mit Aufl\xC3\xB6sungsskala 1x, das schont den Akku. Automatisch: an, wenn der "
+                       "Bildschirm klein ist oder der Chip einer f\xC3\xBCr Handhelds ist. Deine Einstellungen "
                        "eines Spiels bleiben, wie sie sind.";
     handheld.type = "string";
     handheld.category = kCategory;

@@ -1,5 +1,5 @@
 """Finds (and with --fix repairs) double-encoded UTF-8 (UTF-8 bytes read as Latin-1 and encoded
-again: 'Ã¼' for 'ü') in text files under the given roots."""
+again: '\u00c3\u00bc' for '\u00fc') in text files under the given roots."""
 import os
 import re
 import sys

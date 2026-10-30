@@ -256,6 +256,10 @@ def cmd_build(a):
 FORBIDDEN = re.compile(r"(^rom/(?!README\.md$).+|\.(xex|iso|dump|bin|igz|iga|bk2)$)", re.I)
 
 
+MOJIBAKE = re.compile("[\u00c2-\u00f4][\u0080-\u00bf]+")
+MOJIBAKE_EXT = (".cpp", ".h", ".inc", ".md", ".toml", ".example", ".iss", ".txt", ".py", ".ps1", ".cmake", ".json")
+
+
 def check_repo(repo, history=False):
     """The problems that stop a release of `repo`, as a list of strings."""
     d = sk.repo_dir(repo)
@@ -277,6 +281,25 @@ def check_repo(repo, history=False):
                              ":!thirdparty", check=False)
             if commits:
                 problems.append(f"the Windows user name in the history: commits {commits.split()[:5]}")
+    # Double-encoded UTF-8 ("\u00c3\u00bc" for "\u00fc", tools/find_mojibake.py): a German help text went out
+    # that way in Core of Light 0.3.0-beta.3.
+    garbled = []
+    for path in tracked:
+        if path.startswith("thirdparty/") or not path.endswith(MOJIBAKE_EXT):
+            continue
+        try:
+            text = (d / path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for m in MOJIBAKE.finditer(text):
+            try:
+                m.group(0).encode("latin-1").decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+            garbled.append(path)
+            break
+    if garbled:
+        problems.append("double-encoded UTF-8 (tools/find_mojibake.py --fix): " + ", ".join(garbled[:5]))
     emails = set(sk.git(repo, "log", "--all", "--format=%ae%n%ce").split())
     private = [e for e in emails if not e.endswith("users.noreply.github.com") and e != "noreply@github.com"]
     if private:
