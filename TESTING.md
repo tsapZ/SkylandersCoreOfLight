@@ -15,9 +15,9 @@ It doesn't replace playing: quests, bosses and two players still need people. [R
 | Spyro's Adventure | 0.3.0-beta.3+ (2026-10-28) | **69 of 69** | **45 of 45** | to the end |
 | Giants | 0.3.0-beta.6 (2026-10-29) | **24 of 24** | not yet | to the end |
 | Swap Force | 0.3.0-beta.6 (2026-10-29) | **18 of 18** | **66 of 66** | not yet |
-| Trap Team | 0.3.0-beta.6 (2026-10-29) | **26 of 26** | **81 of 81** | to the end |
+| Trap Team | 0.3.0-beta.6 (2026-10-30) | **26 of 26** | **145 of 145** | to the end |
 | SuperChargers | 0.3.0-beta.6 (2026-10-29) | **14 of 14** | **30 of 30** | not yet |
-| Imaginators | 0.3.0-beta.6 (2026-10-30) | **40 of 40** | **44 of 44** | not yet |
+| Imaginators | 0.3.0-beta.6 (2026-10-29) | **40 of 40** | not yet | not yet |
 
 ## Spyro's Adventure
 
@@ -69,7 +69,7 @@ Tested build: 0.3.0-beta.6 (2026-10-29)
 
 ## Trap Team
 
-Tested build: 0.3.0-beta.6 (2026-10-29)
+Tested build: 0.3.0-beta.6 (2026-10-30)
 
 | What | Result |
 |---|---|
@@ -80,6 +80,8 @@ Tested build: 0.3.0-beta.6 (2026-10-29)
 | Eon's Elite, each as a new figure | 8 of 8 |
 | Minis, each as a new figure | 16 of 16 |
 | Variants, each as a new figure | 16 of 16 |
+| Magic items, each as a new figure | 4 of 4 |
+| Traps, each as a new figure | 60 of 60 |
 | End credits | played to the end |
 
 ## SuperChargers
@@ -100,17 +102,13 @@ Found on the way:
 
 ## Imaginators
 
-Tested build: 0.3.0-beta.6 (2026-10-30)
+Tested build: 0.3.0-beta.6 (2026-10-29)
 
 | What | Result |
 |---|---|
 | Levels | 40 of 40 loaded and played |
 | Lowest frame rate in a level | 53 FPS |
-| Senseis, each on the portal | 20 of 20 |
-| Villain Senseis, each on the portal | 11 of 11 |
-| Sensei variants, each on the portal | 7 of 7 |
-| Villain variants, each on the portal | 6 of 6 |
 
 Found on the way:
 
-- Imaginators turns down a figure its toy maker didn't make, so a blank one made by the test can't go on. Its figures were tested with the files of real figures instead.
+- Imaginators turns down a figure its toy maker didn't make, so a blank one made by the test can't go on. Its figures are tested with the files of real figures instead.
