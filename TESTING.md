@@ -17,7 +17,7 @@ It doesn't replace playing: quests, bosses and two players still need people. [R
 | Swap Force | 0.3.0-beta.6 (2026-10-30) | **18 of 18** | **80 of 80** | not yet |
 | Trap Team | 0.3.0-beta.6 (2026-10-30) | **26 of 26** | **145 of 145** | to the end |
 | SuperChargers | 0.3.0-beta.6 (2026-10-30) | **14 of 14** | **63 of 63** | not yet |
-| Imaginators | 0.3.0-beta.6 (2026-10-30) | **40 of 40** | **102 of 102** | not yet |
+| Imaginators | 0.3.0-beta.6 (2026-10-30) | **40 of 40** | **107 of 107** | not yet |
 
 ## Spyro's Adventure
 
@@ -121,6 +121,7 @@ Tested build: 0.3.0-beta.6 (2026-10-30)
 | Villain Senseis, each on the portal | 11 of 11 |
 | Sensei variants, each on the portal | 7 of 7 |
 | Villain variants, each on the portal | 6 of 6 |
+| Magic items, each on the portal | 5 of 5 |
 | Creation crystals (ready-made Imaginators), each on the portal | 58 of 58 |
 
 Found on the way:
