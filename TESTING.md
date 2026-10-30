@@ -13,7 +13,7 @@ It doesn't replace playing: quests, bosses and two players still need people. [R
 | Game | Tested build | Levels | Figures | End credits |
 |---|---|---|---|---|
 | Spyro's Adventure | 0.3.0-beta.3+ (2026-10-28) | **69 of 69** | **45 of 45** | to the end |
-| Giants | 0.3.0-beta.6 (2026-10-29) | **24 of 24** | not yet | to the end |
+| Giants | 0.3.0-beta.6 (2026-10-30) | **24 of 24** | **65 of 65** | to the end |
 | Swap Force | 0.3.0-beta.6 (2026-10-30) | **18 of 18** | **80 of 80** | not yet |
 | Trap Team | 0.3.0-beta.6 (2026-10-30) | **26 of 26** | **145 of 145** | to the end |
 | SuperChargers | 0.3.0-beta.6 (2026-10-30) | **14 of 14** | **63 of 63** | not yet |
@@ -42,12 +42,17 @@ Found on the way:
 
 ## Giants
 
-Tested build: 0.3.0-beta.6 (2026-10-29)
+Tested build: 0.3.0-beta.6 (2026-10-30)
 
 | What | Result |
 |---|---|
 | Levels | 24 of 24 loaded and played |
 | Lowest frame rate in a level | 59 FPS |
+| Skylanders, each as a new figure | 31 of 31 |
+| Giants, each as a new figure | 8 of 8 |
+| LightCore Skylanders, each as a new figure | 8 of 8 |
+| Variants, each as a new figure | 14 of 14 |
+| Magic items, each as a new figure | 4 of 4 |
 | End credits | played to the end |
 
 Found on the way:
