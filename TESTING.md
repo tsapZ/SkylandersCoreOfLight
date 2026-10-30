@@ -14,9 +14,9 @@ It doesn't replace playing: quests, bosses and two players still need people. [R
 |---|---|---|---|---|
 | Spyro's Adventure | 0.3.0-beta.3+ (2026-10-28) | **69 of 69** | **45 of 45** | to the end |
 | Giants | 0.3.0-beta.6 (2026-10-29) | **24 of 24** | not yet | to the end |
-| Swap Force | 0.3.0-beta.6 (2026-10-29) | **18 of 18** | **66 of 66** | not yet |
+| Swap Force | 0.3.0-beta.6 (2026-10-30) | **18 of 18** | **80 of 80** | not yet |
 | Trap Team | 0.3.0-beta.6 (2026-10-30) | **26 of 26** | **145 of 145** | to the end |
-| SuperChargers | 0.3.0-beta.6 (2026-10-29) | **14 of 14** | **30 of 30** | not yet |
+| SuperChargers | 0.3.0-beta.6 (2026-10-30) | **14 of 14** | **63 of 63** | not yet |
 | Imaginators | 0.3.0-beta.6 (2026-10-29) | **40 of 40** | not yet | not yet |
 
 ## Spyro's Adventure
@@ -56,7 +56,7 @@ Found on the way:
 
 ## Swap Force
 
-Tested build: 0.3.0-beta.6 (2026-10-29)
+Tested build: 0.3.0-beta.6 (2026-10-30)
 
 | What | Result |
 |---|---|
@@ -65,7 +65,8 @@ Tested build: 0.3.0-beta.6 (2026-10-29)
 | Skylanders, each as a new figure | 32 of 32 |
 | Swappers, each as a new figure | 16 of 16 |
 | LightCore Skylanders, each as a new figure | 8 of 8 |
-| Variants, each as a new figure | 10 of 10 |
+| Variants, each as a new figure | 19 of 19 |
+| Magic items, each as a new figure | 5 of 5 |
 
 ## Trap Team
 
@@ -86,7 +87,7 @@ Tested build: 0.3.0-beta.6 (2026-10-30)
 
 ## SuperChargers
 
-Tested build: 0.3.0-beta.6 (2026-10-29)
+Tested build: 0.3.0-beta.6 (2026-10-30)
 
 | What | Result |
 |---|---|
@@ -94,6 +95,9 @@ Tested build: 0.3.0-beta.6 (2026-10-29)
 | Lowest frame rate in a level | 57 FPS |
 | SuperChargers, each as a new figure | 18 of 18 |
 | Variants, each as a new figure | 12 of 12 |
+| Magic items, each as a new figure | 4 of 4 |
+| Vehicles, each as a new figure | 18 of 18 |
+| Vehicle variants, each as a new figure | 11 of 11 |
 
 Found on the way:
 
