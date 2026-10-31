@@ -3,7 +3,7 @@
     python maintainer/release.py status
     python maintainer/release.py bump --sdk <sha> --lib <sha> -m <message file> [--status "<line>"] [--push]
     python maintainer/release.py version 0.3.0-beta.1 [--repos ...] [--status "<line>"] [--push]
-    python maintainer/release.py build [--recipe build-release|package-installer] [--test] [--repos ...]
+    python maintainer/release.py build [--recipe build-release|package-installer] [--test] [--pgo] [--repos ...]
     python maintainer/release.py check [--history] [--repos ...]
     python maintainer/release.py publish --notes <folder> [--repos ...] [--dry-run]
 
@@ -233,6 +233,16 @@ def cmd_build(a):
                 steps.append(("package", ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
                                           str(d / "tools" / "package_installer.ps1")]))
         else:
+            # A game's profile-guided build (skylanders-portal cmake/pgo.cmake): --pgo takes its
+            # profile from SKYLANDERS_WORK\pgo\<Repo>.profdata (made by the scripted training runs);
+            # without --pgo, or without that file, the release folder is set back to an ordinary
+            # build, so an old profile never stays in its cache unnoticed.
+            profile = sk.WORK / "pgo" / f"{repo}.profdata"
+            use = a.pgo and profile.exists()
+            value = profile.as_posix() if use else ""
+            print(f"{repo}: {'profile-guided, ' + profile.name if use else 'no profile'}"
+                  + (" (none made yet)" if a.pgo and not use else ""))
+            steps.append(("configure", in_vs(f"cmake --preset win-amd64-release -DSKYLANDERS_PGO_PROFILE={value}")))
             steps.append((a.recipe, in_vs(f"just {a.recipe}")))
             if a.test:
                 steps.append(("test", in_vs("just test-release")))
@@ -440,6 +450,8 @@ def main():
     s = sub.add_parser("build", help="build in the Visual Studio environment, logs in SKYLANDERS_WORK")
     s.add_argument("--recipe", default="build-release", choices=["build-release", "package-installer"])
     s.add_argument("--test", action="store_true", help="also run the games' tests")
+    s.add_argument("--pgo", action="store_true",
+                   help="profile-guided: each game with its profile from SKYLANDERS_WORK\\pgo\\<Repo>.profdata")
     s.add_argument("--repos", nargs="*")
     s = sub.add_parser("check", help="what would stop a release: game data, user names, build paths")
     s.add_argument("--history", action="store_true", help="also search every commit for the user name")
