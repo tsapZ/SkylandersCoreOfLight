@@ -360,8 +360,11 @@ void SaveKnownReleases(const std::vector<Release>& releases) {
 bool UpdateCheckDue() {
   uint64_t checked = 0;
   LoadKnownReleases(&checked);
-  constexpr uint64_t kDay = 24ull * 60 * 60 * 10000000;  // in 100 ns steps
-  return checked == 0 || Now() - checked > kDay;
+  // Six hours (a day before: a game released in the evening wasn't seen until the next day, and a
+  // player whose disc it was made for couldn't start it, 2026-10-31). Seven requests a check,
+  // GitHub allows 60 an hour without an account.
+  constexpr uint64_t kInterval = 6ull * 60 * 60 * 10000000;  // in 100 ns steps
+  return checked == 0 || Now() - checked > kInterval;
 }
 
 bool DownloadFile(const std::string& url, const fs::path& file, std::atomic<float>* progress,

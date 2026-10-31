@@ -192,7 +192,7 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
         old = WithSuffix(target, (L".old" + std::to_wstring(n)).c_str());
       }
       if (!MoveFileExW(target.c_str(), old.c_str(), 0)) {
-        HubLog("portable update: can't move " + Utf8(target) + " aside (error " + std::to_string(GetLastError()) + ")");
+        HubWarn("portable update: can't move " + Utf8(target) + " aside (error " + std::to_string(GetLastError()) + ")");
         roll_back();
         error = cant_write;
         return false;
@@ -201,7 +201,7 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
     }
     swapped.push_back(swap);
     if (!MoveFileExW(WithSuffix(target, L".new").c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING)) {
-      HubLog("portable update: can't put " + Utf8(target) + " in place (error " + std::to_string(GetLastError()) + ")");
+      HubWarn("portable update: can't put " + Utf8(target) + " in place (error " + std::to_string(GetLastError()) + ")");
       roll_back();
       error = cant_write;
       return false;

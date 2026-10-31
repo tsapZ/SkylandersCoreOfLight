@@ -26,6 +26,7 @@
 #include "portal/figure_info.h"
 #include "game_files.h"
 #include "handheld.h"
+#include "hub_log.h"
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
@@ -143,7 +144,7 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   work_ = std::make_shared<UpdateWork>();
   if (!Offline()) releases_ = LoadKnownReleases();  // --offline: no release, nothing to download
   Refresh();
-  if (!Offline() && UpdateCheckDue()) StartUpdateCheck(false);
+  if (!Offline() && UpdateCheckDue()) StartUpdateCheck(false, "the last check is over six hours old");
   else AutoUpdateGames();  // updates the last check found and that weren't installed yet
   // The first-run setup: on a first start with no game there (a friend's PC, not a developer's).
   if (!hub_.setup_done && std::none_of(found_.begin(), found_.end(), [](const Found& f) { return !f.exe.empty(); })) {
@@ -252,6 +253,9 @@ void LauncherUi::UpdateImport() {
     const int game = import_.game();
     Refresh();  // the disc check again
     if (game >= 0) selected_ = size_t(game);
+    // The game may have a newer version that the last check (up to six hours ago) didn't see: one
+    // that takes this disc, for example (a player's other pressing before Trap Team had it).
+    if (game >= 0) RequestUpdateCheck(std::string("a disc was set up for ") + AllGames()[size_t(game)].name_en);
     // Its title music again, now that the disc is there.
     if (game >= 0 && size_t(game) < export_tried_.size()) export_tried_[size_t(game)] = false;
   }
@@ -281,8 +285,10 @@ void LauncherUi::UpdateInstall() {
   const bool update = std::exchange(install_is_update_, false);
   if (code == 0 && game < found_.size() && !found_[game].exe.empty()) {
     selected_ = game;
+    const std::string version = game < installed_versions_.size() ? installed_versions_[game] : std::string();
+    HubLog("install: " + std::string(AllGames()[game].name_en) + (update ? " updated to " : " installed, ") +
+           (version.empty() ? std::string("version unknown") : version));
     if (update) {
-      const std::string version = game < installed_versions_.size() ? installed_versions_[game] : std::string();
       error_ = Wide(name + (german_ ? " ist aktualisiert (" : " is updated (") + version + ")");
     } else {
       error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
@@ -290,6 +296,8 @@ void LauncherUi::UpdateInstall() {
   } else {
     if (update_total_ && update) update_failed_.push_back(name);  // "Alle aktualisieren" sums it up
     const std::string why = GameInstallError(game);
+    HubWarn("install: " + std::string(AllGames()[game].name_en) + (update ? " update" : " install") +
+            " stopped, code " + std::to_string(code) + (why.empty() ? std::string() : ": " + why));
     char text[256];
     std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %lu)%s%s" : "%s: installation stopped (code %lu)%s%s",
                   name.c_str(), code, why.empty() ? "" : ": ", why.c_str());
@@ -298,9 +306,71 @@ void LauncherUi::UpdateInstall() {
   error_until_ = ImGui::GetTime() + 8.0;
 }
 
+namespace {
+
+// The game's own message when it stopped with one (exit code 2: its Fatal(), a message box and an
+// "[error]" line in its log): the last error line of its newest log, continued lines joined.
+std::string GameErrorMessage(const Found& found) {
+  namespace fs = std::filesystem;
+  fs::path newest;
+  fs::file_time_type newest_time{};
+  std::error_code ec;
+  for (const fs::path& dir : {found.workdir / "logs", found.exe.parent_path() / "logs"}) {
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+      if (!entry.is_regular_file(ec) || entry.path().extension() != ".log") continue;
+      const auto time = entry.last_write_time(ec);
+      if (newest.empty() || time > newest_time) {
+        newest = entry.path();
+        newest_time = time;
+      }
+    }
+  }
+  if (newest.empty()) return {};
+  std::ifstream in(newest, std::ios::binary);
+  std::string message;
+  bool in_error = false;
+  for (std::string line; std::getline(in, line);) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    const size_t at = line.find("] [error] ");
+    if (at != std::string::npos) {
+      // "[time] [error] [core] [t123] text": the text after the thread's tag.
+      size_t text = line.find("] ", line.find("[t", at + 10));
+      text = text == std::string::npos ? at + 10 : text + 2;
+      message = line.substr(text);
+      in_error = true;
+    } else if (in_error && !line.empty() && line[0] != '[') {
+      message += " / " + line;  // the message's next lines
+    } else {
+      in_error = false;
+    }
+  }
+  return message.size() > 400 ? message.substr(0, 400) + " ..." : message;
+}
+
+}  // namespace
+
 void LauncherUi::GameExitCode(unsigned long code) {
   starting_ = false;
   if (code == 0) return;
+  size_t game = AllGames().size();
+  for (size_t i = 0; i < AllGames().size(); ++i) {
+    if (last_key_ == AllGames()[i].key) game = i;
+  }
+  const std::string name = game < AllGames().size() ? AllGames()[game].name_en : "the game";
+  if (code == 2 && game < found_.size()) {
+    const std::string message = GameErrorMessage(found_[game]);
+    HubWarn("game: " + name + " stopped with a message: " + (message.empty() ? "(none in its log)" : message));
+  } else {
+    char line[96];
+    std::snprintf(line, sizeof(line), " ended with an error (exit code 0x%08lX%s)", code,
+                  code == 0xC0000005 ? ", an access violation"
+                  : code == 0xC0000409 ? ", a stack buffer overrun or fast fail"
+                  : code == 0xC0000135 ? ", a DLL missing"
+                                       : "");
+    HubError("game: " + name + line);
+  }
+  // A newer game may be out that fixes it, or that takes the disc (a refused pressing, 2026-10-31).
+  RequestUpdateCheck(name + " ended with an error");
   // "Problem melden?" comes up by itself (DrawCrashReport).
   crash_code_ = code;
   crash_key_ = last_key_;
@@ -1429,13 +1499,20 @@ struct LauncherUi::UpdateWork {
   std::filesystem::path file;
 };
 
-void LauncherUi::StartUpdateCheck(bool manual) {
+void LauncherUi::RequestUpdateCheck(const std::string& why) {
+  if (Offline() || work_->checking.load() || ImGui::GetTime() - last_requested_check_ < 600.0) return;
+  last_requested_check_ = ImGui::GetTime();
+  StartUpdateCheck(false, why);
+}
+
+void LauncherUi::StartUpdateCheck(bool manual, const std::string& why) {
   if (Offline()) {
     if (manual) ShowToast(german_ ? "Offline gestartet (--offline): keine Updates" : "Started offline (--offline): no updates");
     return;
   }
   if (manual) manual_check_ = true;
   if (work_->checking.exchange(true)) return;
+  HubLog("updates: checking, " + (manual ? std::string("asked for") : why.empty() ? std::string("by itself") : why));
   // The repository, its asset's name before "-<version>" and the asset's extension: the launcher's
   // setup, or its ZIP for the portable one (portable.h), and each game's setup.
   struct Wanted {
@@ -1470,6 +1547,7 @@ void LauncherUi::UpdateReleases() {
   }
   const bool manual = std::exchange(manual_check_, false);
   if (found.empty()) {
+    HubWarn("updates: no answer from GitHub (no network, or it is down or busy)");
     if (manual) {
       ShowToast(german_ ? "Keine Verbindung zu GitHub: Updates lassen sich gerade nicht pr\xC3\xBC" "fen"
                         : "No connection to GitHub: updates can't be checked right now",
@@ -1477,8 +1555,26 @@ void LauncherUi::UpdateReleases() {
     }
     return;
   }
-  releases_ = std::move(found);
-  if (!install_process_ && !Downloading()) Refresh();
+  {
+    // What is out, and what of it is newer than what is installed.
+    std::string latest, newer;
+    for (const Release& r : found) latest += (latest.empty() ? "" : ", ") + r.repo + " " + r.version;
+    releases_ = std::move(found);
+    if (!install_process_ && !Downloading()) Refresh();
+    for (size_t i = 0; i < found_.size(); ++i) {
+      if (found_[i].exe.empty() || !UpdateAvailable(i)) continue;
+      const std::string have = i < installed_versions_.size() ? installed_versions_[i] : std::string();
+      for (const Release& r : releases_) {
+        if (r.repo == AllGames()[i].repo) {
+          newer += (newer.empty() ? "" : ", ") + std::string(AllGames()[i].name_en) + " " +
+                   (have.empty() ? "?" : have) + " -> " + r.version;
+        }
+      }
+    }
+    HubLog("updates: latest " + latest);
+    HubLog("updates: " + (newer.empty() ? std::string("every installed game is up to date") : "newer: " + newer) +
+           (hub_update_ ? ", Core of Light " + hub_update_->version : std::string()));
+  }
   if (!manual) AutoUpdateGames();
   if (manual) {
     // A newer launcher: its own question comes up (DrawHubUpdate); the games' updates: asked here.
@@ -1890,10 +1986,10 @@ void LauncherUi::TakeDataMove() {
     told = DocumentsMoved() || skylanders::SetDataFolder(new_dir);
   }
   if (!error.empty()) {
-    HubLog("data folder: the move failed: " + error);
+    HubWarn("data folder: the move failed: " + error);
     message = (german_ ? "Verschieben fehlgeschlagen: " : "The move failed: ") + error;
   } else if (!told) {
-    HubLog("data folder: copied to " + to + ", but the pointer file couldn't be written");
+    HubWarn("data folder: copied to " + to + ", but the pointer file couldn't be written");
     message = german_ ? "Kopiert, aber die Spiele lie\xC3\x9F" "en sich nicht umstellen" : "Copied, but the games couldn't be told";
   } else {
     if (DocumentsMoved()) SetSkylandersDirOverride(new_dir);
@@ -2066,6 +2162,7 @@ void LauncherUi::UpdateDownload() {
   const size_t game = work_->game;
   const std::string name = german_ ? AllGames()[game].name_de : AllGames()[game].name_en;
   if (state == 3 || !BeginInstall(game, work_->update)) {
+    HubWarn("download: " + std::string(AllGames()[game].name_en) + (state == 3 ? ": the download failed" : ": its setup didn't start"));
     if (update_total_ && work_->update) update_failed_.push_back(name);
     error_ = Wide(name + (german_ ? ": Der Download ist fehlgeschlagen" : ": the download failed"));
     error_until_ = ImGui::GetTime() + 8.0;
@@ -2335,7 +2432,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
           if (WriteGameSetting(toml, "Input", cvar, "int", it->second)) {
             f.settings[cvar] = it->second;
           } else {
-            HubLog("controller page: could not write " + std::string(cvar) + " into " +
+            HubWarn("controller page: could not write " + std::string(cvar) + " into " +
                    std::string(reinterpret_cast<const char*>(toml.u8string().c_str())));
           }
         }

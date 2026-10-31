@@ -179,7 +179,12 @@ class LauncherUi {
   std::optional<Release> hub_update_;
   bool hub_update_put_off_ = false;
   bool manual_check_ = false;
-  void StartUpdateCheck(bool manual);
+  // `why` goes into the log ("asked for", "a disc was set up", ...).
+  void StartUpdateCheck(bool manual, const std::string& why = {});
+  // A check after something that may want a newer game (a disc set up, a game that stopped with an
+  // error): not offline, not while one runs, at most every ten minutes.
+  void RequestUpdateCheck(const std::string& why);
+  double last_requested_check_ = -1.0e9;
   void UpdateReleases();
   void ApplyReleases();
   // Installs (or updates) a game from setups_: at once from a file that is there, else once it is

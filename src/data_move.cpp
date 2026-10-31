@@ -28,7 +28,7 @@ void CopyOver(const fs::path& old_dir, const fs::path& new_dir) {
   fs::create_directories(new_dir.parent_path(), ec);
   const skylanders::CopyResult copy = skylanders::CopyFolderVerified(old_dir, new_dir);
   if (!copy.ok) {
-    HubLog("data folder: could not copy " + U8(old_dir) + ": " + copy.error);
+    HubWarn("data folder: could not copy " + U8(old_dir) + ": " + copy.error);
     return;
   }
   skylanders::WriteMovedNote(old_dir, new_dir);
@@ -96,7 +96,7 @@ int DeleteOldData(const std::vector<OldData>& list) {
     std::error_code ec;
     fs::remove_all(d.old_dir, ec);
     if (ec) {
-      HubLog("data folder: could not delete " + U8(d.old_dir) + ": " + ec.message());
+      HubWarn("data folder: could not delete " + U8(d.old_dir) + ": " + ec.message());
       continue;
     }
     ++deleted;
@@ -138,7 +138,7 @@ fs::path SetAsideCopiedFolder(const fs::path& dir) {
     if (fs::exists(aside, ec)) continue;
     fs::rename(dir, aside, ec);
     if (ec) {
-      HubLog("data folder: could not rename " + U8(dir) + ": " + ec.message());
+      HubWarn("data folder: could not rename " + U8(dir) + ": " + ec.message());
       return {};
     }
     HubLog("data folder: " + U8(dir) + " (copied away before) is now " + U8(aside));

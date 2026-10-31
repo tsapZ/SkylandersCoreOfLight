@@ -115,18 +115,6 @@ std::string ReadTail(const fs::path& path, size_t cap = 8u << 20) {
   return data;
 }
 
-std::string WindowsVersion() {
-  using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
-  OSVERSIONINFOW v{};
-  v.dwOSVersionInfoSize = sizeof(v);
-  if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
-    if (auto get = reinterpret_cast<RtlGetVersionFn>(GetProcAddress(ntdll, "RtlGetVersion"))) get(&v);
-  }
-  char text[64];
-  std::snprintf(text, sizeof(text), "%lu.%lu.%lu", v.dwMajorVersion, v.dwMinorVersion, v.dwBuildNumber);
-  return text;
-}
-
 std::string ProcessorName() {
   wchar_t name[256] = {};
   DWORD size = sizeof(name);
@@ -277,14 +265,19 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     std::vector<fs::path> dirs = {f.workdir / "logs"};
     if (f.exe.parent_path() / "logs" != dirs[0]) dirs.push_back(f.exe.parent_path() / "logs");
     // The newest log, then the newest three of real sessions: the launcher's own short runs of a
-    // game (its settings list, its pictures) leave logs of a few hundred bytes.
+    // game for its settings list leave logs of a few hundred bytes. Only those are left out: a
+    // start that stopped at once (a refused disc, 2026-10-31) is short as well, and it is the log
+    // that says why.
     size_t game_notes = 0;
     for (const fs::path& dir : dirs) {
       const std::vector<fs::path> logs = Newest(dir, L".log", 40);
       size_t taken = 0;
       for (size_t k = 0; k < logs.size() && taken < 4; ++k) {
         std::error_code ec;
-        if (k > 0 && fs::file_size(logs[k], ec) < 4096) continue;
+        if (k > 0 && fs::file_size(logs[k], ec) < 4096 &&
+            ReadTail(logs[k]).find("Settings schema written") != std::string::npos) {
+          continue;
+        }
         report.Add(folder + "logs/" + Utf8(logs[k].filename()), clean(ReadTail(logs[k], kLogTail)));
         ++taken;
       }
@@ -310,7 +303,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   for (const fs::path& file : {HubSettingsFile(), launcher_dir / "coreoflight.ini"}) {
     if (std::string text = ReadTail(file); !text.empty()) report.Add("launcher/" + Utf8(file.filename()), clean(text));
   }
-  // The launcher's own log (hub_log.h): games started and ended, its focus, the pads.
+  // The launcher's own log (hub_log.h): discs, updates, games started and ended.
   if (std::string text = ReadTail(HubLogFile(), kLogTail); !text.empty()) report.Add("launcher/coreoflight.log", clean(text));
 
   if (!report.Write(report_path)) {

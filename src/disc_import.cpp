@@ -148,7 +148,8 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       shared->phase = phase;
       // Every step in the launcher's log, so a report says why a disc wasn't set up (a colleague's
       // under Wine: "many errors", none of the texts in the report).
-      HubLog("disc import: " + text);
+      if (phase == Phase::kFailed) HubWarn("disc import: " + text);
+      else HubLog("disc import: " + text);
     };
     HubLog("disc import: " + std::string(reinterpret_cast<const char*>(iso.u8string().c_str())));
     // A folder with an unpacked disc, or an ISO.

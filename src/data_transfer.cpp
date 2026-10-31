@@ -261,7 +261,7 @@ void DataTransfer::StartExport(const std::vector<Found>& games, bool german) {
       fs::remove(temp, ec);
       summary = german ? "Der Export hat nicht geklappt (der Desktop ist nicht beschreibbar?)."
                        : "The export didn't work (can't write to the desktop?).";
-      HubLog("data export: failed");
+      HubWarn("data export: failed");
     } else {
       written = file;
       char line[300];

@@ -34,7 +34,7 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
 // The releases kept from the last check, and when it was (Windows file time; 0: never).
 std::vector<Release> LoadKnownReleases(uint64_t* checked = nullptr);
 void SaveKnownReleases(const std::vector<Release>& releases);
-// Whether the last check is older than a day.
+// Whether the last check is older than six hours.
 bool UpdateCheckDue();
 
 // Downloads `url` into `file` (written as <file>.part, renamed when complete): progress 0..1 into

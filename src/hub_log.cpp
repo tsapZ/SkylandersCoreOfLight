@@ -81,22 +81,48 @@ std::string RedactUserData(std::string text) {
 
 }  // namespace
 
-void HubLog(const std::string& line) {
-  static std::mutex mutex;  // the disc import writes from its own thread
+namespace {
+
+void Write(const char* level, const std::string& line) {
+  static std::mutex mutex;  // the disc import and the update check write from their own threads
   std::lock_guard lock(mutex);
   const fs::path file = HubLogFile();
   if (file.empty()) return;
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
-  const bool restart = fs::file_size(file, ec) > 256 * 1024 && !ec;
-  std::ofstream out(file, restart ? std::ios::trunc : std::ios::app);
+  // Full: kept as coreoflight.old.log (it was emptied before, and with it what led up to a problem).
+  if (fs::file_size(file, ec) > 256 * 1024 && !ec) {
+    fs::path old = file;
+    old.replace_filename(L"coreoflight.old.log");
+    fs::rename(file, old, ec);
+    if (ec) fs::remove(file, ec);
+  }
+  std::ofstream out(file, std::ios::app);
   if (!out) return;
   SYSTEMTIME t;
   GetLocalTime(&t);
-  char stamp[32];
-  std::snprintf(stamp, sizeof(stamp), "%04u-%02u-%02u %02u:%02u:%02u.%03u ", t.wYear, t.wMonth, t.wDay, t.wHour,
-                t.wMinute, t.wSecond, t.wMilliseconds);
+  char stamp[48];
+  std::snprintf(stamp, sizeof(stamp), "%04u-%02u-%02u %02u:%02u:%02u.%03u [%s] ", t.wYear, t.wMonth, t.wDay, t.wHour,
+                t.wMinute, t.wSecond, t.wMilliseconds, level);
   out << stamp << RedactUserData(line) << "\n";
+}
+
+}  // namespace
+
+void HubLog(const std::string& line) { Write("info", line); }
+void HubWarn(const std::string& line) { Write("warn", line); }
+void HubError(const std::string& line) { Write("error", line); }
+
+std::string WindowsVersion() {
+  using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
+  OSVERSIONINFOW v{};
+  v.dwOSVersionInfoSize = sizeof(v);
+  if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
+    if (auto get = reinterpret_cast<RtlGetVersionFn>(GetProcAddress(ntdll, "RtlGetVersion"))) get(&v);
+  }
+  char text[64];
+  std::snprintf(text, sizeof(text), "%lu.%lu.%lu", v.dwMajorVersion, v.dwMinorVersion, v.dwBuildNumber);
+  return text;
 }
 
 std::string WineVersion() {

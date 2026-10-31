@@ -165,9 +165,15 @@ void ReleaseDevice() {
   if (g_device) g_device->Release();
 }
 
+// While a game runs and for 30 s after it: the window's focus goes into the log then (a report from
+// a PC where the pad stopped after a game). Otherwise every switch to another program wrote two
+// lines and buried the rest (the owner, reading a report, 2026-10-31).
+bool g_game_running = false;
+ULONGLONG g_focus_log_until = 0;
+
 LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-  // The window's focus in the log (a report from a PC where the pad stopped after a game).
-  if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_ACTIVATEAPP) {
+  if ((msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_ACTIVATEAPP) &&
+      (g_game_running || GetTickCount64() < g_focus_log_until)) {
     coreoflight::HubLog(msg == WM_SETFOCUS    ? "window: focus"
                         : msg == WM_KILLFOCUS ? "window: focus lost"
                         : wparam              ? "window: app active"
@@ -219,6 +225,7 @@ std::filesystem::path LauncherDir() {
 // under Wine / Proton there is no Segoe UI, and Dear ImGui's built-in pixel font made the cards'
 // lines run into each other (a colleague's Bazzite, 2026-10-24).
 bool g_own_font = false;  // --own_font: the launcher's own font even where Segoe UI is (to see it)
+std::string g_fonts;      // the fonts LoadFont took, for the start line
 
 ImFont* LoadFont(ImGuiIO& io, const wchar_t* windows_file, const wchar_t* own_file) {
   wchar_t windows[MAX_PATH];
@@ -231,11 +238,11 @@ ImFont* LoadFont(ImGuiIO& io, const wchar_t* windows_file, const wchar_t* own_fi
     // The atlas reads the file by its UTF-8 name (the launcher folder may have any characters).
     const std::u8string u8 = path.u8string();
     if (ImFont* font = io.Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(u8.c_str()), 32.0f)) {
-      coreoflight::HubLog("font: " + std::string(reinterpret_cast<const char*>(path.filename().u8string().c_str())));
+      g_fonts += (g_fonts.empty() ? "" : " ") + std::string(reinterpret_cast<const char*>(path.filename().u8string().c_str()));
       return font;
     }
   }
-  coreoflight::HubLog("font: none found, Dear ImGui's own");
+  g_fonts += g_fonts.empty() ? "none (Dear ImGui's own)" : " none";
   return nullptr;
 }
 
@@ -251,7 +258,7 @@ void LogTerminate() {
     } catch (...) {
     }
   }
-  coreoflight::HubLog("launcher: ended by an uncaught exception: " + what);
+  coreoflight::HubError("launcher: ended by an uncaught exception: " + what);
   std::abort();
 }
 
@@ -262,7 +269,7 @@ LONG WINAPI LogFault(EXCEPTION_POINTERS* info) {
                 info->ExceptionRecord->ExceptionCode,
                 static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) -
                                                 reinterpret_cast<uintptr_t>(self)));
-  coreoflight::HubLog(line);
+  coreoflight::HubError(line);
   return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -364,8 +371,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   coreoflight::SetTextureDevice(g_device);
   {
     const std::string wine = coreoflight::WineVersion();
-    coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION + (wine.empty() ? std::string(", Windows") : ", Wine " + wine) +
-                        (start_fullscreen ? ", fullscreen" : ", window"));
+    // The local time's offset from UTC: the log's times are local.
+    TIME_ZONE_INFORMATION zone{};
+    const DWORD zone_id = GetTimeZoneInformation(&zone);
+    const long bias = zone.Bias + (zone_id == TIME_ZONE_ID_DAYLIGHT ? zone.DaylightBias : zone.StandardBias);
+    char offset[32];
+    std::snprintf(offset, sizeof(offset), "UTC%c%02ld:%02ld", bias <= 0 ? '+' : '-', std::labs(bias) / 60, std::labs(bias) % 60);
+    coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION ", Windows " + coreoflight::WindowsVersion() +
+                        (wine.empty() ? std::string() : ", Wine " + wine) +
+                        (start_fullscreen ? ", fullscreen" : ", window") + ", time zone " + offset + ", fonts " + g_fonts);
     // Where the player's data is, by kind only: the log goes along with a problem report.
     std::error_code ec;
     coreoflight::HubLog(std::string("data folder: ") +
@@ -451,6 +465,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       CloseHandle(game);
       game = nullptr;
       game_shown = false;
+      g_game_running = false;
+      g_focus_log_until = GetTickCount64() + 30000;
       ui.GameEnded();
       ui.GameExitCode(code);
       ui.Refresh();
@@ -511,6 +527,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (void* started = ui.TakeStartedProcess()) {
       game = static_cast<HANDLE>(started);  // hidden once its window is up (above)
       game_shown = false;
+      g_game_running = true;
       coreoflight::HubLog("game: started, process " + std::to_string(GetProcessId(game)));
     }
   }
