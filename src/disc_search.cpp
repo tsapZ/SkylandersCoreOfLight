@@ -110,10 +110,10 @@ std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<fs::path, int>
         const XisoImage::Entry* xex = image ? image->Find("default.xex") : nullptr;
         std::vector<uint8_t> data;
         if (!xex || !image->Read(*xex, data)) return;
-        const std::string hash = Sha256Hex(data.data(), data.size());
+        const XexId id = IdentifyXex(data.data(), data.size());
         int game = -1;
         for (size_t i = 0; i < AllGames().size(); ++i) {
-          if (IsGameDisc(AllGames()[i], hash)) game = int(i);
+          if (IsGameDisc(AllGames()[i], id)) game = int(i);
         }
         std::lock_guard lock(search->mutex);
         search->found.push_back({game, iso});

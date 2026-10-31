@@ -17,9 +17,11 @@
 
 #include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
+#include "xex/xex_header.h"
 #include "handheld.h"
 #include "hub_log.h"  // WineVersion
 #include "profiles.h"
+#include "xiso.h"  // Sha256Hex
 
 namespace coreoflight {
 namespace {
@@ -31,29 +33,39 @@ constexpr char kConfigFile[] = "coreoflight.ini";
 fs::path g_figures_dir;
 constexpr wchar_t kBuildDir[] = L"out\\build\\win-amd64-release";
 
-// Each repository pins its disc's default.xex in docs/game/default.xex.sha256.
+// Each repository pins its disc's default.xex in docs/game/default.xex.sha256 and its code in
+// docs/game/default.xex.code: another pressing with the same code (another language set) runs too.
 const std::vector<Game> kGames = {
     {"ssa", "Spyro's Adventure", "Spyro's Adventure", 2011, "ssarecompiled.exe", "SSARecomp",
-     "Spyro's Adventure Recompiled", "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b", 16, 0,
+     "Spyro's Adventure Recompiled",
+     "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b,"
+     "82110000:0a6b070c95f730a77a8662afdbbb297a15ce8a465c344951ab5ff1bb94bd802d", 16, 0,
      "{2B356600-5297-425A-A646-8498A7AAC307}"},
     {"giants", "Giants", "Giants", 2012, "giantsrecompiled.exe", "GiantsRecomp", "Giants Recompiled",
-     "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e", 112, 4614,
+     "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e,"
+     "82150000:9fb7c356cbba689b46370ce2c1d5228e8e41b47d019ddfbdf49fd8a96c6584fe", 112, 4614,
      "{1F12B332-CD84-471A-BE9F-7F3BFA614A6D}"},
     {"swapforce", "Swap Force", "Swap Force", 2013, "swapforcerecompiled.exe", "SwapForceRecomp",
-     "Swap Force Recompiled", "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7", 2015, 8192,
+     "Swap Force Recompiled",
+     "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7,"
+     "823E0000:0dcab6aa8cfb5c82f42e603d165a1966615073bf1f4372bd1733cd5fcca3e31b", 2015, 8192,
      "{C3E00C3F-6CE0-4100-BD9B-13F9B4A8CCBA}"},
     {"trapteam", "Trap Team", "Trap Team", 2014, "trapteamrecompiled.exe", "TrapTeamRecomp",
-     "Trap Team Recompiled", "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35", 462, 12288,
+     "Trap Team Recompiled",
+     "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35,"
+     "821A0000:08c372fa42acfd04eb2d3ec047dfe92552e67c597d46f4f174673d2ee8c65687", 462, 12288,
      "{9A774956-7256-4E2C-A3D6-418903FC71B6}"},
     {"superchargers", "SuperChargers", "SuperChargers", 2015, "superchargersrecompiled.exe",
      "SuperChargersRecomp", "SuperChargers Recompiled",
      // The European English / German disc and the Spanish / Italian one (the same build).
      "02ff6672d460c9aaa54e69d584af67a7138c6c93cde5e04b0da4284207be7c61,"
-     "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc", 3412, 16640,
+     "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc,"
+     "82450000:3140330d024070a570409f8ebb651593ffdf5e038495721f2ca3538dbecd4671", 3412, 16640,
      "{44F04CDA-C049-4558-AAA6-25A6E7932D71}"},
     {"imaginators", "Imaginators", "Imaginators", 2016, "imaginatorsrecompiled.exe",
      "ImaginatorsRecomp", "Imaginators Recompiled",
-     "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029", 601, 20480,
+     "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029,"
+     "82480000:91c6d66ea09dff54b1650fb9b446081dcb180095e9d29b60a0432ea284e8ea7f", 601, 20480,
      "{3D80E212-E302-4422-9B7B-6AFAF712400E}"},
 };
 
@@ -287,16 +299,32 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
 
 const std::vector<Game>& AllGames() { return kGames; }
 
-bool IsGameDisc(const Game& game, const std::string& sha256) {
-  const std::string_view list = game.xex_sha256;
+XexId IdentifyXex(const void* data, size_t size) {
+  XexId id;
+  id.sha256 = Sha256Hex(data, size);
+  const auto* bytes = static_cast<const uint8_t*>(data);
+  if (const auto header = skylanders::xex::ParseXexHeader(bytes, size)) {
+    id.header = skylanders::xex::DescribeXexHeader(*header);
+    if (header->code_pages_size) {
+      id.code_pin = skylanders::xex::CodePin(
+          *header, Sha256Hex(bytes + header->code_pages_offset, header->code_pages_size));
+    }
+  }
+  return id;
+}
+
+bool XexInList(std::string_view list, const XexId& xex) {
   for (size_t start = 0;;) {
     const size_t comma = list.find(',', start);
-    if (list.substr(start, comma == std::string_view::npos ? std::string_view::npos : comma - start) == sha256)
-      return true;
+    const std::string_view entry =
+        list.substr(start, comma == std::string_view::npos ? std::string_view::npos : comma - start);
+    if (entry == xex.sha256 || (!xex.code_pin.empty() && entry == xex.code_pin)) return true;
     if (comma == std::string_view::npos) return false;
     start = comma + 1;
   }
 }
+
+bool IsGameDisc(const Game& game, const XexId& xex) { return XexInList(game.xex_sha256, xex); }
 
 fs::path g_install_dir;  // --install_dir, or "library" in coreoflight.ini
 
@@ -323,7 +351,10 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
         result->store(DiscState::kMissing);
         return;
       }
-      result->store(IsGameDisc(kGames[i], Sha256(xex)) ? DiscState::kMatches : DiscState::kOther);
+      std::ifstream in(xex, std::ios::binary);
+      const std::vector<char> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      result->store(IsGameDisc(kGames[i], IdentifyXex(data.data(), data.size())) ? DiscState::kMatches
+                                                                                 : DiscState::kOther);
     }).detach();
   }
 }

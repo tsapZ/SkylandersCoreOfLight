@@ -258,7 +258,11 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
     // disc) can be added by it, as SuperChargers' second European disc was.
     std::ifstream xex(f.rom / "default.xex", std::ios::binary);
     const std::string data((std::istreambuf_iterator<char>(xex)), std::istreambuf_iterator<char>());
-    if (!data.empty()) info += "    default.xex SHA-256 " + Sha256Hex(data.data(), data.size()) + "\n";
+    if (!data.empty()) {
+      const XexId id = IdentifyXex(data.data(), data.size());
+      info += "    default.xex SHA-256 " + id.sha256 + "\n";
+      if (!id.header.empty()) info += "    default.xex " + id.header + ", code " + id.code_pin + "\n";
+    }
   }
   report.Add("info", clean(info));
 

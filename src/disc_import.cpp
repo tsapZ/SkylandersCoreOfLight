@@ -185,12 +185,16 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
         return;
       }
     }
-    const std::string hash = Sha256Hex(xex.data(), xex.size());
+    const XexId id = IdentifyXex(xex.data(), xex.size());
+    const std::string& hash = id.sha256;
     const auto& games = AllGames();
     int game = -1;
     for (size_t i = 0; i < games.size(); ++i) {
-      if (IsGameDisc(games[i], hash)) game = int(i);
+      if (IsGameDisc(games[i], id)) game = int(i);
     }
+    // What the disc is, for a report: a pressing the ports don't know yet can be added by its code.
+    HubLog("disc import: default.xex " + (id.header.empty() ? std::string("without an XEX2 header") : id.header) +
+           ", SHA-256 " + hash + (id.code_pin.empty() ? "" : ", code " + id.code_pin));
     if (game < 0) {
       say(german ? "Diese Disc kennt Core of Light nicht: ein anderes Spiel oder eine andere Version (jedes "
                    "Spiel ist f\xC3\xBCr eine Disc gemacht, meist die europ\xC3\xA4ische; siehe die Seite des Spiels)."

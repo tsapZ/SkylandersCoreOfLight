@@ -4,9 +4,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
-#include <sstream>
 #include <string_view>
 
+#include "games.h"  // IdentifyXex
 #include "hub_log.h"
 #include "xiso.h"
 
@@ -52,11 +52,7 @@ GameFilesCheck CheckGameFiles(const fs::path& rom, const std::string& xex_sha256
   {
     std::ifstream in(rom / "default.xex", std::ios::binary);
     const std::vector<char> xex((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    if (!xex.empty()) {
-      const std::string hash = Sha256Hex(xex.data(), xex.size());
-      std::stringstream known(xex_sha256);
-      for (std::string h; std::getline(known, h, ',');) check.xex_ok = check.xex_ok || h == hash;
-    }
+    if (!xex.empty()) check.xex_ok = XexInList(xex_sha256, IdentifyXex(xex.data(), xex.size()));
   }
   std::ifstream list(rom / kDiscFileList, std::ios::binary);
   check.had_list = bool(list);

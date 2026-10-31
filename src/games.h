@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -21,8 +22,8 @@ struct Game {
   const char* exe;        // "ssarecompiled.exe"
   const char* repo;       // "SSARecomp", the folder of its repository
   const char* app_name;   // "Spyro's Adventure Recompiled", its installer's folder
-  // The discs' default.xex, as its repository pins them: one SHA-256, or several comma separated
-  // (SuperChargers runs two European discs).
+  // The discs' default.xex, as its repository pins them: SHA-256s and code pins, comma separated
+  // (docs/game/default.xex.sha256 and default.xex.code; skylanders-portal's xex/xex_header.h).
   const char* xex_sha256;
   uint16_t hero_id, hero_variant;  // the game's hero, whose picture is on its card
   const char* app_id;              // its installer's AppId: the uninstall entry "<AppId>_is1"
@@ -30,8 +31,19 @@ struct Game {
 
 // The six games, in release order.
 const std::vector<Game>& AllGames();
-// Whether `sha256` (lower-case hex) is one of the game's discs.
-bool IsGameDisc(const Game& game, const std::string& sha256);
+
+// A default.xex as the disc check sees it.
+struct XexId {
+  std::string sha256;    // lower-case hex
+  std::string code_pin;  // "<code address>:<SHA-256>", empty without an XEX2 header
+  std::string header;    // "title 41560911, version 0.0.0.20, Europe and Australia (00FF0000), ..."
+};
+XexId IdentifyXex(const void* data, size_t size);
+// Whether the xex is one of `list`'s (a Game's xex_sha256): its SHA-256, or its code pin (another
+// pressing with the same code).
+bool XexInList(std::string_view list, const XexId& xex);
+// Whether the xex is one of the game's discs.
+bool IsGameDisc(const Game& game, const XexId& xex);
 
 enum class DiscState {
   kUnknown,    // not checked yet

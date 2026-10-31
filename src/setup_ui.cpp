@@ -226,9 +226,9 @@ void SetupScreen::AddIso(const std::filesystem::path& iso) {
     message_ = german_ ? "Das ist keine Xbox-360-Disc (ISO)." : "That isn't an Xbox 360 disc (ISO).";
     return;
   }
-  const std::string hash = Sha256Hex(data.data(), data.size());
+  const XexId id = IdentifyXex(data.data(), data.size());
   for (size_t i = 0; i < AllGames().size() && i < rows_.size(); ++i) {
-    if (!IsGameDisc(AllGames()[i], hash)) continue;
+    if (!IsGameDisc(AllGames()[i], id)) continue;
     Row& r = rows_[i];
     r.iso = iso;
     r.bytes = image->total_size("$SystemUpdate");
