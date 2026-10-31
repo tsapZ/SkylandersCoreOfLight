@@ -196,10 +196,12 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
     HubLog("disc import: default.xex " + (id.header.empty() ? std::string("without an XEX2 header") : id.header) +
            ", SHA-256 " + hash + (id.code_pin.empty() ? "" : ", code " + id.code_pin));
     if (game < 0) {
-      say(german ? "Diese Disc kennt Core of Light nicht: ein anderes Spiel oder eine andere Version (jedes "
-                   "Spiel ist f\xC3\xBCr eine Disc gemacht, meist die europ\xC3\xA4ische; siehe die Seite des Spiels)."
-                 : "Core of Light doesn't know this disc: another game or another version (each game is made for "
-                   "one disc, mostly the European one; see the game's page).",
+      say(german ? "Diese Disc kennt Core of Light nicht: ein anderes Spiel oder ein anderer Build (jedes "
+                   "Spiel ist f\xC3\xBCr den Code einer Disc gemacht, meist der europ\xC3\xA4ischen; siehe die "
+                   "Seite des Spiels). Was f\xC3\xBCr eine Disc es ist, steht in Problem melden."
+                 : "Core of Light doesn't know this disc: another game or another build (each game is made for "
+                   "one disc's code, mostly the European one's; see the game's page). Report a problem says "
+                   "which disc it is.",
           Phase::kFailed);
       return;
     }

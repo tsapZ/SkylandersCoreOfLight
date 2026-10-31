@@ -176,8 +176,10 @@ achievements.
 
 ## Help
 
-**A disc isn't accepted.** Each game is made for one version of its disc; its page says which. If
-you have another one, open an issue on that game's page.
+**A disc isn't accepted.** Each game is made for the code of one disc; its page says which. Another
+pressing with the same code (a European disc with other languages, for example) works too. If yours
+still isn't taken, make a problem report (below) and open an issue: the report says which disc it
+is.
 
 **Something crashed or looks wrong.** The launcher's settings (LB) > *Report a problem* writes one
 text file to your desktop with the latest logs and settings of every game, your Windows user name
