@@ -3,6 +3,7 @@
 #include "games.h"  // VersionLess
 
 #include <windows.h>
+#include <bcrypt.h>
 #include <shlobj.h>
 #include <winhttp.h>
 
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <functional>
 #include <sstream>
+#include <vector>
 
 namespace coreoflight {
 namespace {
@@ -321,7 +323,11 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
     for (size_t i = 0; assets && i < assets->items.size(); ++i) {
       const Json& a = assets->items[i];
       if (a.String("name") != wanted) continue;
-      Release release{repo, version, wanted, a.String("browser_download_url"), 0};
+      Release release{repo, version, wanted, a.String("browser_download_url"), 0, {}};
+      if (std::string digest = a.String("digest"); digest.starts_with("sha256:") && digest.size() == 7 + 64) {
+        release.sha256 = digest.substr(7);
+        for (char& c : release.sha256) c = char(std::tolower(static_cast<unsigned char>(c)));
+      }
       if (const Json* size = a.Get("size"); size && size->kind == Json::Kind::kNumber) {
         release.size = std::strtoull(size->text.c_str(), nullptr, 10);
       }
@@ -342,8 +348,9 @@ std::vector<Release> LoadKnownReleases(uint64_t* checked) {
     for (std::string part; std::getline(ss, part, '\t');) f.push_back(part);
     if (f.size() == 2 && f[0] == "checked") {
       if (checked) *checked = std::strtoull(f[1].c_str(), nullptr, 10);
-    } else if (f.size() == 5) {
-      releases.push_back({f[0], f[1], f[2], f[3], std::strtoull(f[4].c_str(), nullptr, 10)});
+    } else if (f.size() == 5 || f.size() == 6) {  // the sixth, the SHA-256, since 0.3.0-beta.8
+      releases.push_back({f[0], f[1], f[2], f[3], std::strtoull(f[4].c_str(), nullptr, 10),
+                          f.size() == 6 ? f[5] : std::string()});
     }
   }
   return releases;
@@ -354,7 +361,10 @@ void SaveKnownReleases(const std::vector<Release>& releases) {
   fs::create_directories(LocalDataDir(), ec);
   std::ofstream out(KnownReleasesFile(), std::ios::trunc);
   out << "checked\t" << Now() << "\n";
-  for (const Release& r : releases) out << r.repo << '\t' << r.version << '\t' << r.asset << '\t' << r.url << '\t' << r.size << "\n";
+  for (const Release& r : releases) {
+    out << r.repo << '\t' << r.version << '\t' << r.asset << '\t' << r.url << '\t' << r.size << '\t' << r.sha256
+        << "\n";
+  }
 }
 
 bool UpdateCheckDue() {
@@ -367,8 +377,38 @@ bool UpdateCheckDue() {
   return checked == 0 || Now() - checked > kInterval;
 }
 
+std::string FileSha256(const fs::path& file) {
+  std::ifstream in(file, std::ios::binary);
+  if (!in) return {};
+  BCRYPT_ALG_HANDLE alg = nullptr;
+  BCRYPT_HASH_HANDLE hash = nullptr;
+  if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return {};
+  std::string out;
+  if (BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) == 0) {
+    std::vector<char> buffer(1 << 20);
+    bool ok = true;
+    while (in) {
+      in.read(buffer.data(), std::streamsize(buffer.size()));
+      const auto n = in.gcount();
+      if (n > 0 && BCryptHashData(hash, reinterpret_cast<PUCHAR>(buffer.data()), ULONG(n), 0) != 0) {
+        ok = false;
+        break;
+      }
+    }
+    unsigned char digest[32];
+    if (ok && BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
+      char hex[65];
+      for (int i = 0; i < 32; ++i) std::snprintf(hex + 2 * i, 3, "%02x", digest[i]);
+      out.assign(hex, 64);
+    }
+    BCryptDestroyHash(hash);
+  }
+  BCryptCloseAlgorithmProvider(alg, 0);
+  return out;
+}
+
 bool DownloadFile(const std::string& url, const fs::path& file, std::atomic<float>* progress,
-                  const std::atomic<bool>* cancel) {
+                  const std::atomic<bool>* cancel, const std::string& sha256) {
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   fs::path part = file;
@@ -390,6 +430,8 @@ bool DownloadFile(const std::string& url, const fs::path& file, std::atomic<floa
     // `total` is known only after the headers; the sink reads it from the first piece on.
   }
   if (ok && total && done != total) ok = false;
+  // The release's own SHA-256 (GitHub's digest of the asset): a damaged or swapped download goes.
+  if (ok && !sha256.empty() && FileSha256(part) != sha256) ok = false;
   if (!ok) {
     fs::remove(part, ec);
     return false;

@@ -176,6 +176,7 @@ class LauncherUi {
   std::shared_ptr<UpdateWork> work_;
   std::vector<Release> releases_;
   std::vector<std::string> setup_urls_;  // per game: where setups_[i] comes from while it isn't there
+  std::vector<std::string> setup_sha256_;  // per game: that release asset's SHA-256, empty if unknown
   std::optional<Release> hub_update_;
   bool hub_update_put_off_ = false;
   bool manual_check_ = false;
@@ -190,7 +191,8 @@ class LauncherUi {
   // Installs (or updates) a game from setups_: at once from a file that is there, else once it is
   // downloaded. False if it can't (no setup, or an install or download already running).
   bool BeginInstall(size_t game, bool update);
-  void StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update, bool hub);
+  void StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update, bool hub,
+                     const std::string& sha256);
   void UpdateDownload();
   bool Downloading() const;
   bool DownloadingFor(size_t game) const;

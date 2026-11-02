@@ -1715,6 +1715,7 @@ bool LauncherUi::DrawUpdatesFound(float width, float height) {
 
 void LauncherUi::ApplyReleases() {
   setup_urls_.assign(AllGames().size(), std::string());
+  setup_sha256_.assign(AllGames().size(), std::string());
   for (size_t i = 0; i < AllGames().size() && i < setups_.size(); ++i) {
     const Game& game = AllGames()[i];
     for (const Release& r : releases_) {
@@ -1723,6 +1724,7 @@ void LauncherUi::ApplyReleases() {
       if (setups_[i].empty() || VersionLess(SetupVersion(game, setups_[i]), r.version)) {
         setups_[i] = DownloadsDir() / AssetPath(r.asset);
         setup_urls_[i] = r.url;
+        setup_sha256_[i] = r.sha256;
       }
     }
   }
@@ -2120,7 +2122,7 @@ bool LauncherUi::DrawOldData(float width, float height) {
 }
 
 void LauncherUi::StartDownload(const std::string& url, const std::filesystem::path& file, size_t game, bool update,
-                               bool hub) {
+                               bool hub, const std::string& sha256) {
   work_->game = game;
   work_->update = update;
   work_->hub = hub;
@@ -2128,17 +2130,24 @@ void LauncherUi::StartDownload(const std::string& url, const std::filesystem::pa
   work_->progress = 0.0f;
   work_->cancel = false;
   work_->download = 1;
-  std::thread([work = work_, url, file] {
-    work->download = DownloadFile(url, file, &work->progress, &work->cancel) ? 2 : 3;
+  std::thread([work = work_, url, file, sha256] {
+    work->download = DownloadFile(url, file, &work->progress, &work->cancel, sha256) ? 2 : 3;
   }).detach();
 }
 
 bool LauncherUi::BeginInstall(size_t game, bool update) {
   if (game >= setups_.size() || setups_[game].empty() || install_process_ || Downloading()) return false;
   std::error_code ec;
+  // A setup downloaded before that no longer matches its release's SHA-256 (damaged, swapped) goes
+  // and is fetched again.
+  const std::string sha256 = game < setup_sha256_.size() ? setup_sha256_[game] : std::string();
+  if (!sha256.empty() && std::filesystem::exists(setups_[game], ec) && FileSha256(setups_[game]) != sha256) {
+    HubWarn("download: " + std::string(AllGames()[game].name_en) + ": the kept setup doesn't match its release, fetching it again");
+    std::filesystem::remove(setups_[game], ec);
+  }
   if (!std::filesystem::exists(setups_[game], ec)) {
     if (game >= setup_urls_.size() || setup_urls_[game].empty()) return false;
-    StartDownload(setup_urls_[game], setups_[game], game, update, false);
+    StartDownload(setup_urls_[game], setups_[game], game, update, false, sha256);
     return true;
   }
   // An update goes into the folder the game is in (a copied one has no entry that would say so).
@@ -2260,7 +2269,7 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
   ImGui::End();
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
     if (!Downloading() && !install_process_) {
-      StartDownload(release.url, DownloadsDir() / AssetPath(release.asset), 0, false, true);
+      StartDownload(release.url, DownloadsDir() / AssetPath(release.asset), 0, false, true, release.sha256);
     }
   } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     hub_update_put_off_ = true;

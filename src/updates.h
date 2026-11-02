@@ -22,6 +22,8 @@ struct Release {
   std::string asset;    // "SwapForceRecompSetup-0.1.0-beta.7.exe"
   std::string url;      // its browser_download_url
   uint64_t size = 0;    // bytes
+  std::string sha256;   // the asset's SHA-256 as GitHub gives it ("digest"), lower-case hex; empty
+                        // for a release from before GitHub gave one
 };
 
 // The newest release of tsapZ/<repo> (pre-releases too, drafts not) with an asset named
@@ -39,8 +41,13 @@ bool UpdateCheckDue();
 
 // Downloads `url` into `file` (written as <file>.part, renamed when complete): progress 0..1 into
 // `progress` while it runs, stops early when `cancel` becomes true. False on failure or cancel.
+// SHA-256 of a file (Windows' CNG), lower-case hex; empty if it can't be read.
+std::string FileSha256(const std::filesystem::path& file);
+
+// With `sha256` given (a release's), a download whose bytes don't hash to it is deleted and counts as
+// failed: a damaged or swapped file never gets run.
 bool DownloadFile(const std::string& url, const std::filesystem::path& file, std::atomic<float>* progress,
-                  const std::atomic<bool>* cancel);
+                  const std::atomic<bool>* cancel, const std::string& sha256 = {});
 
 // Where downloaded setups go: %TEMP%\CoreOfLight\downloads.
 std::filesystem::path DownloadsDir();
