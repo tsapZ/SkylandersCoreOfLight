@@ -26,6 +26,10 @@ are in [RULES.md](RULES.md).
     python maintainer/release.py publish --notes notes --dry-run
     python maintainer/release.py publish --notes notes
 
+Test after the packaging build, not before it: every `build` runs the CMake configure again, which
+writes the SDK's `rex/version.h` with a new time, so the game relinks and the tested exe isn't the
+one that ships.
+
 ## tools/
 
 | Script | What it does |
