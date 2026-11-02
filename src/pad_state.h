@@ -51,12 +51,23 @@ inline XInputGetStateFn PadGetState() {
 // the hat the d-pad, X / Y the left stick, Z / R the right one. An XInput pad shows up there as
 // well, with another layout, so a device with the vendor and product of an XInput device ("IG_"
 // in its HID path, as Microsoft's XInput-and-DirectInput note tells them apart) is left out.
+//
+// Not every such device is a pad: a keyboard can bring a joystick part of its own (a Keychron one,
+// 3434:D030, #50), with no hat, whose missing hat reads as "up", or axes that sit at an edge, and the
+// menus moved by themselves. So only the axes and the hat a device says it has are read, and each
+// only after it has been seen at rest once (a stick in the middle, the hat let go): a real pad is at
+// rest when it comes, a stuck axis never is.
 struct GenericPad {
   bool connected = false, skip = false;
   unsigned long vendor = 0;  // its USB vendor id (Sony, Nintendo: their button pictures in the hints)
   DWORD min[4] = {0, 0, 0, 0}, max[4] = {65535, 65535, 65535, 65535};  // X, Y, Z, R
+  bool has_axis[4] = {true, true, false, false};  // X, Y, Z, R as the device's caps tell them
+  bool has_pov = false;
 };
 inline GenericPad g_generic_pads[16];
+// Per joystick id, which of X, Y, Z, R (0-3) and the hat (4) have been seen at rest since the device
+// came (the frame thread sets them, the pad watch clears them when a device comes).
+inline std::atomic<bool> g_generic_rested[16][5] = {};
 inline std::mutex g_generic_mutex;  // the pad watch writes g_generic_pads, the frame copies it
 
 // The vendor and product ids of the XInput devices (from the raw input HID list).
@@ -140,7 +151,14 @@ inline void FindGenericPads(bool xinput_connected) {
       HubLog(line);
     }
     if (pad.skip) continue;
+    if (!was) {
+      for (auto& rested : g_generic_rested[id]) rested = false;
+    }
     pad.vendor = caps.wMid;
+    pad.has_axis[0] = pad.has_axis[1] = caps.wNumAxes >= 2;
+    pad.has_axis[2] = (caps.wCaps & JOYCAPS_HASZ) != 0;
+    pad.has_axis[3] = (caps.wCaps & JOYCAPS_HASR) != 0;
+    pad.has_pov = (caps.wCaps & JOYCAPS_HASPOV) != 0;
     const DWORD mins[4] = {caps.wXmin, caps.wYmin, caps.wZmin, caps.wRmin};
     const DWORD maxs[4] = {caps.wXmax, caps.wYmax, caps.wZmax, caps.wRmax};
     for (int a = 0; a < 4; ++a) {
@@ -210,18 +228,25 @@ inline bool ReadGenericPad(UINT id, const GenericPad& pad, XINPUT_GAMEPAD& out) 
   on(11, XINPUT_GAMEPAD_RIGHT_THUMB);
   if (b & (1u << 6)) out.bLeftTrigger = 255;
   if (b & (1u << 7)) out.bRightTrigger = 255;
-  // The hat in hundredths of a degree, 0 up, clockwise; a diagonal gives both directions.
+  // The hat in hundredths of a degree, 0 up, clockwise; a diagonal gives both directions. Only one
+  // the device has, once it has been let go (see GenericPad).
   const DWORD pov = info.dwPOV;
-  if (LOWORD(pov) != 0xFFFF && pov < 36000) {
+  const bool pov_centered = LOWORD(pov) == 0xFFFF || pov >= 36000;
+  if (pad.has_pov && pov_centered) g_generic_rested[id][4] = true;
+  if (pad.has_pov && g_generic_rested[id][4] && !pov_centered) {
     if (pov >= 31500 || pov <= 4500) out.wButtons |= XINPUT_GAMEPAD_DPAD_UP;
     if (pov >= 4500 && pov <= 13500) out.wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
     if (pov >= 13500 && pov <= 22500) out.wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
     if (pov >= 22500 && pov <= 31500) out.wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
   }
-  // Axes to XInput's -32768..32767, y up.
+  // Axes to XInput's -32768..32767, y up; one the device hasn't, or that hasn't been seen near the
+  // middle yet, reads 0 (see GenericPad).
   auto axis = [&](int a, DWORD v, bool invert) {
+    if (!pad.has_axis[a]) return SHORT(0);
     const double t = (double(v) - double(pad.min[a])) / double(pad.max[a] - pad.min[a]);
     const int s = int(std::clamp(t * 65535.0 - 32768.0, -32768.0, 32767.0));
+    if (std::abs(s) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) g_generic_rested[id][a] = true;
+    if (!g_generic_rested[id][a]) return SHORT(0);
     return SHORT(invert ? std::clamp(-s, -32768, 32767) : s);
   };
   out.sThumbLX = axis(0, info.dwXpos, false);
