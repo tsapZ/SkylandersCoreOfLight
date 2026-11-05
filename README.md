@@ -49,12 +49,12 @@ asks for a Skylander, the portal menu opens by itself.
 <tr>
 <td width="33%"><img src=".github/images/screens/game_settings.png" alt="A game's settings"></td>
 <td width="33%"><img src=".github/images/screens/saves.png" alt="Saves and backups"></td>
-<td width="33%"></td>
+<td width="33%"><img src=".github/images/screens/game_settings_extras.png" alt="A game's Extras page"></td>
 </tr>
 <tr>
 <td align="center"><sub>A game's settings, before you start it</sub></td>
 <td align="center"><sub>Saves and their older versions</sub></td>
-<td></td>
+<td align="center"><sub>Extras: a few cheats, hidden with one switch</sub></td>
 </tr>
 </table>
 
@@ -112,6 +112,11 @@ All six share one portal and one settings menu:
 - **60 FPS and more**, and **2x or 3x the console's resolution** with sharpening
 - **ultrawide**
 - **no portal needed:** a menu with every figure opens when the game asks; or a **real USB portal**
+- **figure backups:** a figure file is backed up before a game first saves over it, and the portal
+  menu puts an older version back
+- **quick swap** back to the Skylander you played before, with one button
+- **Extras:** no health loss and full gold, off by default, and *Show cheats* hides them all
+- **Discord status** if you want it: the game and the Skylander you play
 
 <br>
 
@@ -142,6 +147,12 @@ the game.
 - **Saves with backups:** each save's earlier versions, and putting one back.
 - **Moving to a new PC:** *Export my data* puts all your saves, figures and settings into one ZIP,
   *Import my data* takes it back without overwriting anything.
+- **Portable:** with the portable ZIP, all your data can live next to the launcher instead of in
+  Documents.
+- **Checked downloads:** every setup and launcher update is checked against the SHA-256 GitHub
+  keeps for it before it runs.
+- **Weaker graphics cards** (integrated graphics, the GTX cards and older Radeons) get their games
+  set up at 1x resolution instead of 2x; the game's settings still offer every resolution.
 - **Each game's settings** before you start it, the same pages as the game's own menu.
 - **The title music** of the chosen game, straight from its disc.
 - **Imaginators in English, German or French** from your PS3 disc (the European 360 disc only has
