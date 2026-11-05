@@ -52,7 +52,9 @@ exe and gets out of the way while the game runs; no game needs it.
   "Installieren" when the launcher has the game's setup (`<Repo>Setup-<version>.exe` in a `games\`
   folder next to it, or for a developer in `<Repo>\<Repo>\installer\Output`). A runs that setup
   hidden and silent with `/NOROM=1` (the game without its disc), the menus' language, the screen's
-  size and 2x scale for its settings file; after a few seconds the card asks for the disc, which the
+  size and 2x scale for its settings file (1x on a handheld and on a weak graphics card, gpu_tier.h:
+  integrated graphics, GTX / GT / MX, the RTX 3050, Radeons before the RX 5700, Arc A310 / A380,
+  under 6 GB; the card and the verdict are in the launcher's log); after a few seconds the card asks for the disc, which the
   launcher's own import then sets up. With a library folder (`library = <folder>` in
   `coreoflight.ini`, or `--install_dir=<folder>`) the game goes to `<folder>\<Game> Recompiled`,
   else to the setup's default. If the setup stops, its reason comes from its log

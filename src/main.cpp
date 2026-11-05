@@ -15,6 +15,7 @@
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
+#include "gpu_tier.h"
 #include "hints.h"
 #include "hub_log.h"
 #include "hub_settings.h"
@@ -380,6 +381,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION ", Windows " + coreoflight::WindowsVersion() +
                         (wine.empty() ? std::string() : ", Wine " + wine) +
                         (start_fullscreen ? ", fullscreen" : ", window") + ", time zone " + offset + ", fonts " + g_fonts);
+    // The graphics card and whether new setups get 1x for it (gpu_tier.h), read once and logged.
+    coreoflight::DetectGpu();
     // Where the player's data is, by kind only: the log goes along with a problem report.
     std::error_code ec;
     coreoflight::HubLog(std::string("data folder: ") +

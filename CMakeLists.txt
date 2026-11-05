@@ -63,6 +63,7 @@ add_executable(coreoflight WIN32
   src/data_transfer.cpp
   src/game_files.cpp
   src/handheld.cpp
+  src/gpu_tier.cpp
   src/portable.cpp
   src/language_import.cpp
   src/coreoflight.rc
