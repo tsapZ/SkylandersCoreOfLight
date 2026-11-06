@@ -187,8 +187,10 @@ def cmd_version(a):
         write_keeping_format(path, lambda t: pattern.sub(lambda m: m.group(1) + a.version + m.group(3), t, count=1))
         files = [str(path.relative_to(sk.repo_dir(repo)))]
         if a.status:
-            entry = add_status_entry(repo, a.version, "The setup's version for what came since the last one: "
-                                     + a.status)
+            # --status is the list of what came; a text that already starts with the lead-in keeps one.
+            lead = "The setup's version for what came since the last one: "
+            text = a.status[len(lead):] if a.status.startswith(lead) else a.status
+            entry = add_status_entry(repo, a.version, lead + text)
             if entry:
                 files.append(entry)
         sk.git(repo, "add", *files)
