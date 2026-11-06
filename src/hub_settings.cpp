@@ -125,7 +125,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   language.de = "Sprache";
   language.help_en = "The language of the launcher's menus. Automatic follows Windows. Each game's own "
                      "language is on its card (Y).";
-  language.help_de = "Die Sprache der Men\xC3\xBCs im Hub. Automatisch folgt Windows. Die Sprache jedes "
+  language.help_de = "Die Sprache der Men\xC3\xBCs in Core of Light. Automatisch folgt Windows. Die Sprache jedes "
                      "Spiels steht auf seiner Karte (Y).";
   language.type = "string";
   language.category = kCategory;
@@ -167,7 +167,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     volume.de = "Musik-Lautst\xC3\xA4rke";
     volume.help_en = "How loud the title music plays in the launcher, heard while you change it: left / right "
                      "(faster when held) or drag the bar. The games' own volume is in their settings.";
-    volume.help_de = "Wie laut die Titelmusik im Hub spielt, schon beim Verstellen zu h\xC3\xB6ren: links / rechts "
+    volume.help_de = "Wie laut die Titelmusik in Core of Light spielt, schon beim Verstellen zu h\xC3\xB6ren: links / rechts "
                      "(gehalten schneller) oder den Balken ziehen. Die Lautst\xC3\xA4rke der Spiele steht in ihren "
                      "Einstellungen.";
     volume.type = "int";
@@ -196,7 +196,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                        "battery. Automatic: on when the screen is small or the chip is a handheld's. A game's "
                        "settings you've made stay as they are.";
     handheld.help_de = "F\xC3\xBCr Handheld-PCs (ROG Ally, Legion Go, Steam Deck mit Windows): Die Bildschirme "
-                       "des Hubs werden gr\xC3\xB6\xC3\x9F" "er gezeichnet, und ein hier eingerichtetes Spiel "
+                       "von Core of Light werden gr\xC3\xB6\xC3\x9F" "er gezeichnet, und ein hier eingerichtetes Spiel "
                        "startet mit Aufl\xC3\xB6sungsskala 1x, das schont den Akku. Automatisch: an, wenn der "
                        "Bildschirm klein ist oder der Chip einer f\xC3\xBCr Handhelds ist. Deine Einstellungen "
                        "eines Spiels bleiben, wie sie sind.";
@@ -210,7 +210,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                                  "The launcher fills the screen and starts that way, for the TV or a handheld. F11 or "
                                  "Alt+Enter switch it too; --fullscreen on its command line (Steam's launch options) "
                                  "starts it in fullscreen whatever this says.",
-                                 "Der Hub f\xC3\xBCllt den Bildschirm und startet auch so, f\xC3\xBCr den Fernseher "
+                                 "Core of Light f\xC3\xBCllt den Bildschirm und startet auch so, f\xC3\xBCr den Fernseher "
                                  "oder einen Handheld. F11 oder Alt+Enter schalten auch um; --fullscreen in seiner "
                                  "Befehlszeile (Steams Startoptionen) startet ihn immer im Vollbild.",
                                  settings.fullscreen));
@@ -233,7 +233,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                    "in its subfolders, with their disc, also ones copied there from another PC (another drive, a "
                    "network drive, a Linux folder when it runs with Proton). A game installed somewhere else stays "
                    "where it is.";
-  folder.help_de = "Wo deine Spiele liegen und wohin neue kommen. Der Hub findet die Spiele in diesem Ordner und "
+  folder.help_de = "Wo deine Spiele liegen und wohin neue kommen. Core of Light findet die Spiele in diesem Ordner und "
                    "seinen Unterordnern, mit ihrer Disc, auch von einem anderen PC dorthin kopierte (ein anderes "
                    "Laufwerk, ein Netzlaufwerk, ein Linux-Ordner, wenn er mit Proton l\xC3\xA4uft). Ein woanders "
                    "installiertes Spiel bleibt, wo es ist.";
@@ -253,7 +253,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   data.help_en = "Where the games keep your saves, achievements and figures, and where the launcher keeps "
                  "its profiles and settings: one folder for all six games. Picking another one moves "
                  "everything there; the old folder is deleted only when you say so.";
-  data.help_de = "Wo die Spiele deine Spielst\xC3\xA4nde, Erfolge und Figuren ablegen und der Hub seine "
+  data.help_de = "Wo die Spiele deine Spielst\xC3\xA4nde, Erfolge und Figuren ablegen und Core of Light seine "
                  "Profile und Einstellungen: ein Ordner f\xC3\xBCr alle sechs Spiele. Ein anderer Ordner "
                  "nimmt alles mit; der alte wird erst gel\xC3\xB6scht, wenn du es sagst.";
   data.type = "action";
@@ -298,7 +298,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                         "launcher's settings and each game's settings in one file on the desktop. Not in it: the "
                         "games (set them up from your discs again) and the pictures and HD packs (they come again).";
   export_data.help_de = "F\xC3\xBCr einen neuen PC: deine Figuren, Spielst\xC3\xA4nde (mit ihren Kopien), Erfolge, "
-                        "Profile, die Einstellungen des Hubs und jedes Spiels in einer Datei auf dem Desktop. Nicht "
+                        "Profile, die Einstellungen von Core of Light und jedes Spiels in einer Datei auf dem Desktop. Nicht "
                         "drin: die Spiele (richte sie wieder von deinen Discs ein) und die Bilder und HD-Pakete "
                         "(die kommen wieder).";
   export_data.type = "action";
@@ -347,7 +347,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                         "too.";
   im_language.help_de = "Die europ\xC3\xA4ische Xbox-360-Disc von Imaginators spricht nur Spanisch und Italienisch. "
                         "Deine PS3-Disc des Spiels hat mehr: w\xC3\xA4hle Englisch, Deutsch oder Franz\xC3\xB6sisch, "
-                        "dann die PS3-Disc (eine entschl\xC3\xBCsselte .iso oder ihren entpackten Ordner), und der Hub "
+                        "dann die PS3-Disc (eine entschl\xC3\xBCsselte .iso oder ihren entpackten Ordner), und Core of Light "
                         "bringt Texte, Stimmen und Filme dieser Sprache in dein Imaginators. Etwa eine Minute; "
                         "Spielst\xC3\xA4nde bleiben. Hier kommen auch die Sprachen der Disc zur\xC3\xBC" "ck.";
   im_language.type = "action";
@@ -384,7 +384,7 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
                    "and a few facts about this PC (Windows, processor, memory, graphics card), into one text "
                    "file on the desktop. Your Windows user name and the computer's name are taken out. Send it "
                    "along with what happened.";
-  report.help_de = "Packt die letzten Logs und Einstellungen aller Spiele, ihrer Setups und des Hubs sowie "
+  report.help_de = "Packt die letzten Logs und Einstellungen aller Spiele, ihrer Setups und von Core of Light sowie "
                    "ein paar Angaben zum PC (Windows, Prozessor, Arbeitsspeicher, Grafikkarte) in eine "
                    "Textdatei auf dem Desktop. Dein Windows-Benutzername und der Name des PCs werden "
                    "entfernt. Schick sie mit und schreib dazu, was passiert ist.";

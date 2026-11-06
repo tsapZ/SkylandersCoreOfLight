@@ -274,7 +274,7 @@ std::shared_ptr<GameSettings> Load(const fs::path& exe, const fs::path& workdir,
                   "list the launcher kept when the disc was set up). If something is missing, it says what "
                   "and offers to take the disc again.";
   check.help_de = "Pr\xC3\xBC" "ft, ob die Dateien der Disc alle da und vollst\xC3\xA4ndig sind (Namen und "
-                  "Gr\xC3\xB6\xC3\x9F" "en, mit der Liste, die der Hub beim Einrichten der Disc angelegt hat). "
+                  "Gr\xC3\xB6\xC3\x9F" "en, mit der Liste, die Core of Light beim Einrichten der Disc angelegt hat). "
                   "Fehlt etwas, sagt er was, und bietet an, die Disc noch einmal einzulesen.";
   check.type = "action";
   check.options = {{"", "Check", "Pr\xC3\xBC" "fen"}};

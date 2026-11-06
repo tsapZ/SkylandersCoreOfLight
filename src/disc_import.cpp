@@ -174,7 +174,7 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       image = XisoImage::Open(iso);
       if (!image && IsPs3Disc(iso)) {
         say(german ? "Das ist eine PS3-Disc. Die Spiele brauchen ihre Xbox-360-Disc; eine PS3-Disc hilft nur "
-                     "Imaginators, f\xC3\xBCr seine Sprachen (Einstellungen des Hubs > Imaginators-Sprache)."
+                     "Imaginators, f\xC3\xBCr seine Sprachen (Einstellungen von Core of Light > Imaginators-Sprache)."
                    : "That's a PS3 disc. The games need their Xbox 360 disc; a PS3 disc only helps Imaginators, "
                      "for its languages (Launcher settings > Imaginators language).",
             Phase::kFailed);

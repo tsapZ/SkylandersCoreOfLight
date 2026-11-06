@@ -890,7 +890,7 @@ bool LauncherUi::DrawLanguage(float width, float height) {
     if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) clicked = r;
   }
   const char* note = german_ ? "Etwa eine Minute. Spielst\xC3\xA4nde bleiben; zur\xC3\xBC" "ck geht es jederzeit unter "
-                               "Einstellungen des Hubs > Imaginators-Sprache."
+                               "Einstellungen von Core of Light > Imaginators-Sprache."
                              : "About a minute. Your saves stay; you can go back any time in Launcher settings > "
                                "Imaginators language.";
   Text(dl, regular_, 18 * u, {a.x + 40 * u, b.y - 74 * u}, kDim, note, bw - 80 * u);
@@ -2820,7 +2820,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   hx = Hint(dl, bold_, hs, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
   hx = Hint(dl, bold_, hs, {hx, hy}, "RT", Rgba(80, 90, 140), german_ ? "Spielst\xC3\xA4nde" : "Saves");
   hx = Hint(dl, bold_, hs, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles", "P");
-  hx = Hint(dl, bold_, hs, {hx, hy}, "LB", Rgba(80, 90, 140), german_ ? "Hub" : "Hub");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "LB", Rgba(80, 90, 140), "Launcher");
   hx = Hint(dl, bold_, hs, {hx, hy}, "B", Rgba(200, 60, 60),
             import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));
   hint_row.End(48 * u, hx, width - 24 * u);
