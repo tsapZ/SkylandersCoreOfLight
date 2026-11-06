@@ -63,7 +63,10 @@ special to one repository stays in its own CLAUDE.md.
   `maintainer/README.md`). Versions are `x.y.z-beta.N` with a one-digit N: GitHub sorts tags as
   text, so after beta.9 the minor version goes up.
 - Every shipped exe and DLL is checked for build machine paths before upload (`check`).
-- Release when something is done and tested; test first with `test/smoke_all.ps1`.
+- Release when something is done and tested; test first with `test/selftest.ps1` (the tools) and
+  `test/smoke_all.ps1`.
+- At most one release a day per game: small changes (a cheat, a tweak) wait for the next bundle;
+  a crash fix or a broken setup goes out at once.
 
 ## Editing gotchas
 

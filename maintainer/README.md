@@ -51,6 +51,7 @@ saves and figures are never touched.
 | Script | What it does |
 |---|---|
 | `smoke.ps1 -Repo <Repo> -Route <route> [-Build devkit]` | one run along a route with window shots, then one verdict line: crash or trouble lines, whether the script reached its end, the FPS samples. `-Build devkit` runs the developer kit's build (`out\build\win-amd64-devkit`, the private SkylandersDevKit: level loading and level sweeps) |
+| `selftest.ps1` | the tools themselves, a few seconds: every PowerShell script parses, every Python script compiles, every list parameter splits a comma list (`powershell -File` hands "A,B" over as one string); before a release |
 | `smoke_all.ps1` | `smoke.ps1` for all six games with their usual route, about 15 minutes; after anything that touches every game |
 | `crash_hunt.ps1 -Repo <Repo> -Route <route> [-Seconds 1800] [-Seed 2]` | a route, then random play for that long (`wander.py`), a shot every minute, the threads' call chains every three |
 | `crash_all.ps1 [-Minutes 20] [-Seed 1]` | `crash_hunt.ps1` for all six on their usual routes, one after the other (about 2.5 hours at 20 minutes); for a release candidate |
