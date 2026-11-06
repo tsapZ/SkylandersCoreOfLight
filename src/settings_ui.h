@@ -48,6 +48,9 @@ class SettingsScreen {
   void Step(int step);
   // A slider's value set (clamped), as Step does for the other rows.
   void SetSlider(GameSetting& s, int value);
+  // A setting's new value goes into the changes, or out of them when it is the original again.
+  void NoteChange(const std::string& cvar, const std::string& category, const std::string& type,
+                  const std::string& value);
   void Save();
   std::string ValueLabel(const GameSetting& s) const;
   // Whether a row can be changed: its enabled_by setting is on (as edited so far), or it has none.
@@ -73,6 +76,9 @@ class SettingsScreen {
     std::string category, type, value;
   };
   std::map<std::string, Pending> changes_;
+  // Each setting's value when the page was loaded or last saved: a change back to it is no change
+  // (German -> English -> German asked to save before, the owner 2026-11-06).
+  std::map<std::string, std::string> original_;
   std::map<std::string, std::string> saved_;
   std::string action_;
   bool confirm_discard_ = false;

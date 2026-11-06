@@ -69,6 +69,9 @@ bool DiscImport::PickIso(fs::path& iso, bool german) {
     dialog->SetFileTypes(2, filters);
     dialog->SetTitle(german ? L"Eigene Skylanders-Disc (Xbox 360, ISO) wählen"
                             : L"Choose your own Skylanders disc (Xbox 360, ISO)");
+    // Windows' dialog runs other programs' shell extensions inside the launcher: a crash in there
+    // then follows this line.
+    HubLog("disc import: choosing a disc (Windows file dialog)");
     IShellItem* item = nullptr;
     if (SUCCEEDED(dialog->Show(GetActiveWindow())) && SUCCEEDED(dialog->GetResult(&item))) {
       PWSTR path = nullptr;
@@ -95,6 +98,7 @@ bool DiscImport::PickFolder(fs::path& folder, bool german) {
     dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
     dialog->SetTitle(german ? L"Ordner mit der entpackten Disc (mit default.xex) w\u00e4hlen"
                             : L"Choose the folder with the unpacked disc (with default.xex)");
+    HubLog("disc import: choosing a folder (Windows file dialog)");
     IShellItem* item = nullptr;
     if (SUCCEEDED(dialog->Show(GetActiveWindow())) && SUCCEEDED(dialog->GetResult(&item))) {
       PWSTR path = nullptr;

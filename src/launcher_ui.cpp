@@ -2130,6 +2130,9 @@ void LauncherUi::StartDownload(const std::string& url, const std::filesystem::pa
   work_->progress = 0.0f;
   work_->cancel = false;
   work_->download = 1;
+  // Where a report sees what the launcher did last (a crash before an install said nothing, 2026-11-06).
+  HubLog("download: " + std::string(hub ? "Core of Light" : AllGames()[game].name_en) + ", " +
+         std::string(reinterpret_cast<const char*>(file.filename().u8string().c_str())));
   std::thread([work = work_, url, file, sha256] {
     work->download = DownloadFile(url, file, &work->progress, &work->cancel, sha256) ? 2 : 3;
   }).detach();
@@ -2157,6 +2160,7 @@ bool LauncherUi::BeginInstall(size_t game, bool update) {
     install_process_ = nullptr;
     return false;
   }
+  HubLog("install: " + std::string(AllGames()[game].name_en) + (update ? " update" : "") + ", its setup started");
   install_game_ = game;
   install_since_ = ImGui::GetTime();
   install_is_update_ = update;

@@ -263,14 +263,67 @@ void LogTerminate() {
   std::abort();
 }
 
+DWORD g_main_thread = 0;
+
+// "name.dll+0x1234": the module an address is in and the offset in it (only the file name, never
+// the folder), or the bare address when no module holds it. A fault in a driver or a DLL Windows or
+// another program put into the launcher was "exe+0x827802E74" before, useless (a player's report,
+// 2026-11-06).
+void DescribeAddress(DWORD64 address, char* out, size_t size) {
+  HMODULE module = nullptr;
+  wchar_t path[MAX_PATH] = L"";
+  if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         reinterpret_cast<LPCWSTR>(address), &module) &&
+      GetModuleFileNameW(module, path, MAX_PATH)) {
+    const wchar_t* name = std::wcsrchr(path, L'\\');
+    std::snprintf(out, size, "%ls+0x%llX", name ? name + 1 : path,
+                  static_cast<unsigned long long>(address - reinterpret_cast<DWORD64>(module)));
+  } else {
+    std::snprintf(out, size, "0x%llX", static_cast<unsigned long long>(address));
+  }
+}
+
 LONG WINAPI LogFault(EXCEPTION_POINTERS* info) {
-  char line[128];
-  const HMODULE self = GetModuleHandleW(nullptr);
-  std::snprintf(line, sizeof(line), "launcher: crashed, exception 0x%08lX at exe+0x%llX",
-                info->ExceptionRecord->ExceptionCode,
-                static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) -
-                                                reinterpret_cast<uintptr_t>(self)));
-  coreoflight::HubError(line);
+  const EXCEPTION_RECORD& record = *info->ExceptionRecord;
+  char where[192], line[512];
+  DescribeAddress(reinterpret_cast<DWORD64>(record.ExceptionAddress), where, sizeof(where));
+  // An access violation also says what it touched: a read of 0x0 is a null pointer.
+  char touched[64] = "";
+  if (record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record.NumberParameters >= 2) {
+    const ULONG_PTR kind = record.ExceptionInformation[0];
+    std::snprintf(touched, sizeof(touched), ", %s 0x%llX", kind == 0 ? "reading" : kind == 1 ? "writing" : "running",
+                  static_cast<unsigned long long>(record.ExceptionInformation[1]));
+  }
+  std::snprintf(line, sizeof(line), "launcher: crashed, exception 0x%08lX in %s%s, %s thread", record.ExceptionCode,
+                where, touched, GetCurrentThreadId() == g_main_thread ? "main" : "another");
+  coreoflight::HubError(line);  // first, in case the walk below faults on a broken stack
+#if defined(_M_X64)
+  // The calls that led there, unwound with the modules' own x64 unwind data from the faulting
+  // frame up: module and offset each, enough to look them up in the build's .pdb.
+  CONTEXT context = *info->ContextRecord;
+  ULONG_PTR low = 0, high = 0;
+  GetCurrentThreadStackLimits(&low, &high);
+  std::string calls = "launcher: called from";
+  int frames = 0;
+  for (int i = 0; i < 12; ++i) {
+    DWORD64 base = 0;
+    PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &base, nullptr);
+    if (function) {
+      void* handler_data = nullptr;
+      DWORD64 frame = 0;
+      RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, context.Rip, function, &context, &handler_data, &frame, nullptr);
+    } else {
+      // A leaf function: the return address is on top of the stack.
+      if (context.Rsp < low || context.Rsp + 8 > high) break;
+      context.Rip = *reinterpret_cast<const DWORD64*>(context.Rsp);
+      context.Rsp += 8;
+    }
+    if (!context.Rip || context.Rsp < low || context.Rsp >= high) break;
+    DescribeAddress(context.Rip, where, sizeof(where));
+    calls += std::string(frames++ ? ", " : " ") + where;
+  }
+  if (frames) coreoflight::HubError(calls);
+#endif
   return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -278,6 +331,7 @@ LONG WINAPI LogFault(EXCEPTION_POINTERS* info) {
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   std::set_terminate(LogTerminate);
+  g_main_thread = GetCurrentThreadId();
   SetUnhandledExceptionFilter(LogFault);
   ImGui_ImplWin32_EnableDpiAwareness();
   WNDCLASSEXW wc = {sizeof(wc), CS_CLASSDC, WndProc, 0, 0, instance, nullptr, nullptr, nullptr, nullptr,
@@ -326,6 +380,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         // Fullscreen for this start, whatever the setting says (Steam's launch options on a
         // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
         fullscreen_arg = true;
+      } else if (arg == L"--test_crash") {
+        // A fault inside ntdll.dll on purpose (a string at address 0x10), to see the crash lines
+        // LogFault writes: the module and offset, the thread, the calls back into the launcher.
+        using InitString = void(WINAPI*)(void*, const wchar_t*);
+        if (auto init = reinterpret_cast<InitString>(
+                GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlInitUnicodeString"))) {
+          alignas(16) unsigned char text[16] = {};
+          init(text, reinterpret_cast<const wchar_t*>(0x10));
+        }
       } else if (iso.empty()) {
         iso = arg;
       }
