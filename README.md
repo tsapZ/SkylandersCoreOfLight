@@ -28,7 +28,7 @@ asks for a Skylander, the portal menu opens by itself.
 **What it does:**
 
 - **Your real portal and figures work**, as on the console: plug in a Portal of Power and the games read your figures and save their progress on them. No figures? The portal menu holds every one, and both work together too.
-- **Sharper and smoother than the console:** up to 3x the console's 720p, 60 FPS and more, a settings menu in every game.
+- **Sharper and smoother than the console:** up to 3x the console's 720p, 60 FPS and more, a settings menu in every game. On a Ryzen 5 5600 with a Radeon RX 6800 XT (32 GB RAM, Windows 11) all six hold 60 FPS at 2x (1440p); without the cap their hubs run at 87 to 142 FPS at 2x.
 - **Native Windows ports, not an emulator:** the games' code is recompiled for the PC. No game data comes with it; the launcher takes it from your own Xbox 360 discs.
 - **Everything in one place:** your figures, saves and achievements, with older versions to go back to.
 
