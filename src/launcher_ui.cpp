@@ -1875,7 +1875,13 @@ void LauncherUi::ApplyGamesFolder(const std::filesystem::path& chosen) {
     if (!f.exe.empty() && f.exe.native().starts_with(dir.native())) ++found;
   }
   char line[160];
-  std::snprintf(line, sizeof(line), german_ ? "%zu Spiel(e) in diesem Ordner gefunden" : "%zu game(s) found in this folder", found);
+  if (found == 0) {
+    std::snprintf(line, sizeof(line), "%s", german_ ? "Kein Spiel in diesem Ordner gefunden" : "No game found in this folder");
+  } else if (found == 1) {
+    std::snprintf(line, sizeof(line), "%s", german_ ? "1 Spiel in diesem Ordner gefunden" : "1 game found in this folder");
+  } else {
+    std::snprintf(line, sizeof(line), german_ ? "%zu Spiele in diesem Ordner gefunden" : "%zu games found in this folder", found);
+  }
   if (setup_.is_open()) setup_.UseGamesFolder(dir);
   if (hub_screen_.is_open()) {
     std::string en, de;
@@ -2107,7 +2113,11 @@ bool LauncherUi::DrawOldData(float width, float height) {
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
     const int deleted = DeleteOldData(old_data_);
     char line[120];
-    std::snprintf(line, sizeof(line), german_ ? "%d alte(r) Ordner gel\xC3\xB6scht" : "%d old folder(s) deleted", deleted);
+    if (deleted == 1) {
+      std::snprintf(line, sizeof(line), "%s", german_ ? "1 alter Ordner gel\xC3\xB6scht" : "1 old folder deleted");
+    } else {
+      std::snprintf(line, sizeof(line), german_ ? "%d alte Ordner gel\xC3\xB6scht" : "%d old folders deleted", deleted);
+    }
     ShowToast(line);
     old_data_.clear();
     ask_old_data_ = false;

@@ -667,10 +667,13 @@ void SetupScreen::DrawWork(float width, float height, const Launcher& launcher) 
   const float hy = height - 52 * u;
   if (done) {
     char text[160];
-    std::snprintf(text, sizeof(text),
-                  german_ ? "%d Spiel(e) bereit%s. A: zu den Spielen" : "%d game(s) ready%s. A: to the games", ok,
-                  failed ? (german_ ? ", bei den roten hat es nicht geklappt (Karte: A versucht es noch einmal)"
-                                    : ", the red ones failed (their card's A tries again)")
+    const char* ready = german_ ? (ok == 1 ? "1 Spiel ist bereit" : ok ? "%d Spiele sind bereit" : "Kein Spiel ist bereit")
+                                : (ok == 1 ? "1 game is ready" : ok ? "%d games are ready" : "No game is ready");
+    char first[64];
+    std::snprintf(first, sizeof(first), ready, ok);
+    std::snprintf(text, sizeof(text), german_ ? "%s%s. A: zu den Spielen" : "%s%s. A: to the games", first,
+                  failed ? (german_ ? "; bei den roten hat es nicht geklappt, A auf ihrer Karte versucht es noch einmal"
+                                    : "; the red ones failed, A on their card tries again")
                          : "");
     Text(dl, bold_, 22 * u, {left, y + 16 * u}, ok ? kGreen : kDim, text, right);
     if (Accept() || Back()) {
