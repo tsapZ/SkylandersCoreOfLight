@@ -3,6 +3,8 @@
 # again in one block. Twenty minutes each is about two and a half hours for all six; run it on a
 # release candidate while the PC is free.
 param([int]$Minutes = 20, [int]$Seed = 1, [string[]]$Repos = @())
+# powershell -File hands "A,B" over as one string: split it here.
+$Repos = @($Repos | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 . (Join-Path $PSScriptRoot "testkit.ps1")
 $routes = [ordered]@{
   SSARecomp = "ssa_save"; GiantsRecomp = "giants_save"; SwapForceRecomp = "sf_save"

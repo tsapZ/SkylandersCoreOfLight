@@ -3,6 +3,8 @@
 # each route, a few minutes more), then the verdicts again in one block. Run it after anything that
 # touches all games: a submodule bump, shared code, a release build.
 param([string[]]$Repos = @(), [switch]$Menus)
+# powershell -File hands "A,B" over as one string: split it here.
+$Repos = @($Repos | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 . (Join-Path $PSScriptRoot "testkit.ps1")
 $routes = [ordered]@{
   SSARecomp = "ssa_save"; GiantsRecomp = "giants_save"; SwapForceRecomp = "sf_save"
