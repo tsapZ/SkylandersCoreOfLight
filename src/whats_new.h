@@ -12,10 +12,10 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"Also as a portable ZIP without a setup; it updates itself.",
-     "Auch als portable ZIP ohne Setup; aktualisiert sich selbst."},
-    {"Arrows show when a settings list goes on above or below.",
-     "Pfeile zeigen, wenn eine Einstellungsliste oben oder unten weitergeht."},
+    {"The settings only ask to save after a real change.",
+     "Die Einstellungen fragen nur noch nach echten \xC3\x84nderungen, ob du speichern willst."},
+    {"After a crash, the log says where it happened.",
+     "Nach einem Absturz steht im Log, wo er passiert ist."},
 };
 
 }  // namespace coreoflight
