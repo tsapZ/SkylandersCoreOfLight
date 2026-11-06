@@ -90,7 +90,7 @@ std::string CopyKind(const SaveCopy& c, bool german) {
     return german ? "Dein Stand, bevor eine \xC3\xA4ltere Version zur\xC3\xBC" "ckgeholt wurde"
                   : "Your save before an older version was brought back";
   }
-  if (c.automatic) return german ? "Automatisch vom Hub gesichert" : "Kept by the launcher on its own";
+  if (c.automatic) return german ? "Automatisch von Core of Light gesichert" : "Backed up by the launcher";
   return german ? "Von dir gesichert" : "Backed up by you";
 }
 

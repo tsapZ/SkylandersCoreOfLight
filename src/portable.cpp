@@ -142,7 +142,7 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
     return false;
   }
   std::error_code ec;
-  const std::string cant_write = german ? "Der Ordner des Hubs l\xC3\xA4sst sich nicht beschreiben."
+  const std::string cant_write = german ? "In den Ordner von Core of Light l\xC3\xA4sst sich nicht schreiben."
                                         : "Can't write to the launcher's folder.";
   // 1. Every new file next to its place as <name>.new: a full disk or a read-only folder fails here,
   // before anything is replaced.

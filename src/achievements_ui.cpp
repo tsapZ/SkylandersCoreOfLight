@@ -329,7 +329,7 @@ void AchievementsScreen::DrawInfo(float width, float height, float u) {
   }
   Text(dl, bold_, 21 * u, {tx, std::max(ty, p0.y + 230 * u)}, got ? kGreen : kDim, when);
   char count[96];
-  std::snprintf(count, sizeof(count), german_ ? "%d von %zu Erfolgen dieses Spiels" : "%d of %zu of this game's achievements",
+  std::snprintf(count, sizeof(count), german_ ? "%d von %zu Erfolgen dieses Spiels" : "%d of this game's %zu achievements",
                 list_.unlocked, list_.items.size());
   Text(dl, regular_, 18 * u, {p0.x + 40 * u, p1.y - 44 * u}, kDim, count);
   Hint(dl, bold_, 22 * u, {p1.x - 170 * u, p1.y - 48 * u}, "B", Rgba(200, 60, 60), german_ ? "Schlie\xC3\x9F" "en" : "Close");

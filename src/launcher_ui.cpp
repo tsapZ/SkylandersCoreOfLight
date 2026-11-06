@@ -289,7 +289,7 @@ void LauncherUi::UpdateInstall() {
     HubLog("install: " + std::string(AllGames()[game].name_en) + (update ? " updated to " : " installed, ") +
            (version.empty() ? std::string("version unknown") : version));
     if (update) {
-      error_ = Wide(name + (german_ ? " ist aktualisiert (" : " is updated (") + version + ")");
+      error_ = Wide(name + (german_ ? " wurde aktualisiert (" : " was updated (") + version + ")");
     } else {
       error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
     }
@@ -769,7 +769,7 @@ void LauncherUi::OpenHubSettings(int page) {
   for (const WhatsNewLine& line : kWhatsNew) news.emplace_back(line.en, line.de);
   hub_screen_.SetNote({"New in Core of Light " COREOFLIGHT_VERSION, "Neu in Core of Light " COREOFLIGHT_VERSION},
                       std::move(news));
-  hub_screen_.Open(german_ ? "Einstellungen des Hubs" : "Launcher settings", &hub_loader_, {}, page);
+  hub_screen_.Open(german_ ? "Einstellungen von Core of Light" : "Launcher settings", &hub_loader_, {}, page);
   for (int p = 0; p < 2; ++p) rumble_seen_[p].clear();
   language_label_pending_ = true;
 }
@@ -1394,7 +1394,7 @@ bool LauncherUi::DrawReimportQuestion(float width, float height) {
     ButtonHint(dl, bold_, 24 * u, {p.x + (280 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
     return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   };
-  const bool again = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Disc einlesen" : "Take the disc");
+  const bool again = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Disc einlesen" : "Add the disc");
   const bool later = button(b.x - 330 * u, "B", Rgba(200, 60, 60), german_ ? "Sp\xC3\xA4ter" : "Later");
   ImGui::End();
   if (again || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
@@ -1584,7 +1584,7 @@ void LauncherUi::UpdateReleases() {
       games = games || (!found_[i].exe.empty() && UpdateAvailable(i) && !BeingUpdated(i));
     }
     if (hub_update_) {
-      ShowToast((german_ ? "Neue Version von Core of Light: " : "A new Core of Light: ") + hub_update_->version);
+      ShowToast((german_ ? "Neue Version von Core of Light: " : "New Core of Light version: ") + hub_update_->version);
     } else if (games) {
       ask_updates_found_ = true;
     } else {
@@ -1796,7 +1796,7 @@ void LauncherUi::UpdateQueue() {
   }
   std::string text;
   if (update_failed_.empty()) {
-    text = german_ ? "Alle Spiele sind aktualisiert" : "All games are updated";
+    text = german_ ? "Alle Spiele sind auf dem neuesten Stand" : "All games are up to date";
   } else {
     text = german_ ? "Nicht aktualisiert: " : "Not updated: ";
     for (size_t i = 0; i < update_failed_.size(); ++i) text += (i ? ", " : "") + update_failed_[i];
@@ -2217,9 +2217,9 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
                 COREOFLIGHT_VERSION, double(release.size) / (1024.0 * 1024.0));
   Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, line)) * 0.5f, a.y + 84 * u}, kWhite, line);
   const char* keeps =
-      portable_ ? (german_ ? "Der Hub l\xC3\xA4" "dt sie, tauscht seine Dateien aus und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+      portable_ ? (german_ ? "Core of Light l\xC3\xA4" "dt sie, tauscht seine Dateien aus und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
                            : "The launcher downloads it, swaps its files and starts again. Games and saves stay.")
-                : (german_ ? "Der Hub l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+                : (german_ ? "Core of Light l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
                            : "The launcher downloads it, installs it and starts again. Games and saves stay.");
   Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, keeps)) * 0.5f, a.y + 118 * u}, kDim, keeps);
   const bool downloading = Downloading() && work_->hub;
@@ -2239,7 +2239,7 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
       std::string why;
       if (ApplyPortableUpdate(work_->file, launcher_dir_, exe_name, german_, why)) {
         if (StartLauncher(launcher_dir_ / exe_name)) return false;  // the launcher quits; the new one runs
-        why = german_ ? "Der neue Hub lie\xC3\x9F sich nicht starten; starte ihn bitte selbst." : "Couldn't start the new launcher; please start it yourself.";
+        why = german_ ? "Das neue Core of Light lie\xC3\x9F sich nicht starten; starte es bitte selbst." : "Couldn't start the new launcher; please start it yourself.";
       }
       error_ = Wide(why);
       error_until_ = ImGui::GetTime() + 8.0;

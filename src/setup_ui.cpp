@@ -384,8 +384,8 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
                     german_ ? "A auf einem Spiel: seine ISO w\xC3\xA4hlen. Die anderen sucht Core of Light dann im selben Ordner."
                             : "A on a game: choose its ISO. Core of Light then looks for the others in the same folder.");
     } else if (done && nearby_) {
-      std::snprintf(text, sizeof(text), german_ ? "Daneben gesucht: %d von 6 Spielen zugeordnet. Stimmt eines nicht: A darauf, andere ISO w\xC3\xA4hlen."
-                                                : "Looked next to it: %d of 6 games filled in. One wrong: A on it, another ISO.",
+      std::snprintf(text, sizeof(text), german_ ? "Im selben Ordner gesucht: %d von 6 Spielen zugeordnet. Stimmt eines nicht, w\xC3\xA4hlt A darauf eine andere ISO."
+                                                : "Searched the same folder: %d of 6 games filled in. If one is wrong, A on it picks another ISO.",
                     games);
     } else if (done) {
       std::snprintf(text, sizeof(text), german_ ? "Suche fertig: %d ISOs, %d von 6 Spielen gefunden"

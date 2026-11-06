@@ -380,7 +380,7 @@ void ProfilesScreen::Draw(float width, float height) {
       }
       hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70),
                 on_profile ? (german_ ? "Mit diesem Profil spielen" : "Play with this profile")
-                           : (german_ ? "Anlegen" : "Make it"));
+                           : (german_ ? "Anlegen" : "Create it"));
       if (on_profile) {
         hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Bild" : "Picture", "Tab");
         hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Name" : "Name", "F2");

@@ -458,8 +458,12 @@ void DataTransfer::StartImport(bool replace_settings) {
                   added, same);
     std::string summary = line;
     if (replaced) {
-      std::snprintf(line, sizeof(line), german ? " %zu Spiel-Einstellungen ersetzt." : " %zu games' settings replaced.",
-                    replaced);
+      if (replaced == 1) {
+        std::snprintf(line, sizeof(line), "%s", german ? " Einstellungen von 1 Spiel ersetzt." : " One game's settings replaced.");
+      } else {
+        std::snprintf(line, sizeof(line), german ? " Einstellungen von %zu Spielen ersetzt." : " %zu games' settings replaced.",
+                      replaced);
+      }
       summary += line;
     }
     if (!kept.empty()) {
