@@ -12,10 +12,8 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"The settings only ask to save after a real change.",
-     "Die Einstellungen fragen nur noch nach echten \xC3\x84nderungen, ob du speichern willst."},
-    {"After a crash, the log says where it happened.",
-     "Nach einem Absturz steht im Log, wo er passiert ist."},
+    {"The mouse cursor goes away while you don't move the mouse.",
+     "Der Mauszeiger verschwindet, solange du die Maus nicht bewegst."},
 };
 
 }  // namespace coreoflight
