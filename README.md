@@ -123,7 +123,7 @@ All six share one portal and one settings menu:
   menu puts an older version back
 - **quick swap** back to the Skylander you played before, with one button
 - **Extras:** no health loss and full gold, off by default, and *Show cheats* hides them all
-- **Discord status** if you want it: the game and the Skylander you play
+- **Discord status:** the game and the Skylander you play, on by default, F4 > Game turns it off
 
 <br>
 
