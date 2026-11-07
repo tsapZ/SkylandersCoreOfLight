@@ -5,7 +5,8 @@
 # shader compiles from real slow spots. Prints the verdict; the run stays in
 # %LOCALAPPDATA%\SkylandersDev\runs\crash\<Repo>_<Seed>.
 param([Parameter(Mandatory = $true)][string]$Repo, [Parameter(Mandatory = $true)][string]$Route,
-      [int]$Seconds = 600, [int]$Seed = 1, [switch]$Save, [switch]$KeepCache, [string]$Extra = "")
+      [int]$Seconds = 600, [int]$Seed = 1, [switch]$Save, [switch]$KeepCache, [string]$Extra = "",
+      [string]$Build = "release")
 . (Join-Path $PSScriptRoot "testkit.ps1")
 $head = Get-RouteHeader $Route
 $t = New-TestRun $Repo "crash" "${Repo}_$Seed" -Save:($Save -or $head.Save) -KeepCache:$KeepCache
@@ -13,7 +14,7 @@ $prefix = Expand-Route $Route $t.Run
 $script = Join-Path $t.Run "wander.txt"
 python (Join-Path $PSScriptRoot "wander.py") $prefix $Seconds $Seed $script | Out-Null
 $shots = ((1..[int](($Seconds + 400) / 60)) | ForEach-Object { "wait 60; shot m{0:D2}" -f $_ }) -join "; "
-$log = Invoke-Game $Repo $script $t.UserData $t.Run $shots $Extra
+$log = Invoke-Game $Repo $script $t.UserData $t.Run $shots $Extra -Build $Build
 Get-Verdict $Repo $log
 if ($log) {
   "  wander end: $(@(Select-String -Path $log -Pattern 'wander end').Count), last lines:"

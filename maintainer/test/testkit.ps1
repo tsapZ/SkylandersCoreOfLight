@@ -126,6 +126,8 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   $before = Get-Date
   $gameArgs = "--user_data_root=$UserData --portal_mode=software --fullscreen=false --resolution=1920x1080 " +
           "--audio_mute=true --skip_intro=true --input_script=$Script $Extra"
+  # RULES.md: a setting with an empty value can make the game drop its command line and run on the real data.
+  if ($gameArgs -match '(^|\s)--\w+=(\s|$)') { throw "a setting with an empty value: $($Matches[0])" }
   # The shots run alongside the route; once they are done the game keeps going until the route's
   # quit, at most $QuitTimeout more seconds (then it is stopped and the verdict says NO QUIT).
   # SDL keeps the display on while a game runs (ES_DISPLAY_REQUIRED), which switches monitors back
