@@ -468,6 +468,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   bool window_seen = false;  // the game's SDL window was there once (only then can it be gone)
   ULONGLONG took_back_until = 0;  // after a game: until then a pad press brings the launcher to the front
   bool input_logged = true;       // the first press after a game went into the log
+  double last_mouse_use = 0.0;    // ImGui's clock
   while (running) {
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -584,6 +585,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     ImGui::NewFrame();
     coreoflight::UpdateHintInput();
     if (!ui.Draw(io.DisplaySize.x, io.DisplaySize.y)) running = false;
+    // The cursor goes away while the mouse isn't used, as in the games (#53).
+    if (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f || io.MouseWheel != 0.0f ||
+        ImGui::IsAnyMouseDown()) {
+      last_mouse_use = ImGui::GetTime();
+    }
+    if (ImGui::GetTime() - last_mouse_use > 3.0 && GetForegroundWindow() == hwnd) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+    }
     ImGui::Render();
     const float clear[4] = {0.01f, 0.03f, 0.09f, 1.0f};
     g_context->OMSetRenderTargets(1, &g_target, nullptr);
