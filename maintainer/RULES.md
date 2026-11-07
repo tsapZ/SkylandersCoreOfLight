@@ -66,7 +66,8 @@ special to one repository stays in its own CLAUDE.md.
 - Release when something is done and tested; test first with `test/selftest.ps1` (the tools) and
   `test/smoke_all.ps1`.
 - At most one release a day per game: small changes (a cheat, a tweak) wait for the next bundle;
-  a crash fix or a broken setup goes out at once.
+  a crash fix, a broken setup, or anything finished and tested that the owner wants out goes out at
+  once.
 
 ## Editing gotchas
 
