@@ -1052,7 +1052,8 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
         std::erase(mode, '"');
       }
     }
-    const bool used = mode == "hybrid" || mode == "usb";
+    // No line in the settings file: the games' default, which uses a real portal (hybrid).
+    const bool used = mode.empty() || mode == "hybrid" || mode == "usb";
     const float w = 46 * u, h = 30 * u;
     const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
     const bool over = ImGui::IsMouseHoveringRect(a, b);
@@ -1079,8 +1080,8 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
       if (used) {
         text += german_ ? game + " benutzt es." : game + " uses it.";
       } else {
-        text += german_ ? game + " spielt mit dem virtuellen Portal. Zum Benutzen: Einstellungen des Spiels (Y / Tab) > Portal > \"Beides\" oder \"Nur echtes USB-Portal\"."
-                        : game + " plays with the virtual portal. To use it: the game's settings (Y / Tab) > Portal > \"Both\" or \"Real USB portal only\".";
+        text += german_ ? game + " spielt mit dem virtuellen Portal. Zum Benutzen: Einstellungen des Spiels (Y / Tab) > Portal > \"Automatisch\" oder \"Nur echtes USB-Portal\"."
+                        : game + " plays with the virtual portal. To use it: the game's settings (Y / Tab) > Portal > \"Automatic\" or \"Real USB portal only\".";
       }
       ShowToast(text, 10.0);
     }
