@@ -231,12 +231,19 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   owned_.clear();
   catalog_.clear();
   std::set<std::pair<uint16_t, uint16_t>> have;
+  // The games' copies of a real toy before they write to it (Figures\real): not a figure file of
+  // its own to put on, but the toy is the player's, so it counts as owned (TrapTeamRecomp #22).
+  std::map<std::pair<uint16_t, uint16_t>, fs::path> real_toys;
   std::error_code ec;
   for (fs::recursive_directory_iterator it(figures_dir, ec), end; it != end; it.increment(ec)) {
     if (ec) break;
     if (!it->is_regular_file(ec)) continue;
-    // The games' own copies of a figure before writing to it are not figures of their own.
-    if (it->path().string().find("\\real\\") != std::string::npos) continue;
+    if (it->path().string().find("\\real\\") != std::string::npos) {
+      if (const auto copy = sp::LoadFigureFile(it->path())) {
+        real_toys.emplace(std::pair{sp::ReadFigureId(*copy), sp::ReadFigureVariant(*copy)}, it->path());
+      }
+      continue;
+    }
     const auto data = sp::LoadFigureFile(it->path());
     if (!data) continue;
     Figure f;
@@ -285,6 +292,26 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.category = std::string(info->category);
     f.badge = sp::VersionBadge(*info);
     f.element = sp::FigureElement(*info);
+    owned_.push_back(std::move(f));
+  }
+  for (const auto& [key, copy] : real_toys) {
+    const sp::SkylanderInfo* info = sp::FindSkylander(key.first, key.second);
+    if (!info || have.contains(key) || marked_.contains(key)) continue;
+    const auto data = sp::LoadFigureFile(copy);
+    if (!data) continue;
+    Figure f;
+    f.id = key.first;
+    f.variant = key.second;
+    f.owned = true;
+    f.stats = sp::ParseFigureStats(*data);
+    f.trap = sp::ReadTrapVillain(*data);
+    const std::string shown = sp::FigureDisplayName(*data);
+    f.name = sp::DisplayName(shown.empty() ? info->name : shown);
+    f.game = std::string(info->game);
+    f.category = std::string(info->category);
+    f.badge = sp::VersionBadge(*info);
+    f.element = sp::FigureElement(*info);
+    have.insert(key);
     owned_.push_back(std::move(f));
   }
   // In release order, then by kind of figure as the catalog orders them, then by name.
