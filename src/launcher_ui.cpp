@@ -2675,9 +2675,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
       OpenSettings(i);
     }
     if (lift_.size() != n) lift_.assign(n, 0.0f);
-    const float target = i == selected_ ? 1.0f : 0.0f;
+    // The chosen card looks chosen (lifted, framed, its button shown) only while the focus is on the
+    // cards: with the top bar's controller or profile button focused, two things looked selected and
+    // it wasn't clear what A presses (#59).
+    const bool card_focused = i == selected_ && top_focus_ < 0;
+    const float target = card_focused ? 1.0f : 0.0f;
     lift_[i] = hub_.animations ? lift_[i] + (target - lift_[i]) * std::min(1.0f, io.DeltaTime * 12.0f) : target;
-    DrawCard(i, x, y - lift_[i] * 12 * u, card_w, card_h, i == selected_);
+    DrawCard(i, x, y - lift_[i] * 12 * u, card_w, card_h, card_focused);
   }
   if (!on_top && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
                   ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false))) {
