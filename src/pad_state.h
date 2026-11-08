@@ -6,7 +6,9 @@
 
 #include <windows.h>
 #include <mmsystem.h>
+#include <setupapi.h>
 #include <xinput.h>
+#pragma comment(lib, "setupapi.lib")
 
 #include <algorithm>
 #include <atomic>
@@ -94,7 +96,8 @@ inline std::set<std::pair<unsigned long, unsigned long>> XInputVidPids() {
 // The real Portal of Power on USB, as the pad watch saw it last (every two seconds, #42): 0 none,
 // 1 the PS3 / Wii / Wii U portal (1430:0150, every game's portal from Spyro's Adventure on), 2 the
 // Xbox 360 portal (1430:1F17). The ids skylanders-portal's UsbPortal opens (kKnownPortals). Only
-// looked at in the HID list, never opened: a game may be using it.
+// looked at in the HID list and, for a portal on the WinUSB driver (Zadig, for Dolphin or Cemu, #58),
+// in the USB device list; never opened: a game may be using it.
 enum class UsbPortalKind { kNone, kPs3WiiU, kXbox360 };
 inline std::atomic<UsbPortalKind> g_usb_portal{UsbPortalKind::kNone};
 
@@ -114,6 +117,29 @@ inline UsbPortalKind FindUsbPortal() {
     if (path.find(L"VID_1430&PID_0150") != std::wstring::npos) return UsbPortalKind::kPs3WiiU;
     if (path.find(L"VID_1430&PID_1F17") != std::wstring::npos) found = UsbPortalKind::kXbox360;
   }
+  if (found != UsbPortalKind::kNone) return found;
+  // Not a HID device: a portal on WinUSB, which the games open too.
+  HDEVINFO devices = SetupDiGetClassDevsW(nullptr, L"USB", nullptr, DIGCF_ALLCLASSES | DIGCF_PRESENT);
+  if (devices == INVALID_HANDLE_VALUE) return found;
+  SP_DEVINFO_DATA info{};
+  info.cbSize = sizeof(info);
+  for (DWORD i = 0; SetupDiEnumDeviceInfo(devices, i, &info); ++i) {
+    wchar_t ids[512] = {};
+    wchar_t service[64] = {};
+    if (!SetupDiGetDeviceRegistryPropertyW(devices, &info, SPDRP_HARDWAREID, nullptr, reinterpret_cast<PBYTE>(ids),
+                                           sizeof(ids) - 2 * sizeof(wchar_t), nullptr) ||
+        !SetupDiGetDeviceRegistryPropertyW(devices, &info, SPDRP_SERVICE, nullptr, reinterpret_cast<PBYTE>(service),
+                                           sizeof(service) - sizeof(wchar_t), nullptr) ||
+        _wcsicmp(service, L"WinUSB") != 0) {
+      continue;
+    }
+    if (wcsstr(ids, L"VID_1430&PID_0150")) {
+      found = UsbPortalKind::kPs3WiiU;
+      break;
+    }
+    if (wcsstr(ids, L"VID_1430&PID_1F17")) found = UsbPortalKind::kXbox360;
+  }
+  SetupDiDestroyDeviceInfoList(devices);
   return found;
 }
 
