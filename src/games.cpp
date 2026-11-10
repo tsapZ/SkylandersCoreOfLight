@@ -548,15 +548,16 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
   fs::create_directories(log.parent_path(), ec);
   fs::remove(log, ec);
   // The screen's own size for the game's window, its settings at 2x (the "Quality" preset), or at
-  // 1x in handheld mode (handheld.h, #39) and on a weak graphics card (gpu_tier.h). Only a new
-  // setup writes the scale: the setup never overwrites a settings file.
+  // 1x in handheld mode (handheld.h, #39) and on a weak graphics card (gpu_tier.h), the portal on
+  // Automatic (hybrid, the games' default). Only a new setup writes these: the setup never
+  // overwrites a settings file.
   const int w = GetSystemMetrics(SM_CXSCREEN), h = GetSystemMetrics(SM_CYSCREEN);
   const bool light = g_handheld_active || DetectGpu().weak;
   // No desktop shortcut per game: the launcher is where they start (the setup's own wizard still
   // offers one when run by hand).
   std::wstring command = L"\"" + setup.wstring() + L"\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL" +
                          L" \"/MERGETASKS=!desktopicon\"" +
-                         L" /NOROM=1 /PORTAL=software /SCALE=" + std::wstring(light ? L"1" : L"2") + L" /LANGUAGE=" +
+                         L" /NOROM=1 /PORTAL=hybrid /SCALE=" + std::wstring(light ? L"1" : L"2") + L" /LANGUAGE=" +
                          (german ? L"german" : L"english") + L" /RESOLUTION=" + std::to_wstring(w) + L"x" +
                          std::to_wstring(h) + L" \"/LOG=" + log.wstring() + L"\"";
   // An update goes where the game is (its exe's folder: the setup's entry would know it, a copied
