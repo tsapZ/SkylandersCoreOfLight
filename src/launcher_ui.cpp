@@ -3096,8 +3096,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
   const float bar_l = 40 * u, bar_r = width - 40 * u, bar_t = height - 112 * u, bar_b = height - 36 * u;
   DrawBottomBar(dl, {bar_l, bar_t}, {bar_r, bar_b}, u);
   const char* version = "Core of Light " COREOFLIGHT_VERSION;
-  const float version_w = TextWidth(regular_, 16 * u, version);
-  Text(dl, regular_, 16 * u, {bar_r - 26 * u - version_w, bar_t + (bar_b - bar_t - 16 * u) * 0.5f}, kDim, version);
+  // Under it the credit for the look (#78, promised there).
+  const char* credit = german_ ? "Design-Idee: morpheus284" : "Design idea: morpheus284";
+  const float version_w = std::max(TextWidth(regular_, 16 * u, version), TextWidth(regular_, 13 * u, credit));
+  const float vy = bar_t + (bar_b - bar_t) * 0.5f;
+  Text(dl, regular_, 16 * u, {bar_r - 26 * u - TextWidth(regular_, 16 * u, version), vy - 18 * u}, kDim, version);
+  Text(dl, regular_, 13 * u, {bar_r - 26 * u - TextWidth(regular_, 13 * u, credit), vy + 2 * u}, Rgba(150, 175, 215),
+       credit);
   // While a game writes its pictures (UpdatePictureExport), a note above the bar's right end: the
   // game runs for it in the background, and should its window show for a moment, it isn't a pop-up
   // to close (a colleague did, 2026-10-23).
