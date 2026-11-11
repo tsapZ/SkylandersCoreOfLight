@@ -255,9 +255,15 @@ class LauncherUi {
   std::filesystem::path language_source_;  // the PS3 disc, empty: pick it after the language
   std::string language_wanted_;
   bool browse_for_language_ = false;
+  // SuperChargers (#77): the settings' "SuperChargers-Sprache" asks the same way, its languages from
+  // another Xbox 360 disc of the game; the question and the browser are for it while this is set.
+  bool language_for_sc_ = false;
+  bool import_was_sc_ = false;  // the running / last import is SuperChargers': its end sets the game's language
   size_t ImaginatorsIndex() const;
   bool ImaginatorsReady() const;  // installed with its Xbox 360 disc
-  void AskLanguage(const std::filesystem::path& source);
+  size_t SuperChargersIndex() const;
+  bool SuperChargersReady() const;
+  void AskLanguage(const std::filesystem::path& source, bool superchargers = false);
   void TakeLanguageDisc(const std::filesystem::path& chosen);
   // The settings row's value; false while the settings page isn't loaded yet, then it is tried
   // again the next frame (language_label_pending_).

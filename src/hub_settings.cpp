@@ -353,6 +353,26 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   im_language.type = "action";
   im_language.options = {{"", "Choose", "W\xC3\xA4hlen"}};
   page.settings.push_back(std::move(im_language));
+  // SuperChargers in another language from another Xbox 360 disc of the game (#77): its value says
+  // which one it speaks and in whose place (LauncherUi::LanguageLabel).
+  GameSetting sc_language;
+  sc_language.cvar = "sc_language";
+  sc_language.en = "SuperChargers language";
+  sc_language.de = "SuperChargers-Sprache";
+  sc_language.help_en = "Each European disc of SuperChargers speaks two of its six languages. Another Xbox 360 disc of "
+                        "the game has others, also one that can't run here itself (another build): pick the language, "
+                        "then that disc (its .iso or unpacked folder), and the launcher puts its texts and voices into "
+                        "your SuperChargers, in place of one of its two languages. A few minutes; your saves stay. The "
+                        "disc's own languages come back here too.";
+  sc_language.help_de = "Jede europ\xC3\xA4ische Disc von SuperChargers spricht zwei seiner sechs Sprachen. Eine andere "
+                        "Xbox-360-Disc des Spiels hat andere, auch eine, die hier selbst nicht l\xC3\xA4uft (ein anderer "
+                        "Build): w\xC3\xA4hle die Sprache, dann diese Disc (ihre .iso oder ihren entpackten Ordner), und "
+                        "Core of Light bringt Texte und Stimmen in dein SuperChargers, anstelle einer seiner zwei "
+                        "Sprachen. Ein paar Minuten; Spielst\xC3\xA4nde bleiben. Hier kommen auch die Sprachen der Disc "
+                        "zur\xC3\xBC" "ck.";
+  sc_language.type = "action";
+  sc_language.options = {{"", "Choose", "W\xC3\xA4hlen"}};
+  page.settings.push_back(std::move(sc_language));
   // The games' updates without asking (#27, the owner's wish: on unless someone wants to keep a version).
   page.settings.push_back(Switch(
       "auto_update_games", "Update games by themselves", "Spiele automatisch aktualisieren",

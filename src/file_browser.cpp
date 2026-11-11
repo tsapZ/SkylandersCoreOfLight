@@ -285,10 +285,13 @@ void FileBrowser::Draw(float width, float height) {
   } else {
     Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim,
          for_backup_     ? (german_ ? "MEINE DATEN IMPORTIEREN" : "IMPORT MY DATA")
+         : for_sc_language_ ? (german_ ? "SUPERCHARGERS-SPRACHE" : "SUPERCHARGERS LANGUAGE")
          : for_language_ ? (german_ ? "IMAGINATORS-SPRACHE" : "IMAGINATORS LANGUAGE")
                          : (german_ ? "DISC EINLESEN" : "ADD A DISC"));
     Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
          for_backup_     ? (german_ ? "W\xC3\xA4hle die Datei deines Exports" : "Choose the file you exported")
+         : for_sc_language_ ? (german_ ? "W\xC3\xA4hle eine Xbox-360-Disc von SuperChargers mit der Sprache"
+                                       : "Choose an Xbox 360 disc of SuperChargers with the language")
          : for_language_ ? (german_ ? "W\xC3\xA4hle deine PS3-Disc von Imaginators" : "Choose your PS3 disc of Imaginators")
                          : (german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO"));
   }
@@ -424,6 +427,8 @@ void FileBrowser::Draw(float width, float height) {
     Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
          for_backup_ ? (german_ ? "Die .zip aus \xE2\x80\x9EMeine Daten exportieren\xE2\x80\x9C. Was schon da ist, bleibt."
                                 : "The .zip from \"Export my data\". What's already here stays.")
+         : for_sc_language_ ? (german_ ? "Ihre .iso oder ihr entpackter Ordner, auch ein anderer Build; sie selbst bleibt, wie sie ist."
+                                      : "Its .iso or unpacked folder, another build too; the disc itself stays as it is.")
          : for_language_ ? (german_ ? "Eine entschl\xC3\xBCsselte .iso oder ihr entpackter Ordner; sie selbst bleibt, wie sie ist."
                                   : "A decrypted .iso or its unpacked folder; the disc itself stays as it is.")
          : german_ ? "Die ISO wird in den rom-Ordner des Spiels entpackt; sie selbst bleibt, wo sie ist."

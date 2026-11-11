@@ -39,7 +39,10 @@ class FileBrowser {
   bool for_figures() const { return for_figures_; }
   // In disc mode: Imaginators' PS3 disc for its languages (language_import.h), not a disc to unpack;
   // the title and the note say so. Set before Open.
-  void SetForLanguage(bool language) { for_language_ = language; }
+  void SetForLanguage(bool language, bool superchargers = false) {
+    for_language_ = language;
+    for_sc_language_ = language && superchargers;
+  }
   // In disc mode: the .zip of "Meine Daten exportieren" to import (data_transfer.h, #40)
   // instead of a disc: .zip files listed, no disc search. Set before Open.
   void SetForBackup(bool backup) { for_backup_ = backup; }
@@ -68,6 +71,7 @@ class FileBrowser {
   bool for_data_ = false;      // the folder is the data folder's place (SetForData)
   bool for_figures_ = false;   // the folder has figure files to import (SetForFigures)
   bool for_language_ = false;  // the disc is Imaginators' PS3 disc (SetForLanguage)
+  bool for_sc_language_ = false;  // ... or another Xbox 360 disc of SuperChargers with the language (#77)
   bool for_backup_ = false;    // the file is a data export to import (SetForBackup)
   bool open_ = false;
   std::filesystem::path folder_, last_folder_, chosen_;

@@ -201,6 +201,17 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
     HubLog("disc import: default.xex " + (id.header.empty() ? std::string("without an XEX2 header") : id.header) +
            ", SHA-256 " + hash + (id.code_pin.empty() ? "" : ", code " + id.code_pin));
     if (game < 0) {
+      // Another build of SuperChargers (#77, a French / Dutch disc): it can't run, but its languages
+      // can come into a SuperChargers set up from a matching disc.
+      if (IsSuperChargersDisc(iso)) {
+        say(german ? "Diese SuperChargers-Disc ist ein anderer Build und l\xC3\xA4uft so nicht. Ihre Sprachen gehen aber: "
+                     "Einstellungen von Core of Light > SuperChargers-Sprache (SuperChargers zuerst von einer "
+                     "passenden Disc einrichten)."
+                   : "This SuperChargers disc is another build and can't run as it is, but its languages can: "
+                     "Launcher settings > SuperChargers language (set SuperChargers up from a matching disc first).",
+            Phase::kFailed);
+        return;
+      }
       say(german ? "Diese Disc kennt Core of Light nicht: ein anderes Spiel oder ein anderer Build (jedes "
                    "Spiel ist f\xC3\xBCr den Code einer Disc gemacht, meist der europ\xC3\xA4ischen; siehe die "
                    "Seite des Spiels). Was f\xC3\xBCr eine Disc es ist, steht in Problem melden."

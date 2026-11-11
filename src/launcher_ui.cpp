@@ -509,8 +509,8 @@ void LauncherUi::Start(size_t index) {
     say(L"Dieses Spiel wird gerade aktualisiert", L"This game is being updated");
     return;
   }
-  if (index == ImaginatorsIndex() && language_import_.running()) {
-    say(L"Die Sprache von Imaginators wird gerade eingespielt", L"Imaginators' language is being put in");
+  if ((index == ImaginatorsIndex() || index == SuperChargersIndex()) && language_import_.running()) {
+    say(L"Eine Sprache wird gerade eingespielt", L"A language is being put in");
     return;
   }
   // A newer setup than the installed game: ask first (once a launch; "Erst spielen" plays).
@@ -787,6 +787,19 @@ bool LauncherUi::ImaginatorsReady() const {
          std::filesystem::exists(found_[im].rom / "archives" / "permanent_xenon.pak", ec);
 }
 
+size_t LauncherUi::SuperChargersIndex() const {
+  size_t sc = 0;
+  while (sc < AllGames().size() && std::string_view(AllGames()[sc].name_en) != "SuperChargers") ++sc;
+  return sc;
+}
+
+bool LauncherUi::SuperChargersReady() const {
+  const size_t sc = SuperChargersIndex();
+  std::error_code ec;
+  return sc < found_.size() && !found_[sc].exe.empty() && !found_[sc].rom.empty() &&
+         std::filesystem::exists(found_[sc].rom / "archives" / "permanent_xenon.pak", ec);
+}
+
 bool LauncherUi::LanguageLabel() {
   if (!hub_screen_.is_open()) return true;
   std::string en = "Imaginators isn't set up", de = "Imaginators ist nicht eingerichtet";
@@ -802,11 +815,50 @@ bool LauncherUi::LanguageLabel() {
       de = languages[i].name_de;
     }
   }
-  return hub_screen_.SetActionLabel("im_language", en, de);
+  // SuperChargers (#77): the install's own two, or the imported one and in whose place.
+  std::string sc_en = "SuperChargers isn't set up", sc_de = "SuperChargers ist nicht eingerichtet";
+  if (SuperChargersReady()) {
+    const std::filesystem::path& rom = found_[SuperChargersIndex()].rom;
+    const std::string now = ImportedLanguage(rom), place = ImportedPlace(rom);
+    size_t n = 0;
+    const LanguageImport::Language* six = LanguageImport::SuperChargersLanguages(&n);
+    const auto own_name = [&](const std::string& code) -> std::string {
+      for (size_t i = 0; i < n; ++i) {
+        if (code == six[i].code) return six[i].own;
+      }
+      return code;
+    };
+    if (now.empty()) {
+      std::string names;
+      for (const std::string& code : SuperChargersInstallLanguages(rom)) names += (names.empty() ? "" : ", ") + own_name(code);
+      sc_en = "The disc's own (" + names + ")";
+      sc_de = "Wie die Disc (" + names + ")";
+    } else {
+      sc_en = own_name(now) + " (as " + own_name(place) + ")";
+      sc_de = own_name(now) + " (als " + own_name(place) + ")";
+    }
+  }
+  const bool sc_done = hub_screen_.SetActionLabel("sc_language", sc_en, sc_de);
+  return hub_screen_.SetActionLabel("im_language", en, de) && sc_done;
 }
 
-void LauncherUi::AskLanguage(const std::filesystem::path& source) {
+void LauncherUi::AskLanguage(const std::filesystem::path& source, bool superchargers) {
   if (language_import_.running()) return;  // its note shows how far it is
+  if (superchargers) {
+    if (!SuperChargersReady()) {
+      ShowToast(german_ ? "SuperChargers braucht zuerst seine Xbox-360-Disc, dann die Disc mit der Sprache."
+                        : "SuperChargers needs its Xbox 360 disc first, then the disc with the language.",
+                10.0);
+      return;
+    }
+    language_for_sc_ = true;
+    language_source_ = source;
+    language_now_ = ImportedLanguage(found_[SuperChargersIndex()].rom);
+    language_row_ = 0;
+    ask_language_ = true;
+    return;
+  }
+  language_for_sc_ = false;
   if (!ImaginatorsReady()) {
     ShowToast(german_ ? "Imaginators braucht zuerst seine Xbox-360-Disc, dann die PS3-Disc f\xC3\xBCr die Sprache."
                       : "Imaginators needs its Xbox 360 disc first, then the PS3 disc for the language.",
@@ -824,11 +876,28 @@ void LauncherUi::AskLanguage(const std::filesystem::path& source) {
 void LauncherUi::TakeLanguageDisc(const std::filesystem::path& chosen) {
   const bool for_language = std::exchange(browse_for_language_, false);
   browser_.SetForLanguage(false);
+  if (for_language && language_for_sc_) {
+    std::vector<std::string> has;
+    if (!IsSuperChargersDisc(chosen, &has)) {
+      ShowToast(german_ ? "Das ist keine Xbox-360-Disc von SuperChargers." : "That isn't an Xbox 360 disc of SuperChargers.", 8.0);
+      return;
+    }
+    if (std::find(has.begin(), has.end(), language_wanted_) == has.end()) {
+      ShowToast(german_ ? "Diese Disc hat die Sprache nicht." : "That disc doesn't have the language.", 8.0);
+      return;
+    }
+    if (SuperChargersReady() && !language_import_.running()) {
+      import_was_sc_ = true;
+      language_import_.StartSuperChargers(chosen, found_[SuperChargersIndex()].rom, language_wanted_, german_);
+    }
+    return;
+  }
   if (!IsImaginatorsPs3Disc(chosen)) {
     ShowToast(german_ ? "Das ist keine PS3-Disc von Imaginators." : "That isn't a PS3 disc of Imaginators.", 8.0);
     return;
   }
   if (for_language && !language_wanted_.empty() && ImaginatorsReady() && !language_import_.running()) {
+    import_was_sc_ = false;
     language_import_.Start(chosen, found_[ImaginatorsIndex()].rom, language_wanted_, german_);
     return;
   }
@@ -841,6 +910,26 @@ bool LauncherUi::DrawLanguage(float width, float height) {
   const float u = UiScale(width, height);
   size_t count = 0;
   const LanguageImport::Language* languages = LanguageImport::Languages(&count);
+  // SuperChargers (#77): its six but the install's own two, which are the row "as the disc".
+  std::vector<LanguageImport::Language> sc_choices;
+  std::string own_names = "Espa\xC3\xB1ol / Italiano";
+  if (language_for_sc_) {
+    const size_t sc = SuperChargersIndex();
+    const std::vector<std::string> own = sc < found_.size() ? SuperChargersInstallLanguages(found_[sc].rom)
+                                                            : std::vector<std::string>();
+    size_t all = 0;
+    const LanguageImport::Language* six = LanguageImport::SuperChargersLanguages(&all);
+    own_names.clear();
+    for (size_t i = 0; i < all; ++i) {
+      if (std::find(own.begin(), own.end(), six[i].code) == own.end()) {
+        sc_choices.push_back(six[i]);
+      } else {
+        own_names += (own_names.empty() ? "" : " / ") + std::string(six[i].own);
+      }
+    }
+    languages = sc_choices.data();
+    count = sc_choices.size();
+  }
   const int rows = int(count) + (language_now_.empty() ? 0 : 1);
   language_row_ = std::clamp(language_row_, 0, rows - 1);
   ImGui::SetNextWindowPos({0, 0});
@@ -850,16 +939,22 @@ bool LauncherUi::DrawLanguage(float width, float height) {
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const size_t im = ImaginatorsIndex();
+  const size_t im = language_for_sc_ ? SuperChargersIndex() : ImaginatorsIndex();
   DrawBackdrop(dl, width, height, im < background_art_.size() ? background_art_[im] : std::filesystem::path());
   const float row_h = 54 * u;
   const float bw = 800 * u, bh = 236 * u + float(rows) * row_h;
   const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
   dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
   dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
-  const char* title = german_ ? "Imaginators: Sprache" : "Imaginators: language";
+  const char* title = language_for_sc_ ? (german_ ? "SuperChargers: Sprache" : "SuperChargers: language")
+                                       : (german_ ? "Imaginators: Sprache" : "Imaginators: language");
   Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title)) * 0.5f, a.y + 26 * u}, kGold, title);
-  const char* line = language_source_.empty()
+  const char* line = language_for_sc_
+                         ? (german_ ? "Welche Sprache soll SuperChargers sprechen? Danach w\xC3\xA4hlst du eine Xbox-360-Disc "
+                                      "des Spiels, die sie hat (.iso oder entpackter Ordner; auch ein anderer Build geht)."
+                                    : "Which language should SuperChargers speak? Then you pick an Xbox 360 disc of the "
+                                      "game that has it (.iso or unpacked folder; another build is fine).")
+                     : language_source_.empty()
                          ? (german_ ? "Welche Sprache soll Imaginators sprechen? Danach w\xC3\xA4hlst du deine PS3-Disc "
                                       "des Spiels (.iso oder entpackter Ordner)."
                                     : "Which language should Imaginators speak? Then you pick your PS3 disc of the "
@@ -880,7 +975,7 @@ bool LauncherUi::DrawLanguage(float width, float height) {
     dl->AddRectFilled(p, q, chosen ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 14 * u);
     if (chosen) dl->AddRect(p, q, kGold, 14 * u, 0, 2 * u);
     const std::string label =
-        own ? (german_ ? "Espa\xC3\xB1ol / Italiano (wie die Disc)" : "Espa\xC3\xB1ol / Italiano (the disc's own)")
+        own ? own_names + (german_ ? " (wie die Disc)" : " (the disc's own)")
             : std::string(languages[r].own);
     Text(dl, bold_, 24 * u, {p.x + 24 * u, p.y + 9 * u}, kWhite, label.c_str());
     if (!own && language_now_ == languages[r].code) {
@@ -889,7 +984,10 @@ bool LauncherUi::DrawLanguage(float width, float height) {
     }
     if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) clicked = r;
   }
-  const char* note = german_ ? "Etwa eine Minute. Spielst\xC3\xA4nde bleiben; zur\xC3\xBC" "ck geht es jederzeit unter "
+  const char* note = language_for_sc_
+                         ? (german_ ? "Ein paar Minuten; Spielst\xC3\xA4nde bleiben. Zur\xC3\xBC" "ck geht es hier jederzeit."
+                                    : "A few minutes; your saves stay. You can go back here any time.")
+                     : german_ ? "Etwa eine Minute. Spielst\xC3\xA4nde bleiben; zur\xC3\xBC" "ck geht es jederzeit unter "
                                "Einstellungen von Core of Light > Imaginators-Sprache."
                              : "About a minute. Your saves stay; you can go back any time in Launcher settings > "
                                "Imaginators language.";
@@ -914,24 +1012,31 @@ bool LauncherUi::DrawLanguage(float width, float height) {
     return true;
   }
   ask_language_ = false;
-  if (!ImaginatorsReady() || language_import_.running()) return true;
+  const char* game = language_for_sc_ ? "SuperChargers" : "Imaginators";
+  if (!(language_for_sc_ ? SuperChargersReady() : ImaginatorsReady()) || language_import_.running()) return true;
   const std::filesystem::path rom = found_[im].rom;
   if (language_row_ == int(count)) {
-    language_import_.StartRestore(rom, german_);
+    import_was_sc_ = language_for_sc_;
+    language_import_.StartRestore(rom, german_, game);
     return true;
   }
   const std::string code = languages[language_row_].code;
   if (code == language_now_) {
-    ShowToast(german_ ? std::string("Imaginators spricht schon ") + languages[language_row_].name_de + "."
-                      : std::string("Imaginators speaks ") + languages[language_row_].name_en + " already.");
+    ShowToast(german_ ? std::string(game) + " spricht schon " + languages[language_row_].name_de + "."
+                      : std::string(game) + " speaks " + languages[language_row_].name_en + " already.");
     return true;
   }
   if (!language_source_.empty()) {
-    language_import_.Start(language_source_, rom, code, german_);
+    import_was_sc_ = language_for_sc_;
+    if (language_for_sc_) {
+      language_import_.StartSuperChargers(language_source_, rom, code, german_);
+    } else {
+      language_import_.Start(language_source_, rom, code, german_);
+    }
   } else {
     language_wanted_ = code;
     browse_for_language_ = true;
-    browser_.SetForLanguage(true);
+    browser_.SetForLanguage(true, language_for_sc_);
     browser_.Open();  // TakeLanguageDisc takes the disc
   }
   return true;
@@ -1128,6 +1233,23 @@ bool LauncherUi::Draw(float width, float height) {
   if (const std::string summary = language_import_.TakeSummary(); !summary.empty()) {
     ShowToast(summary, 14.0);
     language_label_pending_ = true;
+    // SuperChargers (#77) shows the imported language under its place's name: the game's F4 > Game >
+    // Language set to that name, so it speaks it at once (the disc's own back: left as it is).
+    if (import_was_sc_ && SuperChargersReady()) {
+      Found& sc = found_[SuperChargersIndex()];
+      const std::string place = ImportedPlace(sc.rom);
+      static const std::pair<const char*, const char*> kNames[] = {
+          {"en", "english"}, {"de", "german"}, {"es", "spanish"}, {"it", "italian"}};
+      for (const auto& [code, name] : kNames) {
+        if (place != code) continue;
+        const std::filesystem::path toml = sc.exe.parent_path() / (UserDataName(sc.exe) + ".toml");
+        if (WriteGameSetting(toml, "Game", "language", "string", name)) {
+          sc.settings["language"] = name;
+        } else {
+          HubWarn("language import: could not set SuperChargers' language to " + std::string(name));
+        }
+      }
+    }
   }
   // The data export (shown in Explorer) or import (#40): the launcher's settings, the profiles
   // and the games' settings read again after an import.
@@ -2483,6 +2605,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
       folder_browser_.Open();
     }
     if (action == "im_language") AskLanguage({});  // the language first, then the PS3 disc
+    if (action == "sc_language") AskLanguage({}, true);  // the language first, then the other 360 disc
     if (action == "check_updates") StartUpdateCheck(true);
     // "Meine Daten exportieren / importieren" (data_transfer.h, #40): the export onto the desktop,
     // the import from the file picked in the browser.
