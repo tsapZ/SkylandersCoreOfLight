@@ -8,7 +8,9 @@
 #include <fstream>
 #include <iterator>
 #include <optional>
+#include <string_view>
 #include <thread>
+#include <vector>
 
 #include "game_files.h"
 #include "hub_log.h"
@@ -23,6 +25,42 @@ namespace fs = std::filesystem;
 // The disc's system update folder: the console's, not the game's (the installers leave it out
 // too, extract-xiso -s); about 100 MB.
 const std::string kSystemUpdate = "$SystemUpdate";
+// Whether `dir` has the path `parts[i..]`, a "*" part matching any one folder.
+bool HasDiscPath(const fs::path& dir, const std::vector<std::string>& parts, size_t i) {
+  std::error_code ec;
+  if (i == parts.size()) return fs::exists(dir, ec);
+  if (parts[i] != "*") {
+    const std::u8string u8(reinterpret_cast<const char8_t*>(parts[i].data()), parts[i].size());
+    return HasDiscPath(dir / fs::path(u8), parts, i + 1);
+  }
+  for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+    if (it->is_directory(ec) && HasDiscPath(it->path(), parts, i + 1)) return true;
+  }
+  return false;
+}
+
+// The first of `required` (Game::rom_required) that `folder` has no match for, as the game would
+// name it (backslashes); empty when all are there. The games' check is skylanders-portal's
+// MissingRomFile: the same rule.
+std::string MissingDiscFile(const fs::path& folder, std::string_view required) {
+  while (!required.empty()) {
+    const size_t comma = required.find(',');
+    const std::string entry(required.substr(0, comma));
+    required = comma == std::string_view::npos ? std::string_view{} : required.substr(comma + 1);
+    std::vector<std::string> parts;
+    for (size_t start = 0; start <= entry.size();) {
+      const size_t slash = std::min(entry.find('/', start), entry.size());
+      if (slash > start) parts.push_back(entry.substr(start, slash - start));
+      start = slash + 1;
+    }
+    if (parts.empty() || HasDiscPath(folder, parts, 0)) continue;
+    std::string shown = entry;
+    std::replace(shown.begin(), shown.end(), '/', '\\');
+    return shown;
+  }
+  return {};
+}
+
 // Room left on the drive after the disc, so the PC isn't left with a full disk.
 constexpr uint64_t kSpareBytes = 256ull << 20;
 
@@ -230,11 +268,27 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
       return;
     }
     const fs::path rom = targets[game].rom;
-    // Already there: the same default.xex in its rom folder.
+    // An unpacked folder without the files every copy of the disc has: some extract tools leave out
+    // the folders inside the disc's folders (CoL #64: Spyro's Adventure froze on its title screen).
+    if (folder) {
+      if (const std::string missing = MissingDiscFile(iso, games[game].rom_required); !missing.empty()) {
+        say(name + (german ? ": der Ordner ist keine vollst\xC3\xA4ndige Kopie der Disc, es fehlt " + missing +
+                               " (* ist ein Sprachordner wie eng). Manche Entpack-Programme lassen die Ordner "
+                               "in den Ordnern der Disc weg; nimm stattdessen die ISO."
+                           : ": the folder isn't a complete copy of the disc, " + missing +
+                               " is missing (* is a language folder such as eng). Some extract tools leave "
+                               "out the folders inside the disc's folders; pick the ISO instead."),
+            Phase::kFailed);
+        return;
+      }
+    }
+    // Already there: the same default.xex in its rom folder, with the files every copy has (an
+    // incomplete copy of the right disc is set up again).
     {
       std::ifstream in(rom / "default.xex", std::ios::binary);
       const std::vector<char> have((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-      if (!repair && !have.empty() && Sha256Hex(have.data(), have.size()) == hash) {
+      if (!repair && !have.empty() && Sha256Hex(have.data(), have.size()) == hash &&
+          MissingDiscFile(rom, games[game].rom_required).empty()) {
         say(name + (german ? ": die Disc ist schon eingerichtet." : ": the disc is set up already."), Phase::kDone);
         return;
       }

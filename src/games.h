@@ -27,6 +27,10 @@ struct Game {
   const char* xex_sha256;
   uint16_t hero_id, hero_variant;  // the game's hero, whose picture is on its card
   const char* app_id;              // its installer's AppId: the uninstall entry "<AppId>_is1"
+  // Files every copy of its disc has, checked when a disc folder is set up: comma separated, '/'
+  // between the parts, a "*" part is any one folder (the game checks the same list at start,
+  // skylanders-portal xex_verify.h MissingRomFile). Empty for the games without nested folders.
+  const char* rom_required = "";
 };
 
 // The six games, in release order.

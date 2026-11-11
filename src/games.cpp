@@ -41,7 +41,10 @@ const std::vector<Game> kGames = {
      "Spyro's Adventure Recompiled",
      "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b,"
      "82110000:0a6b070c95f730a77a8662afdbbb297a15ce8a465c344951ab5ff1bb94bd802d", 16, 0,
-     "{2B356600-5297-425A-A646-8498A7AAC307}"},
+     "{2B356600-5297-425A-A646-8498A7AAC307}",
+     // Its text and menus are in a folder per language; an extract tool that left those out gave a
+     // game that froze on its title screen (CoL #64).
+     "text/*/global.lxb,ui/*/hudmenu.str"},
     {"giants", "Giants", "Giants", 2012, "giantsrecompiled.exe", "GiantsRecomp", "Giants Recompiled",
      "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e,"
      "82150000:9fb7c356cbba689b46370ce2c1d5228e8e41b47d019ddfbdf49fd8a96c6584fe", 112, 4614,
