@@ -131,11 +131,22 @@ void DrawComet(ImDrawList* dl, Along along, float head, float step, int tail, fl
 // A sky: light blue at the top, deeper below, with soft clouds drifting slowly (standing still
 // with the "Animationen" setting off).
 void DrawSky(ImDrawList* dl, float width, float height, float u, bool animate) {
-  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(96, 160, 232), Rgba(96, 160, 232), Rgba(30, 78, 160),
-                              Rgba(30, 78, 160));
-  // A lighter band low on the screen, where the cards stand.
-  dl->AddRectFilledMultiColor({0, height * 0.45f}, {width, height * 0.8f}, Rgba(140, 190, 245, 0),
-                              Rgba(140, 190, 245, 0), Rgba(140, 190, 245, 45), Rgba(140, 190, 245, 45));
+  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(58, 128, 210), Rgba(78, 148, 222), Rgba(36, 98, 186),
+                              Rgba(30, 86, 172));
+  // Floating islands far off at the top left, dark against the sky: a flat top and a rocky point
+  // below each, a tower on the big one.
+  const ImU32 isle = Rgba(40, 92, 168, 110);
+  auto island = [&](float cx, float cy, float w2, float depth) {
+    const ImVec2 rock[5] = {{cx - w2, cy}, {cx + w2, cy}, {cx + w2 * 0.55f, cy + depth * 0.45f},
+                            {cx + w2 * 0.1f, cy + depth}, {cx - w2 * 0.45f, cy + depth * 0.5f}};
+    dl->AddConvexPolyFilled(rock, 5, isle);
+  };
+  island(220 * u, 110 * u, 120 * u, 150 * u);
+  dl->AddRectFilled({205 * u, 66 * u}, {225 * u, 110 * u}, isle);
+  dl->AddTriangleFilled({198 * u, 68 * u}, {232 * u, 68 * u}, {215 * u, 48 * u}, isle);
+  island(70 * u, 60 * u, 60 * u, 90 * u);
+  island(370 * u, 150 * u, 34 * u, 60 * u);
+  island(300 * u, 236 * u, 18 * u, 34 * u);
   const float t = animate ? float(ImGui::GetTime()) : 0.0f;
   // Clouds: a fixed handful of puffs each, from a small generator so they look the same every frame.
   uint32_t seed = 0x9E3779B9u;
@@ -145,83 +156,128 @@ void DrawSky(ImDrawList* dl, float width, float height, float u, bool animate) {
     seed ^= seed << 5;
     return float(seed & 0xFFFF) / 65535.0f;
   };
-  for (int cloud = 0; cloud < 14; ++cloud) {
-    const float depth = 0.4f + 0.6f * next();  // nearer clouds are bigger, brighter and quicker
-    const float span = width + 600 * u;
-    float cx = next() * span + t * 6.0f * depth * u;
-    cx = std::fmod(cx, span) - 300 * u;
-    const float cy = height * (0.06f + 0.9f * next());
-    const float size = (60 + 90 * depth) * u;
-    const int puffs = 5 + int(next() * 5);
-    // Flat puffs, wider than tall, faint where they overlap less (round ones looked like bubbles).
+  // Big white clouds: a flat, slightly shaded base and round puffs piled on it, brighter at the top.
+  for (int cloud = 0; cloud < 16; ++cloud) {
+    const float depth = 0.35f + 0.65f * next();  // nearer clouds are bigger, brighter and quicker
+    const float span = width + 700 * u;
+    float cx = next() * span + t * 5.0f * depth * u;
+    cx = std::fmod(cx, span) - 350 * u;
+    // Most of them low and at the sides, as in a sky seen from above the clouds.
+    const float cy = height * (cloud % 3 == 0 ? 0.05f + 0.25f * next() : 0.55f + 0.45f * next());
+    const float size = (50 + 80 * depth) * u;
+    const int alpha = int(70 + 120 * depth);
+    dl->AddEllipseFilled({cx, cy + size * 0.3f}, {size * 2.2f, size * 0.45f}, Rgba(205, 225, 245, alpha), 0.0f, 48);
+    const int puffs = 6 + int(next() * 6);
     for (int p = 0; p < puffs; ++p) {
-      const float px = cx + (next() - 0.5f) * size * 2.8f;
-      const float py = cy + (next() - 0.5f) * size * 0.35f;
-      const float r = size * (0.35f + 0.45f * next());
-      dl->AddEllipseFilled({px, py}, {r * 1.7f, r * 0.7f}, Rgba(255, 255, 255, int(10 + 18 * depth)), 0.0f, 40);
+      const float px = cx + (next() - 0.5f) * size * 3.2f;
+      const float r = size * (0.3f + 0.4f * next());
+      const float py = cy - r * 0.35f + (next() - 0.5f) * size * 0.25f;
+      // Soft edges: three circles, each a third of the cloud's white, the smallest in the middle.
+      dl->AddCircleFilled({px, py + r * 0.15f}, r, Rgba(200, 222, 245, alpha / 3), 36);  // its shaded side
+      dl->AddCircleFilled({px, py}, r * 0.86f, Rgba(255, 255, 255, alpha / 3), 36);
+      dl->AddCircleFilled({px, py - r * 0.05f}, r * 0.68f, Rgba(255, 255, 255, alpha / 3), 36);
     }
   }
 }
 
-// A panel with a light rim and a darker line inside it, as the concept's frames.
-void DrawFramedPanel(ImDrawList* dl, ImVec2 a, ImVec2 b, float r, float u, ImU32 fill, ImU32 rim, float rim_w) {
-  dl->AddRectFilled(a, b, fill, r);
-  dl->AddRect({a.x + rim_w, a.y + rim_w}, {b.x - rim_w, b.y - rim_w}, Rgba(10, 20, 48, 150), r - rim_w, 0,
-              1.5f * u);
-  dl->AddRect(a, b, rim, r, 0, rim_w);
-  // The light falling on the top edge.
-  dl->AddLine({a.x + r, a.y + rim_w * 0.5f}, {b.x - r, a.y + rim_w * 0.5f}, Rgba(255, 255, 255, 70), 1.5f * u);
-}
-
-// An eight-pointed star (the badge under a card), long and short points in turn.
-void DrawStar(ImDrawList* dl, ImVec2 c, float radius, ImU32 col) {
-  for (int k = 0; k < 8; ++k) {
-    const float a = float(k) * 0.78539816f - 1.5707963f;
-    const float len = k % 2 ? radius * 0.6f : radius;
-    const float side = radius * 0.2f;
-    const ImVec2 tip{c.x + std::cos(a) * len, c.y + std::sin(a) * len};
-    const ImVec2 l{c.x + std::cos(a - 1.5707963f) * side, c.y + std::sin(a - 1.5707963f) * side};
-    const ImVec2 rr{c.x + std::cos(a + 1.5707963f) * side, c.y + std::sin(a + 1.5707963f) * side};
-    dl->AddTriangleFilled(l, tip, rr, col);
+// The portal emblem in a card's medallion: six petals round a small core.
+void DrawPortalEmblem(ImDrawList* dl, ImVec2 c, float radius, ImU32 col, ImU32 core) {
+  for (int k = 0; k < 6; ++k) {
+    const float a = float(k) * 1.0471976f - 1.5707963f;
+    const ImVec2 p{c.x + std::cos(a) * radius * 0.52f, c.y + std::sin(a) * radius * 0.52f};
+    dl->AddEllipseFilled(p, {radius * 0.48f, radius * 0.24f}, col, a, 24);
   }
-  dl->AddCircleFilled(c, radius * 0.22f, col, 16);
+  dl->AddCircleFilled(c, radius * 0.3f, core, 20);
+  dl->AddCircleFilled(c, radius * 0.16f, col, 16);
 }
 
-// The title plate's half width with the gold lines out from its ends, and its centre: the window's
-// middle, or left of the profile and the controllers at the top right when the window is narrow.
-float TitlePlateHalf(ImFont* bold, float u) { return TextWidth(bold, 50 * u, "CORE OF LIGHT") * 0.5f + 126 * u; }
+// A card's frame as in the concept: a thick steel-blue rim with a lighter outer edge, a dark line
+// inside it and the navy panel; on the chosen card a gold line along the inside of the rim.
+void DrawCardFrame(ImDrawList* dl, ImVec2 a, ImVec2 b, float r, float s, bool selected) {
+  dl->AddRectFilled(a, b, Rgba(118, 160, 222), r);
+  dl->AddRectFilled({a.x + 2 * s, a.y + 2 * s}, {b.x - 2 * s, b.y - 2 * s}, Rgba(70, 110, 178), r - 2 * s);
+  dl->AddRectFilledMultiColor({a.x + r, a.y + 2 * s}, {b.x - r, a.y + 5 * s}, Rgba(150, 190, 240, 120),
+                              Rgba(150, 190, 240, 120), Rgba(150, 190, 240, 0), Rgba(150, 190, 240, 0));
+  dl->AddRectFilled({a.x + 7 * s, a.y + 7 * s}, {b.x - 7 * s, b.y - 7 * s}, Rgba(14, 26, 58), r - 7 * s);
+  dl->AddRectFilled({a.x + 8.5f * s, a.y + 8.5f * s}, {b.x - 8.5f * s, b.y - 8.5f * s}, Rgba(30, 50, 92),
+                    r - 8.5f * s);
+  dl->AddRect(a, b, Rgba(20, 44, 96, 200), r, 0, 1.5f * s);
+  if (selected) {
+    dl->AddRect({a.x + 7.5f * s, a.y + 7.5f * s}, {b.x - 7.5f * s, b.y - 7.5f * s}, kGold, r - 7.5f * s, 0, 3 * s);
+  }
+}
+
+// The title's half width (the big SKYLANDERS or the banner under it, whichever is wider) and its
+// centre: the window's middle, or left of the profile and the controllers at the top right when
+// the window is narrow.
+float TitlePlateHalf(ImFont* bold, float u) {
+  return std::max(TextWidth(bold, 80 * u, "SKYLANDERS") * 0.5f + 8 * u,
+                  TextWidth(bold, 40 * u, "CORE OF LIGHT") * 0.5f + 120 * u);
+}
 float TitlePlateCenter(ImFont* bold, float width, float badge_left, float u) {
   return std::max(TitlePlateHalf(bold, u) + 24 * u, std::min(width * 0.5f, badge_left - TitlePlateHalf(bold, u) - 24 * u));
 }
 
-// The title plate at the top, centred on `cx`: CORE OF LIGHT in gold on a blue plate with pointed
-// ends, SKYLANDERS above it. Returns the plate's bottom.
+// Text with an outline: drawn in the outline colour around it first.
+void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fill, ImU32 outline, float thick,
+                  const char* text) {
+  for (int k = 0; k < 16; ++k) {
+    const float a = float(k) * 0.3926991f;
+    Text(dl, font, size, {pos.x + std::cos(a) * thick, pos.y + std::sin(a) * thick}, outline, text);
+  }
+  Text(dl, font, size, pos, fill, text);
+}
+
+// The title at the top, centred on `cx`, as the concept's logo: a big SKYLANDERS, white with a dark
+// blue outline and a light blue lower half, and under it a banner with pointed ends, CORE OF LIGHT
+// in gold between two gold lines. Our own lettering, not the games' logo. Returns the banner's bottom.
 float DrawTitlePlate(ImDrawList* dl, ImFont* bold, float cx, float u) {
+  const char* over = "SKYLANDERS";
+  const float os = 80 * u, ow = TextWidth(bold, os, over), oy = 22 * u;
+  OutlinedText(dl, bold, os, {cx - ow * 0.5f, oy + 5 * u}, Rgba(10, 30, 70, 200), Rgba(10, 30, 70, 200), 6 * u, over);
+  OutlinedText(dl, bold, os, {cx - ow * 0.5f, oy}, kWhite, Rgba(18, 52, 112), 5 * u, over);
+  // The lower half in light blue, as on the games' own lettering.
+  dl->PushClipRect({cx - ow, oy + os * 0.58f}, {cx + ow, oy + os}, true);
+  Text(dl, bold, os, {cx - ow * 0.5f, oy}, Rgba(170, 215, 250), over);
+  dl->PopClipRect();
   const char* title = "CORE OF LIGHT";
-  const float size = 50 * u, tw = TextWidth(bold, size, title);
-  const float top = 84 * u, h = 70 * u, half = tw * 0.5f + 56 * u;
-  // The plate: a long hexagon, its rim light, a thin gold line inside.
+  const float size = 40 * u, tw = TextWidth(bold, size, title);
+  const float top = oy + os + 6 * u, h = 58 * u, half = tw * 0.5f + 110 * u;
+  // The banner: a long hexagon, dark blue with a light rim and a darker line inside it.
   const ImVec2 pts[6] = {{cx - half, top + h * 0.5f}, {cx - half + h * 0.5f, top},        {cx + half - h * 0.5f, top},
                          {cx + half, top + h * 0.5f}, {cx + half - h * 0.5f, top + h}, {cx - half + h * 0.5f, top + h}};
-  dl->AddConvexPolyFilled(pts, 6, Rgba(26, 56, 120, 240));
-  dl->AddPolyline(pts, 6, Rgba(170, 205, 245), ImDrawFlags_Closed, 4 * u);
+  dl->AddConvexPolyFilled(pts, 6, Rgba(22, 46, 98, 245));
+  dl->AddPolyline(pts, 6, Rgba(150, 190, 240), ImDrawFlags_Closed, 4 * u);
   ImVec2 inner[6];
   for (int i = 0; i < 6; ++i) {
-    inner[i] = {cx + (pts[i].x - cx) * 0.94f, top + h * 0.5f + (pts[i].y - top - h * 0.5f) * 0.78f};
+    inner[i] = {cx + (pts[i].x - cx) * 0.96f, top + h * 0.5f + (pts[i].y - top - h * 0.5f) * 0.8f};
   }
-  dl->AddPolyline(inner, 6, Rgba(255, 204, 64, 150), ImDrawFlags_Closed, 1.5f * u);
-  // Gold lines out from both ends, as on the concept's banner.
-  dl->AddLine({cx - half - 70 * u, top + h * 0.5f}, {cx - half - 10 * u, top + h * 0.5f}, Rgba(255, 204, 64, 200), 3 * u);
-  dl->AddLine({cx + half + 10 * u, top + h * 0.5f}, {cx + half + 70 * u, top + h * 0.5f}, Rgba(255, 204, 64, 200), 3 * u);
+  dl->AddPolyline(inner, 6, Rgba(10, 24, 56, 200), ImDrawFlags_Closed, 2 * u);
+  // Gold lines on both sides of the name, inside the banner.
+  const float ly = top + h * 0.5f;
+  dl->AddLine({cx - tw * 0.5f - 74 * u, ly}, {cx - tw * 0.5f - 16 * u, ly}, kGold, 3.5f * u);
+  dl->AddLine({cx + tw * 0.5f + 16 * u, ly}, {cx + tw * 0.5f + 74 * u, ly}, kGold, 3.5f * u);
   const float ty = top + (h - size) * 0.5f;
-  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 3 * u}, Rgba(90, 50, 0, 200), title);
+  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 3 * u}, Rgba(60, 35, 0, 220), title);
   Text(dl, bold, size, {cx - tw * 0.5f, ty}, kGold, title);
-  // SKYLANDERS above, white with a blue shadow.
-  const char* over = "SKYLANDERS";
-  const float os = 34 * u, ow = TextWidth(bold, os, over);
-  Text(dl, bold, os, {cx - ow * 0.5f + 2 * u, top - os - 4 * u + 3 * u}, Rgba(20, 50, 110, 220), over);
-  Text(dl, bold, os, {cx - ow * 0.5f, top - os - 4 * u}, kWhite, over);
   return top + h;
+}
+
+// The bar at the bottom: a long plate with cut corners, a light rim and a dark line inside it.
+void DrawBottomBar(ImDrawList* dl, ImVec2 a, ImVec2 b, float u) {
+  const float c = (b.y - a.y) * 0.32f;
+  const ImVec2 pts[8] = {{a.x, a.y + c}, {a.x + c, a.y}, {b.x - c, a.y}, {b.x, a.y + c},
+                         {b.x, b.y - c}, {b.x - c, b.y}, {a.x + c, b.y}, {a.x, b.y - c}};
+  dl->AddConvexPolyFilled(pts, 8, Rgba(26, 50, 100, 242));
+  dl->AddPolyline(pts, 8, Rgba(118, 160, 222), ImDrawFlags_Closed, 5 * u);
+  ImVec2 inner[8];
+  const ImVec2 m{(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f};
+  for (int i = 0; i < 8; ++i) {
+    const float dx = pts[i].x < m.x ? 7 * u : -7 * u, dy = pts[i].y < m.y ? 7 * u : -7 * u;
+    inner[i] = {pts[i].x + dx, pts[i].y + dy};
+  }
+  dl->AddPolyline(inner, 8, Rgba(10, 24, 56, 200), ImDrawFlags_Closed, 2 * u);
+  dl->AddLine({a.x + c + 4 * u, a.y + 3 * u}, {b.x - c - 4 * u, a.y + 3 * u}, Rgba(190, 220, 250, 110), 1.5f * u);
 }
 
 }  // namespace
@@ -669,7 +725,7 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   const Found& f = found_[index];
   const bool installed = !f.exe.empty();
   const float s = h / 420.0f;  // the card's own scale
-  const float r = 22 * s;
+  const float r = 26 * s;
   if (selected) {
     // The light of the core behind the chosen card.
     for (int k = 6; k > 0; --k) {
@@ -677,9 +733,8 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       dl->AddRectFilled({x - grow, y - grow}, {x + w + grow, y + h + grow}, Rgba(255, 210, 90, 10), r + grow);
     }
   }
-  // The frame (#78): a steel-blue rim with a dark line inside it, gold on the chosen card.
-  DrawFramedPanel(dl, {x, y}, {x + w, y + h}, r, s, Rgba(20, 36, 78, 242), selected ? kGold : Rgba(130, 165, 220),
-                  selected ? 5 * s : 4 * s);
+  // The frame (#78): a thick steel-blue rim, a gold line inside it on the chosen card.
+  DrawCardFrame(dl, {x, y}, {x + w, y + h}, r, s, selected);
   // Two sparks running round the chosen card's border (the owner's wish for more life, 2026-10-24).
   if (selected && hub_.animations) {
     const float head = float(ImGui::GetTime()) * 260 * s;
@@ -696,18 +751,19 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       index < tile_art_.size() && !tile_art_[index].empty() ? LoadTexture(tile_art_[index]) : ImTextureID{};
   float content_y = 0;  // where the hero's picture goes; 0: the layout without a tile
   if (tile) {
-    const float tw = w - 12 * s, th = tw * 320.0f / 420.0f;
-    dl->AddImageRounded(tile, {x + 6 * s, y + 6 * s}, {x + 6 * s + tw, y + 6 * s + th}, {0, 0}, {1, 1}, kWhite,
-                        r - 4 * s, ImDrawFlags_RoundCornersTop);
+    const float tw = w - 17 * s, th = tw * 320.0f / 420.0f;
+    dl->AddImageRounded(tile, {x + 8.5f * s, y + 8.5f * s}, {x + 8.5f * s + tw, y + 8.5f * s + th}, {0, 0}, {1, 1},
+                        kWhite, r - 8.5f * s, ImDrawFlags_RoundCornersTop);
+    dl->AddLine({x + 8.5f * s, y + 8.5f * s + th}, {x + w - 8.5f * s, y + 8.5f * s + th}, Rgba(14, 26, 58), 2 * s);
     // The year small in the tile's corner.
-    const float ys = 18 * s, yw = TextWidth(bold_, ys, year);
-    dl->AddRectFilled({x + 12 * s, y + 12 * s}, {x + 24 * s + yw, y + 16 * s + ys}, Rgba(10, 14, 40, 190), 8 * s);
-    Text(dl, bold_, ys, {x + 18 * s, y + 14 * s}, kWhite, year);
-    content_y = y + 6 * s + th + 10 * s;
+    const float ys = 15 * s, yw = TextWidth(bold_, ys, year);
+    dl->AddRectFilled({x + 14 * s, y + 14 * s}, {x + 26 * s + yw, y + 18 * s + ys}, Rgba(10, 14, 40, 170), 8 * s);
+    Text(dl, bold_, ys, {x + 20 * s, y + 16 * s}, kWhite, year);
+    content_y = y + 8.5f * s + th + 14 * s;
   } else {
     const ImU32 accent = kAccents[index % 6];
-    dl->AddRectFilled({x + 6 * s, y + 6 * s}, {x + w - 6 * s, y + 70 * s}, installed ? accent : Rgba(70, 75, 100),
-                      r - 4 * s, ImDrawFlags_RoundCornersTop);
+    dl->AddRectFilled({x + 8.5f * s, y + 8.5f * s}, {x + w - 8.5f * s, y + 72 * s}, installed ? accent : Rgba(70, 75, 100),
+                      r - 8.5f * s, ImDrawFlags_RoundCornersTop);
     const float year_size = 40 * s;
     Text(dl, bold_, year_size, {x + (w - TextWidth(bold_, year_size, year)) * 0.5f, y + 14 * s}, kWhite, year);
   }
@@ -724,16 +780,15 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   // In a round frame, as the concept's character icons (#78). Smaller where the card is short (two
   // rows of cards in a narrow window), none where it wouldn't fit above the chosen card's button.
   const float hero_y = tile ? content_y + 4 * s : y + 144 * s;
-  const float hero_room = std::min(80 * s, y + h - (selected ? 126 : 76) * s - hero_y - 4 * s);
+  const float hero_room = std::min(74 * s, y + h - 126 * s - hero_y - 4 * s);
   const float hero_side = hero_room >= 36 * s ? hero_room : 0.0f;
   if (!hero_pictures_[index].empty() && hero_side > 0) {
     if (const ImTextureID texture = LoadTexture(hero_pictures_[index])) {
       const ImVec2 a{x + (w - hero_side) * 0.5f, hero_y};
       const ImVec2 c{a.x + hero_side * 0.5f, a.y + hero_side * 0.5f};
-      dl->AddCircleFilled(c, hero_side * 0.5f + 5 * s, Rgba(10, 20, 48), 48);
+      dl->AddCircleFilled(c, hero_side * 0.5f + 7 * s, Rgba(16, 30, 64), 48);  // the dark disc it sits on
       dl->AddImageRounded(texture, a, {a.x + hero_side, a.y + hero_side}, {0, 0}, {1, 1},
                           installed ? kWhite : Rgba(255, 255, 255, 90), hero_side * 0.5f);
-      dl->AddCircle(c, hero_side * 0.5f + 4 * s, selected ? kGold : Rgba(130, 165, 220), 48, 2.5f * s);
     }
   }
   if (!tile) {
@@ -758,9 +813,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       lines.insert(lines.begin(), text);
       if (achievements_[index].platinum) achievements_line = text;
     }
-    // The active profile's time in it, as far as the launcher started it.
+    // The active profile's time in it, as far as the launcher started it (under the achievements, #78).
     if (index >= play_seconds_.size() || !play_seconds_[index]) {
-      lines.insert(lines.begin(), german_ ? "Noch nicht gespielt" : "Not played yet");
+      lines.push_back(german_ ? "Noch nicht gespielt" : "Not played yet");
     } else {
       const uint64_t minutes = play_seconds_[index] / 60, hours = minutes / 60;
       char text[64];
@@ -772,7 +827,7 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       } else {
         std::snprintf(text, sizeof(text), german_ ? "Gespielt < 1 Min." : "Played < 1 min");
       }
-      lines.insert(lines.begin(), text);
+      lines.push_back(text);
     }
     // A picture export running for it (#12): first, so it shows on every card.
     if (pictures_process_ && pictures_game_ == index) {
@@ -782,20 +837,20 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     // or the chosen card's play button (at h - 122).
     const bool hero_shown = !hero_pictures_[index].empty() && hero_side > 0;
     float ly = tile ? hero_y + (hero_shown ? hero_side + 14 * s : 0) : y + (hero_shown ? 230 : 170) * s;
-    const float lines_end = y + h - (selected ? 126 : 76) * s;
-    const size_t fit = size_t(std::max(0.0f, (lines_end - ly) / (24 * s)));
+    const float lines_end = y + h - 96 * s;  // above the state, as on the concept's cards
+    const size_t fit = size_t(std::max(0.0f, (lines_end - ly) / (21 * s)));
     if (lines.size() > fit) lines.resize(fit);
     for (const std::string& line : lines) {
       // Centred under the picture (#78), or from the left where a line has to wrap.
-      const float lw = TextWidth(regular_, 21 * s, line.c_str());
+      const float lw = TextWidth(regular_, 16.5f * s, line.c_str());
       const float lx = lw <= w - 44 * s ? x + (w - lw) * 0.5f : x + 22 * s;
-      Text(dl, regular_, 21 * s, {lx, ly}, kDim, line.c_str(), w - 44 * s);
+      Text(dl, regular_, 16.5f * s, {lx, ly}, Rgba(226, 234, 248), line.c_str(), w - 44 * s);
       if (!achievements_line.empty() && line == achievements_line) {
         DrawPlatinumTrophy(dl, std::min(lx + lw + 16 * s, x + w - 14 * s), ly + 11 * s, 22 * s, true);
       }
       // A line that wraps (a wider font, Noto Sans under Wine) pushes the next one down.
-      const float height = regular_->CalcTextSizeA(21 * s, FLT_MAX, w - 44 * s, line.c_str()).y;
-      ly += std::max(24 * s, height + 3 * s);
+      const float height = regular_->CalcTextSizeA(16.5f * s, FLT_MAX, w - 44 * s, line.c_str()).y;
+      ly += std::max(21 * s, height + 3 * s);
     }
   }
   // The disc's state.
@@ -835,39 +890,39 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
         break;
     }
   }
-  // Centred above the badge (#78), from the left where it has to wrap.
-  auto centred = [&](float size, const char* text) {
-    const float tw = TextWidth(regular_, size, text);
-    return tw <= w - 36 * s ? x + (w - tw) * 0.5f : x + 18 * s;
-  };
-  const float state_size = 20 * s;
-  Text(dl, regular_, state_size, {centred(state_size, state), y + h - 70 * s}, state_col, state, w - 36 * s);
+  // From the left above the medallion, as on the concept's cards (#78).
+  const float state_size = 16.5f * s, text_x = x + 30 * s;
+  Text(dl, regular_, state_size, {text_x, y + h - 88 * s}, state_col, state, w - 48 * s);
   // When the active profile last saved it.
   if (installed && index < last_saved_.size() && last_saved_[index]) {
     const std::string when =
         (german_ ? "Zuletzt gespeichert " : "Last saved ") + FileTimeDate(last_saved_[index], german_);
-    Text(dl, regular_, 16 * s, {centred(16 * s, when.c_str()), y + h - 46 * s}, kDim, when.c_str(), w - 36 * s);
+    Text(dl, regular_, 13.5f * s, {text_x, y + h - 66 * s}, Rgba(226, 234, 248), when.c_str(), w - 48 * s);
   }
-  // The badge on the frame's bottom edge (#78): a star in a ring, lit gold on the chosen card.
+  // The medallion on the frame's bottom edge (#78): the rim bulges round it, a portal emblem inside,
+  // lit gold on the chosen card.
   {
-    const ImVec2 bc{x + w * 0.5f, y + h};
-    const float br = 25 * s;
-    if (selected) dl->AddCircleFilled(bc, br + 9 * s, Rgba(255, 210, 90, 45), 40);
+    const ImVec2 bc{x + w * 0.5f, y + h - 2 * s};
+    const float br = 24 * s;
+    if (selected) dl->AddCircleFilled(bc, br + 14 * s, Rgba(255, 210, 90, 50), 40);
+    dl->AddCircleFilled(bc, br + 8 * s, Rgba(118, 160, 222), 48);  // the rim's bulge
+    dl->AddCircleFilled(bc, br + 6 * s, Rgba(70, 110, 178), 48);
+    dl->AddCircleFilled(bc, br + 1.5f * s, Rgba(14, 26, 58), 48);
     dl->AddCircleFilled(bc, br, selected ? Rgba(150, 100, 20) : Rgba(26, 46, 96), 40);
     dl->AddCircle(bc, br - 4 * s, selected ? Rgba(255, 230, 150, 120) : Rgba(10, 20, 48, 160), 40, 1.5f * s);
     dl->AddCircle(bc, br, selected ? kGold : Rgba(130, 165, 220), 40, 3.5f * s);
-    DrawStar(dl, bc, br * 0.68f, selected ? Rgba(255, 240, 170) : Rgba(150, 178, 225));
+    DrawPortalEmblem(dl, bc, br * 0.72f, selected ? Rgba(255, 225, 90) : Rgba(120, 155, 210),
+                     selected ? Rgba(150, 100, 20) : Rgba(26, 46, 96));
   }
   const DiscState disc_state = f.disc.load();
   const bool can_install = !installed && !install_process_ && index < setups_.size() && !setups_[index].empty();
-  if (selected && !BeingUpdated(index) &&
-      (can_install || (installed && (disc_state == DiscState::kMatches || disc_state == DiscState::kMissing)))) {
-    const char* go = can_install                         ? (german_ ? "Installieren" : "Install")
-                     : disc_state == DiscState::kMissing ? (german_ ? "Disc einlesen" : "Add the disc")
-                                                         : (german_ ? "Starten" : "Play");
+  // Only for what the bar's Play doesn't say (#78: the concept's cards have no button): install it, or
+  // add its disc.
+  if (selected && !BeingUpdated(index) && (can_install || (installed && disc_state == DiscState::kMissing))) {
+    const char* go = can_install ? (german_ ? "Installieren" : "Install") : (german_ ? "Disc einlesen" : "Add the disc");
     const float go_size = 24 * s;
     const float gw = TextWidth(bold_, go_size, go) + 60 * s;
-    const ImVec2 a{x + (w - gw) * 0.5f, y + h - 122 * s};
+    const ImVec2 a{x + (w - gw) * 0.5f, y + h - 142 * s};
     dl->AddRectFilled(a, {a.x + gw, a.y + 44 * s}, kGoldDark, 22 * s);
     dl->AddRectFilled({a.x + 3 * s, a.y + 3 * s}, {a.x + gw - 3 * s, a.y + 41 * s}, kGold, 19 * s);
     Text(dl, bold_, go_size, {a.x + 30 * s, a.y + 8 * s}, Rgba(60, 35, 0), go);
@@ -2845,7 +2900,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();
-  const bool two_rows = width / height < 1.45f;
+  const bool two_rows = false;  // one long row, also in a narrow window: the cards get smaller (the owner, #78)
   const size_t per_row = two_rows ? 3 : n;
   const float gap = 22 * u;
   const float area_w = width - 96 * u;
@@ -2854,7 +2909,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // On a window wider than 16:9 (ultrawide) or a tall one the width alone would make the cards
   // taller than the room between the title plate and the bar at the bottom; there the height
   // decides, the cards keep their shape. Each card's badge reaches below it (the gap in between).
-  const float area_top = 190 * u, area_bottom = height - 136 * u;
+  const float area_top = 222 * u, area_bottom = height - 142 * u;
   const float row_gap = two_rows ? gap + 26 * u : 0.0f;
   const float room_h = (area_bottom - area_top - row_gap) / (two_rows ? 2.0f : 1.0f);
   if (room_h > 0 && card_h > room_h) {
@@ -3038,8 +3093,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // The figure count line that was here went (the owner: nobody needs it there, #25).
   (void)figures;
   // The bar at the bottom (#78): the buttons, the launcher's version at its right end (#22).
-  const float bar_l = 32 * u, bar_r = width - 32 * u, bar_t = height - 90 * u, bar_b = height - 26 * u;
-  DrawFramedPanel(dl, {bar_l, bar_t}, {bar_r, bar_b}, 20 * u, u, Rgba(24, 48, 102, 238), Rgba(150, 190, 240), 3 * u);
+  const float bar_l = 40 * u, bar_r = width - 40 * u, bar_t = height - 112 * u, bar_b = height - 36 * u;
+  DrawBottomBar(dl, {bar_l, bar_t}, {bar_r, bar_b}, u);
   const char* version = "Core of Light " COREOFLIGHT_VERSION;
   const float version_w = TextWidth(regular_, 16 * u, version);
   Text(dl, regular_, 16 * u, {bar_r - 26 * u - version_w, bar_t + (bar_b - bar_t - 16 * u) * 0.5f}, kDim, version);
@@ -3051,15 +3106,19 @@ bool LauncherUi::DrawScreens(float width, float height) {
     const std::string note =
         german_ ? std::string(game.name_de) + ": Bilder werden von der Disc gelesen. L\xC3\xA4uft im Hintergrund und endet von selbst."
                 : std::string(game.name_en) + ": reading its pictures from the disc. Runs in the background and ends by itself.";
-    const float size = 19 * u, tw = TextWidth(regular_, size, note.c_str());
-    const float right = bar_r, x = std::max(bar_l, right - tw - 46 * u);
-    const float y = bar_t - 46 * u;
-    dl->AddRectFilled({x, y}, {right, y + 36 * u}, Rgba(24, 30, 70, 230), 18 * u);
-    const ImVec2 c{x + 22 * u, y + 18 * u};
+    // At the top left, left of the title (the cards' medallions sit above the bar), under the
+    // "update all" pill, wrapped to the room there.
+    const float size = 17 * u;
+    const float x = 40 * u, y = 108 * u;
+    const float room = std::max(260 * u, TitlePlateCenter(bold_, width, badge_left_, u) - TitlePlateHalf(bold_, u) - x - 20 * u);
+    const float wrap = std::min(TextWidth(regular_, size, note.c_str()), room - 50 * u);
+    const float th = regular_->CalcTextSizeA(size, FLT_MAX, wrap, note.c_str()).y;
+    dl->AddRectFilled({x, y}, {x + wrap + 50 * u, y + th + 14 * u}, Rgba(24, 30, 70, 230), 16 * u);
+    const ImVec2 c{x + 22 * u, y + 7 * u + size * 0.6f};
     const float a0 = float(ImGui::GetTime()) * 5.0f;
     dl->PathArcTo(c, 8 * u, a0, a0 + 4.2f, 24);
     dl->PathStroke(kGold, 0, 2.5f * u);
-    Text(dl, regular_, size, {x + 38 * u, y + 7 * u}, kWhite, note.c_str());
+    Text(dl, regular_, size, {x + 38 * u, y + 7 * u}, kWhite, note.c_str(), wrap);
   }
   float hx = bar_l + 28 * u;
   // Smaller when it doesn't fit the bar (handheld mode, a narrow window).
