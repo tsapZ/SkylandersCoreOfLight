@@ -140,7 +140,8 @@ updates itself too. Saves, figures and settings stay.
 
 Your figures live in one folder, shared by all six games like real figures next to the portal. The
 **figure library** shows every one you have, by game, with its level, gold, hat, upgrade tree and
-nickname. Mark the ones on your real shelf with "I own it"; there's a leaderboard too.
+nickname. Mark the ones on your real shelf with "I own it"; there's a leaderboard too. Start on a
+figure resets it to a new toy (the old file stays as a backup) or deletes it.
 
 ### Like a console's dashboard
 
@@ -164,6 +165,8 @@ the game.
 - **The title music** of the chosen game, straight from its disc.
 - **Imaginators in English, German or French** from your PS3 disc (the European 360 disc only has
   Spanish and Italian).
+- **SuperChargers in any of its six languages** from another Xbox 360 disc of the game that has it
+  (each European disc has two), even one of a build that can't run here itself.
 - **Controller, keyboard or mouse:** the button hints at the bottom follow what you use, and can be
   clicked.
 
