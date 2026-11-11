@@ -273,6 +273,9 @@ The pictures at the top of this page are drawn by `tools/make_banner.ps1`, the i
 - **[skylanders-portal](https://github.com/TheBiemGamer/skylanders-portal)** by TheBiemGamer: the
   portal library the launcher shares with the games (figure catalog and figure files), here in a
   fork with the shared menus on top. Submodule; keeps its own license.
+- **[morpheus284](https://github.com/morpheus284)**: the start screen's look (the sky, the framed
+  cards with their badges, the title plate and the bar at the bottom) follows his concept
+  ([#78](https://github.com/tsapZ/SkylandersCoreOfLight/issues/78)).
 - **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut draws the launcher. Submodule
   (MIT).
 - **[stb_image](https://github.com/nothings/stb)** by Sean Barrett: its zlib decoder unpacks
