@@ -84,11 +84,13 @@ constexpr LanguageInfo kImaginatorsSpanish = {"es", "_es", "/spanish/", "_es.wav
 // SuperChargers (SuperChargersRecomp's tools/add_language.py, branch feat/language-any): read off its
 // Spanish / Italian and English / German discs, 2026-11-11: voice banks <bank>_xx.pak, voices in
 // /voice/<language>/, cutscene voices <name>_gen_xx.wav (English <name>_gen.wav), text <name>_xx.lng;
-// French and Dutch named the same way. No movie tracks: SuperChargers' import leaves the movies.
+// French and Dutch named the same way (Core of Light #77: a French / Dutch disc's 1146 texts and
+// 10833 voices came over). movie_track here: the language's spoken track in its own disc's story
+// movies, 5 for the disc's first language and 6 for its second (SuperChargersMovies).
 constexpr LanguageInfo kSuperChargersInfo[] = {
-    {"en", "_en", "/english/", "_gen.wav", 0},    {"de", "_de", "/german/", "_gen_de.wav", 0},
-    {"es", "_es", "/spanish/", "_gen_es.wav", 0}, {"it", "_it", "/italian/", "_gen_it.wav", 0},
-    {"fr", "_fr", "/french/", "_gen_fr.wav", 0},  {"nl", "_nl", "/dutch/", "_gen_nl.wav", 0},
+    {"en", "_en", "/english/", "_gen.wav", 5},    {"de", "_de", "/german/", "_gen_de.wav", 6},
+    {"es", "_es", "/spanish/", "_gen_es.wav", 5}, {"it", "_it", "/italian/", "_gen_it.wav", 6},
+    {"fr", "_fr", "/french/", "_gen_fr.wav", 5},  {"nl", "_nl", "/dutch/", "_gen_nl.wav", 6},
 };
 constexpr LanguageImport::Language kSuperChargersLanguages[] = {
     {"en", "English", "English", "Englisch"},
@@ -1057,6 +1059,123 @@ int Movies(Job& job, std::vector<std::string>& skipped) {
   return changed;
 }
 
+// SuperChargers (add_language.py's --movies, Core of Light #77): the story movies speak their disc's
+// two languages in Bink tracks 5 and 6, in the disc's order, and the game plays track 5 whatever the
+// language (BinkSetSoundTrack with {0, 1, 2, 3, 5}, logged 2026-10-25). So the other disc's movie
+// comes in whole, and when the wanted language is its second one, that track is copied into 5.
+constexpr uint32_t kSpokenPlayed = 5;
+
+// The movie with track `track`'s packets in track kSpokenPlayed as well (add_language.py's
+// spoken_into_played); nullopt when it has no such tracks or they are the same already.
+std::optional<std::vector<uint8_t>> SpokenIntoPlayed(const std::vector<uint8_t>& d, uint32_t track) {
+  const auto b = Bink(d);
+  if (!b || track == kSpokenPlayed) return std::nullopt;
+  const auto src_it = std::find(b->ids.begin(), b->ids.end(), track);
+  const auto dst_it = std::find(b->ids.begin(), b->ids.end(), kSpokenPlayed);
+  if (src_it == b->ids.end() || dst_it == b->ids.end()) return std::nullopt;
+  const size_t src = size_t(src_it - b->ids.begin()), dst = size_t(dst_it - b->ids.begin());
+  const size_t frames = b->offsets.size() - 1;
+  std::vector<uint8_t> body;
+  std::vector<uint32_t> sizes;
+  uint32_t largest = 0;
+  bool changed = false;
+  for (size_t f = 0; f < frames; ++f) {
+    std::vector<std::pair<size_t, uint32_t>> packets;  // (offset of the data, size), one per track
+    size_t at = b->offsets[f];
+    for (size_t t = 0; t < b->ids.size(); ++t) {
+      if (at + 4 > d.size()) return std::nullopt;
+      const uint32_t size = Le32(d.data() + at);
+      if (at + 4 + size > d.size()) return std::nullopt;
+      packets.push_back({at + 4, size});
+      at += 4 + size;
+    }
+    if (at > b->offsets[f + 1] || b->offsets[f + 1] > d.size()) return std::nullopt;
+    if (packets[dst].second != packets[src].second ||
+        std::memcmp(d.data() + packets[dst].first, d.data() + packets[src].first, packets[src].second) != 0) {
+      changed = true;
+    }
+    packets[dst] = packets[src];
+    const size_t start = body.size();
+    for (const auto& [offset, size] : packets) {
+      uint8_t le[4];
+      PutLe32(le, size);
+      body.insert(body.end(), le, le + 4);
+      body.insert(body.end(), d.begin() + ptrdiff_t(offset), d.begin() + ptrdiff_t(offset + size));
+    }
+    body.insert(body.end(), d.begin() + ptrdiff_t(at), d.begin() + ptrdiff_t(b->offsets[f + 1]));  // the video
+    sizes.push_back(uint32_t(body.size() - start));
+    largest = std::max(largest, sizes.back());
+  }
+  if (!changed) return std::nullopt;
+  std::vector<uint8_t> out(d.begin(), d.begin() + ptrdiff_t(b->table));
+  uint32_t at = b->offsets[0];  // the header's own length is unchanged
+  for (size_t f = 0; f <= frames; ++f) {
+    uint8_t le[4];
+    PutLe32(le, at | (Le32(d.data() + b->table + 4 * f) & 1));  // keeps the key frame bit
+    out.insert(out.end(), le, le + 4);
+    if (f < frames) at += sizes[f];
+  }
+  out.insert(out.end(), d.begin() + ptrdiff_t(b->table + 4 * (frames + 1)), d.begin() + ptrdiff_t(b->offsets[0]));
+  out.insert(out.end(), body.begin(), body.end());
+  PutLe32(out.data() + 4, uint32_t(b->offsets[0] + body.size() - 8));
+  PutLe32(out.data() + 12, largest);
+  return out;
+}
+
+// SuperChargers: the other disc's movies where they differ from the install's (the story movies; the
+// logo and vehicle movies are the same file on every disc), the install's own first into
+// <backup>/movies for Restore. The new one is written beside the old first, so a full disk leaves the
+// install's movie as it was.
+int SuperChargersMovies(Job& job, std::vector<std::string>& skipped) {
+  const fs::path store = job.backup / kMoviesDir;
+  std::error_code ec;
+  fs::create_directories(store, ec);
+  int changed = 0;
+  const std::vector<std::string> names = ArchiveNames(job.archives, ".bk2");
+  for (size_t k = 0; k < names.size(); ++k) {
+    const std::string& name = names[k];
+    job.report((job.german ? "Filme " : "movies ") + std::to_string(k + 1) + " / " + std::to_string(names.size()),
+               0.85f + 0.15f * float(k) / float(std::max<size_t>(1, names.size())));
+    const fs::path target = job.archives / Path(name);
+    if (fs::exists(store / Path(name), ec)) continue;  // done in an earlier run
+    const std::string lower = Lower(name);
+    if (!job.disc.Has(lower)) continue;
+    auto own = ReadFile(target);
+    auto other = job.disc.Read(lower);
+    if (!own || !other || *own == *other) continue;  // the same on both discs
+    if (!Bink(*other)) {
+      skipped.push_back(name + " (not a Bink 2 movie)");
+      continue;
+    }
+    if (auto moved = SpokenIntoPlayed(*other, job.lang->movie_track)) *other = std::move(*moved);
+    fs::path fresh = target;
+    fresh += ".new";
+    {
+      std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
+      out.write(reinterpret_cast<const char*>(other->data()), std::streamsize(other->size()));
+      out.close();
+      if (out.fail()) {
+        fs::remove(fresh, ec);
+        skipped.push_back(name + " (could not be written: disk full?)");
+        continue;
+      }
+    }
+    fs::rename(target, store / Path(name), ec);
+    if (ec) {
+      fs::remove(fresh, ec);
+      continue;
+    }
+    fs::rename(fresh, target, ec);
+    if (ec) {
+      fs::rename(store / Path(name), target, ec);  // the install's own back
+      continue;
+    }
+    ++changed;
+  }
+  if (fs::is_empty(store, ec)) fs::remove(store, ec);
+  return changed;
+}
+
 // ---- The way back ----
 
 // add_language.py's restore: the movies back, every archive's entries back and cut to its length.
@@ -1455,7 +1574,7 @@ void LanguageImport::StartSuperChargers(const fs::path& source, const fs::path& 
     const std::vector<std::string> voice_paks = ArchiveNames(job->archives, PlaceVoices(*job).c_str());
     for (size_t k = 0; k < voice_paks.size(); ++k) {
       job->report((german ? "Stimmen " : "voices ") + std::to_string(k + 1) + " / " + std::to_string(voice_paks.size()),
-                  0.5f + 0.5f * float(k) / float(std::max<size_t>(1, voice_paks.size())));
+                  0.5f + 0.35f * float(k) / float(std::max<size_t>(1, voice_paks.size())));
       const std::string lower = Lower(voice_paks[k]);
       const std::string twin = lower.substr(0, lower.size() - PlaceVoices(*job).size()) + job->lang->suffix + ".pak";
       if (!job->disc.Has(twin)) continue;
@@ -1463,13 +1582,19 @@ void LanguageImport::StartSuperChargers(const fs::path& source, const fs::path& 
       job->voices += n;
       job->voice_archives += n ? 1 : 0;
     }
+    // The story movies in the language too (Core of Light #77: the levels spoke French, the films
+    // English).
+    std::vector<std::string> skipped;
+    if (job->texts) job->movies = SuperChargersMovies(*job, skipped);
+    for (const std::string& s : skipped) HubLog("language import: movie left as it is: " + s);
     // Which language it is and in whose place, once all of it is in.
     {
       std::ofstream note(job->backup / kLanguageNote, std::ios::binary | std::ios::trunc);
       note << language << "\n" << place << "\n";
     }
     HubLog("language import: SuperChargers, " + std::to_string(job->text_archives) + " text archives, " +
-           std::to_string(job->voice_archives) + " voice archives, in place of " + place);
+           std::to_string(job->voice_archives) + " voice archives, " + std::to_string(job->movies) +
+           " movies, in place of " + place);
     if (!job->texts) {
       return finish(german ? "Keine Texte gefunden: passt die Disc zu diesem SuperChargers?"
                            : "No texts found: does the disc match this SuperChargers?");
@@ -1481,9 +1606,11 @@ void LanguageImport::StartSuperChargers(const fs::path& source, const fs::path& 
     }
     char text[400];
     std::snprintf(text, sizeof(text),
-                  german ? "SuperChargers spricht jetzt %s (%d Texte, %d Stimmen). Im Spiel unter F4 > Spiel > Sprache: %s."
-                         : "SuperChargers speaks %s now (%d texts, %d voices). In the game's F4 > Game > Language: %s.",
-                  name.c_str(), job->texts, job->voices, place_name.c_str());
+                  german ? "SuperChargers spricht jetzt %s (%d Texte, %d Stimmen, %d Filme). Im Spiel unter F4 > Spiel > "
+                           "Sprache: %s."
+                         : "SuperChargers speaks %s now (%d texts, %d voices, %d movies). In the game's F4 > Game > "
+                           "Language: %s.",
+                  name.c_str(), job->texts, job->voices, job->movies, place_name.c_str());
     finish(text);
   }).detach();
 }
