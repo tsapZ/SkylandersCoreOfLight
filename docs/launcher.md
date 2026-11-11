@@ -199,6 +199,21 @@ exe and gets out of the way while the game runs; no game needs it.
   Python tool's files, so either undoes the other's run; `language.txt` there names the language);
   another language undoes the first one before it goes in. Setting up a different 360 disc deletes
   that folder (its files replace the changed ones).
+- **SuperChargers-Sprache** (a row of the launcher's settings, the same `src/language_import.cpp`,
+  `StartSuperChargers`; #77, the owner: as many languages as possible): each European 360 disc of
+  SuperChargers speaks two of its six (es / it, en / de, fr / nl). The row says which ones ("Wie die
+  Disc (Español, Italiano)", or "Français (als Español)"); A asks the language (the six but the
+  install's own two, and the disc's own back once another is in), then an Xbox 360 disc of the game
+  with it in the browser ("Wähle eine Xbox-360-Disc von SuperChargers mit der Sprache"; its .iso,
+  read through `xiso.h`, or the unpacked folder; another build too, which can't run itself). Its
+  text, the licence and the voices go in place of one of the install's two languages: Spanish if
+  it has it, else its other one (`ImportedPlace`, the second line of `language.txt`), as
+  SuperChargersRecomp's `tools/add_language.py --xbox360 --slot` does, byte for byte (checked
+  2026-11-11); no movies. When it is done the game's `language` is set to the place's name, so F4 >
+  Spiel > Sprache shows it at once. Undone the same way as Imaginators'. A SuperChargers disc the
+  setup doesn't know (another build) says its languages can come in here instead of only being
+  refused. `--sc_language="<code>|<source>|<rom>"` (or `"restore|<rom>"`) runs it without the window,
+  the summary into the launcher's log (tests on copies).
 - **Problem melden** (the last row of the launcher's settings, `src/problem_report.cpp`): A writes
   one text file onto the desktop, `Skylanders-problem-report-<date>.txt` (the same name in German), and shows it in Explorer.
   Plain text, so it opens in any browser or editor and goes onto a GitHub issue as it is, with
