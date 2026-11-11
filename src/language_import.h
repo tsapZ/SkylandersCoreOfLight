@@ -31,11 +31,19 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace coreoflight {
 
 // Whether `source` (an .iso or a folder) is a PS3 disc of Imaginators.
 bool IsImaginatorsPs3Disc(const std::filesystem::path& source);
+// Whether `source` (an Xbox 360 .iso or an unpacked folder) is an Xbox 360 disc of SuperChargers,
+// and which of the six languages it has ("en", "fr", ...: its voice banks' suffixes).
+bool IsSuperChargersDisc(const std::filesystem::path& source, std::vector<std::string>* languages = nullptr);
+// The languages of SuperChargers' installed disc folder (`rom`): its two ("es", "it" or "en", "de").
+std::vector<std::string> SuperChargersInstallLanguages(const std::filesystem::path& rom);
+// The install's language whose place an import into `rom` took ("es"), empty if none (or Imaginators').
+std::string ImportedPlace(const std::filesystem::path& rom);
 // Whether the file is a PS3 disc image of any game (its volume is "PS3VOLUME").
 bool IsPs3Disc(const std::filesystem::path& iso);
 
@@ -53,13 +61,22 @@ class LanguageImport {
     const char* name_de;
   };
   static const Language* Languages(size_t* count);
+  // SuperChargers' six (en, de, es, it, fr, nl), the same layout.
+  static const Language* SuperChargersLanguages(size_t* count);
 
   // Starts on a thread of its own: `source` the PS3 disc (.iso or folder), `rom` the installed
   // Imaginators' disc folder. An earlier import of another language is undone first.
   void Start(const std::filesystem::path& source, const std::filesystem::path& rom, const std::string& language,
              bool german);
-  // Undoes every import into `rom` (also on a thread of its own).
-  void StartRestore(const std::filesystem::path& rom, bool german);
+  // SuperChargers (Core of Light #77): `language` from another Xbox 360 disc of the game (`source`,
+  // its .iso or unpacked folder) in place of one of the install's two languages: Spanish if it has
+  // it, else its other one (`ImportedPlace` says which; the game's F4 > Game > Language picks it by
+  // that name). Text, the licence and the voices, as SuperChargersRecomp's tools/add_language.py
+  // --xbox360 does; no movies. An earlier import is undone first.
+  void StartSuperChargers(const std::filesystem::path& source, const std::filesystem::path& rom,
+                          const std::string& language, bool german);
+  // Undoes every import into `rom` (also on a thread of its own); `game` names it in the summary.
+  void StartRestore(const std::filesystem::path& rom, bool german, const char* game = "Imaginators");
   bool running() const { return shared_ && !shared_->done; }
   // How far it is, 0..1, and what it does now (for the note at the bottom right).
   float progress() const { return shared_ ? shared_->progress.load() : 0.0f; }

@@ -19,6 +19,7 @@
 #include "hints.h"
 #include "hub_log.h"
 #include "hub_settings.h"
+#include "language_import.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
 #include "portable.h"
@@ -347,6 +348,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // which settings file says whether it starts in fullscreen.
   std::wstring iso;
   std::wstring portable_update;
+  std::wstring sc_language;
   bool fullscreen_arg = false;
   int argc = 0;
   if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
@@ -376,6 +378,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         // A test of the portable launcher's update without a release (portable.h): this ZIP's
         // launcher in this one's place, then started, as the update dialog does after its download.
         portable_update = arg.substr(18);
+      } else if (arg.starts_with(L"--sc_language=")) {
+        // A test of SuperChargers' language import without the window (language_import.h).
+        sc_language = arg.substr(14);
       } else if (arg == L"--fullscreen") {
         // Fullscreen for this start, whatever the setting says (Steam's launch options on a
         // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
@@ -405,6 +410,32 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                       coreoflight::StartLauncher(exe);
     coreoflight::HubLog(done ? "portable update test: done, the new launcher started" : "portable update test: " + why);
     return done ? 0 : 1;
+  }
+  if (!sc_language.empty()) {
+    // "<code>|<source disc>|<rom folder>", or "restore|<rom folder>": the import (or its undoing) on
+    // its thread, waited for; its summary goes to the log.
+    std::vector<std::wstring> parts;
+    for (size_t at = 0;;) {
+      const size_t bar = sc_language.find(L'|', at);
+      parts.push_back(sc_language.substr(at, bar == std::wstring::npos ? std::wstring::npos : bar - at));
+      if (bar == std::wstring::npos) break;
+      at = bar + 1;
+    }
+    std::string code;
+    for (wchar_t c : parts[0]) code += static_cast<char>(c);
+    coreoflight::LanguageImport job;
+    if (parts.size() == 2 && code == "restore") {
+      job.StartRestore(parts[1], false, "SuperChargers");
+    } else if (parts.size() == 3) {
+      job.StartSuperChargers(parts[1], parts[2], code, false);
+    } else {
+      coreoflight::HubLog("sc language test: --sc_language=\"<code>|<source disc>|<rom folder>\" or \"restore|<rom folder>\"");
+      return 1;
+    }
+    while (job.running()) Sleep(200);
+    const std::string summary = job.TakeSummary();
+    coreoflight::HubLog("sc language test: " + summary);
+    return summary.empty() ? 1 : 0;
   }
   const float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
   HWND hwnd = CreateWindowW(wc.lpszClassName, L"Skylanders: Core of Light", WS_OVERLAPPEDWINDOW, 100, 100,

@@ -16,6 +16,7 @@
 #include "alchemy/lzma_decoder.h"
 #include "hub_log.h"
 #include "inflate.h"
+#include "xiso.h"
 
 // stb_image's zlib decoder for the raw deflate blocks, every function static (nothing else of it
 // is used; InflateRaw below gives the rest of the launcher the same decoder).
@@ -77,6 +78,33 @@ constexpr LanguageImport::Language kLanguages[] = {
     {"de", "Deutsch", "German", "Deutsch"},
     {"fr", "Fran\xC3\xA7" "ais", "French", "Franz\xC3\xB6sisch"},
 };
+// Imaginators' place for the import: its disc's Spanish.
+constexpr LanguageInfo kImaginatorsSpanish = {"es", "_es", "/spanish/", "_es.wav", 0};
+
+// SuperChargers (SuperChargersRecomp's tools/add_language.py, branch feat/language-any): read off its
+// Spanish / Italian and English / German discs, 2026-11-11: voice banks <bank>_xx.pak, voices in
+// /voice/<language>/, cutscene voices <name>_gen_xx.wav (English <name>_gen.wav), text <name>_xx.lng;
+// French and Dutch named the same way. No movie tracks: SuperChargers' import leaves the movies.
+constexpr LanguageInfo kSuperChargersInfo[] = {
+    {"en", "_en", "/english/", "_gen.wav", 0},    {"de", "_de", "/german/", "_gen_de.wav", 0},
+    {"es", "_es", "/spanish/", "_gen_es.wav", 0}, {"it", "_it", "/italian/", "_gen_it.wav", 0},
+    {"fr", "_fr", "/french/", "_gen_fr.wav", 0},  {"nl", "_nl", "/dutch/", "_gen_nl.wav", 0},
+};
+constexpr LanguageImport::Language kSuperChargersLanguages[] = {
+    {"en", "English", "English", "Englisch"},
+    {"de", "Deutsch", "German", "Deutsch"},
+    {"es", "Espa\xC3\xB1ol", "Spanish", "Spanisch"},
+    {"it", "Italiano", "Italian", "Italienisch"},
+    {"fr", "Fran\xC3\xA7" "ais", "French", "Franz\xC3\xB6sisch"},
+    {"nl", "Nederlands", "Dutch", "Niederl\xC3\xA4ndisch"},
+};
+
+const LanguageInfo* SuperChargersInfoOf(const std::string& code) {
+  for (const LanguageInfo& info : kSuperChargersInfo) {
+    if (code == info.code) return &info;
+  }
+  return nullptr;
+}
 
 const LanguageInfo* InfoOf(const std::string& code) {
   for (const LanguageInfo& info : kInfo) {
@@ -162,7 +190,7 @@ class SourceDisc {
   bool Open(const fs::path& source) {
     std::error_code ec;
     if (fs::is_directory(source, ec)) return OpenFolder(source);
-    return OpenIso(source);
+    return OpenIso(source) || OpenXiso(source);
   }
   bool Has(const std::string& name) const { return files_.count(name) != 0; }
   // Reads `size` bytes at `offset` of the named file.
@@ -253,6 +281,24 @@ class SourceDisc {
     }
     for (const DirEntry& e : List(dir)) {
       if (!e.dir) files_[e.name] = {uint64_t(e.lba) * 2048, e.size, {}};
+    }
+    return !files_.empty();
+  }
+
+  // An Xbox 360 disc image (another 360 disc of SuperChargers): its archives folder, through
+  // xiso.h (whose entries have their bytes' offset in the image file).
+  bool OpenXiso(const fs::path& path) {
+    auto image = XisoImage::Open(path);
+    if (!image) return false;
+    iso_.close();
+    iso_.clear();
+    iso_.open(path, std::ios::binary);
+    if (!iso_) return false;
+    for (const XisoImage::Entry& e : image->entries()) {
+      const std::string lower = Lower(e.path);
+      if (!e.directory && lower.rfind("archives/", 0) == 0 && lower.find('/', 9) == std::string::npos) {
+        files_[lower.substr(9)] = {e.offset, e.size, {}};
+      }
     }
     return !files_.empty();
   }
@@ -674,6 +720,10 @@ std::optional<std::vector<uint8_t>> RewriteLng(const std::vector<uint8_t>& data,
 struct Job {
   fs::path archives, backup;
   const LanguageInfo* lang = nullptr;
+  // The install's language that gets the new one (Imaginators: Spanish), and whether the source is a
+  // PS3 disc ("/xenon/" paths are "/ps3/" there).
+  const LanguageInfo* place = &kImaginatorsSpanish;
+  bool from_ps3 = true;
   SourceDisc disc;
   std::function<void(const std::string&, float)> report;
   bool german = false;  // the hub's language, for the steps' names
@@ -693,10 +743,16 @@ std::vector<std::string> ArchiveNames(const fs::path& archives, const char* endi
   return out;
 }
 
-// The source disc's twin of a 360 text file, lower case ("/xenon/" -> "/ps3/", "_es.lng" -> "_en.lng").
-std::string TwinText(const std::string& x360_name, const LanguageInfo& lang) {
-  std::string lower = Replace(Lower(x360_name), "/xenon/", "/ps3/");
-  return lower.substr(0, lower.size() - std::strlen(kSpanishText)) + lang.suffix + ".lng";
+// The place's text files ("_es.lng") and voice banks ("_es.pak").
+std::string PlaceText(const Job& job) { return std::string(job.place->suffix) + ".lng"; }
+std::string PlaceVoices(const Job& job) { return std::string(job.place->suffix) + ".pak"; }
+
+// The source disc's twin of a 360 text file, lower case ("/xenon/" -> "/ps3/" from a PS3 disc,
+// "_es.lng" -> "_en.lng").
+std::string TwinText(const std::string& x360_name, const Job& job) {
+  std::string lower = Lower(x360_name);
+  if (job.from_ps3) lower = Replace(lower, "/xenon/", "/ps3/");
+  return lower.substr(0, lower.size() - PlaceText(job).size()) + job.lang->suffix + ".lng";
 }
 
 // A voice's name without the build's encoding settings after ".wav" (they differ between the discs).
@@ -705,9 +761,11 @@ std::string WithoutEncoding(const std::string& name) {
   return at == std::string::npos ? name : name.substr(0, at + 4);
 }
 
-std::string TwinVoice(const std::string& x360_name, const LanguageInfo& lang) {
-  std::string lower = Replace(Lower(x360_name), "/xenon/", "/ps3/");
-  return Replace(Replace(lower, "/spanish/", lang.voice_folder), "_es.wav", lang.cutscene_voice);
+std::string TwinVoice(const std::string& x360_name, const Job& job) {
+  std::string lower = Lower(x360_name);
+  if (job.from_ps3) lower = Replace(lower, "/xenon/", "/ps3/");
+  return Replace(Replace(lower, job.place->voice_folder, job.lang->voice_folder), job.place->cutscene_voice,
+                 job.lang->cutscene_voice);
 }
 
 // One 360 archive's Spanish entries pointed at the source disc's twins.
@@ -723,8 +781,8 @@ int Patch(Job& job, const std::string& name, const std::string& source_name, boo
   std::vector<Change> changes;
   for (size_t i = 0; i < x.files().size(); ++i) {
     const std::string& fname = x.files()[i].name;
-    if (!voices && !EndsWith(Lower(fname), kSpanishText)) continue;
-    auto j = twins.find(WithoutEncoding(voices ? TwinVoice(fname, *job.lang) : TwinText(fname, *job.lang)));
+    if (!voices && !EndsWith(Lower(fname), PlaceText(job))) continue;
+    auto j = twins.find(WithoutEncoding(voices ? TwinVoice(fname, job) : TwinText(fname, job)));
     if (j == twins.end()) continue;
     auto data = p.Read(j->second);
     if (!data) continue;
@@ -741,7 +799,7 @@ int Patch(Job& job, const std::string& name, const std::string& source_name, boo
 int DiscOwn(Job& job) {
   int total = 0;
   for (const std::string& name : ArchiveNames(job.archives, ".pak")) {
-    if (EndsWith(Lower(name), kSpanishVoices)) continue;
+    if (EndsWith(Lower(name), PlaceVoices(job))) continue;
     const fs::path backup = job.backup / Path(name + ".disc.json");
     std::error_code ec;
     if (fs::exists(backup, ec)) continue;
@@ -754,8 +812,11 @@ int DiscOwn(Job& job) {
       const size_t dot = lower.rfind('.');
       if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) continue;
       const std::string root = lower.substr(0, dot), ext = lower.substr(dot);
-      if (ext == ".lng" || !EndsWith(root, "_es")) continue;
-      if (auto j = x.Find(root.substr(0, root.size() - 3) + job.lang->suffix + ext)) changes.push_back({i, {}, *j});
+      const std::string place = job.place->suffix;
+      if (ext == ".lng" || !EndsWith(root, place)) continue;
+      if (auto j = x.Find(root.substr(0, root.size() - place.size()) + job.lang->suffix + ext)) {
+        changes.push_back({i, {}, *j});
+      }
     }
     if (!changes.empty() && WriteChanges(job.archives / Path(name), x, backup, changes)) {
       total += int(changes.size());
@@ -1073,6 +1134,15 @@ bool Restore(const fs::path& archives, int* restored) {
   return true;
 }
 
+// The install's languages: its voice banks' suffixes ("_es" / "_it", or "_en" / "_de").
+std::vector<std::string> InstallLanguages(const fs::path& archives) {
+  std::vector<std::string> out;
+  for (const LanguageInfo& info : kSuperChargersInfo) {
+    if (!ArchiveNames(archives, (std::string(info.suffix) + ".pak").c_str()).empty()) out.push_back(info.code);
+  }
+  return out;
+}
+
 std::string LanguageName(const std::string& code, bool german) {
   for (const LanguageImport::Language& l : kLanguages) {
     if (code == l.code) return german ? l.name_de : l.name_en;
@@ -1085,6 +1155,41 @@ std::string LanguageName(const std::string& code, bool german) {
 const LanguageImport::Language* LanguageImport::Languages(size_t* count) {
   *count = std::size(kLanguages);
   return kLanguages;
+}
+
+const LanguageImport::Language* LanguageImport::SuperChargersLanguages(size_t* count) {
+  *count = std::size(kSuperChargersLanguages);
+  return kSuperChargersLanguages;
+}
+
+bool IsSuperChargersDisc(const fs::path& source, std::vector<std::string>* languages) {
+  SourceDisc disc;
+  // Its 360 archives (not a PS3 disc's), and two only SuperChargers has (Imaginators has neither;
+  // juicedomain_permanent.pak both have).
+  if (!disc.Open(source) || !disc.Has("permanent_xenon.pak") || !disc.Has("ap_virtualizationvehicle.pak") ||
+      !disc.Has("academy.pak")) {
+    return false;
+  }
+  if (languages) {
+    languages->clear();
+    for (const LanguageInfo& info : kSuperChargersInfo) {
+      if (disc.Has(std::string("champ_g12_barkley_bank_lv") + info.suffix + ".pak")) languages->push_back(info.code);
+    }
+  }
+  return true;
+}
+
+std::vector<std::string> SuperChargersInstallLanguages(const fs::path& rom) { return InstallLanguages(rom / "archives"); }
+
+std::string ImportedPlace(const fs::path& rom) {
+  const auto note = ReadFile(rom / "archives" / kBackupDir / kLanguageNote);
+  if (!note) return {};
+  const std::string text(note->begin(), note->end());
+  const size_t first = text.find('\n');
+  if (first == std::string::npos) return {};
+  std::string place = text.substr(first + 1);
+  while (!place.empty() && (place.back() == '\n' || place.back() == '\r' || place.back() == ' ')) place.pop_back();
+  return place;
 }
 
 bool IsPs3Disc(const fs::path& iso) {
@@ -1106,6 +1211,7 @@ std::string ImportedLanguage(const fs::path& rom) {
   if (!fs::is_directory(backup, ec) || fs::is_empty(backup, ec)) return {};
   if (auto note = ReadFile(backup / kLanguageNote)) {
     std::string code(note->begin(), note->end());
+    code = code.substr(0, code.find('\n'));  // the first line; SuperChargers' second one is the place
     while (!code.empty() && (code.back() == '\n' || code.back() == '\r' || code.back() == ' ')) code.pop_back();
     if (!code.empty()) return code;
   }
@@ -1126,20 +1232,20 @@ std::string LanguageImport::TakeSummary() {
   return shared_->summary;
 }
 
-void LanguageImport::StartRestore(const fs::path& rom, bool german) {
+void LanguageImport::StartRestore(const fs::path& rom, bool german, const char* game) {
   if (running()) return;
   shared_ = std::make_shared<Shared>();
   shared_->step = german ? "zur\xC3\xBC" "cksetzen" : "restoring";
-  std::thread([shared = shared_, archives = rom / "archives", german] {
+  std::thread([shared = shared_, archives = rom / "archives", german, name = std::string(game)] {
     int restored = 0;
     const bool ok = Restore(archives, &restored);
     std::lock_guard lock(shared->mutex);
-    shared->summary = ok ? (german ? "Imaginators spricht wieder die Sprachen der Disc (" + std::to_string(restored) +
+    shared->summary = ok ? (german ? name + " spricht wieder die Sprachen der Disc (" + std::to_string(restored) +
                                          " Archive zur\xC3\xBC" "ckgesetzt)."
-                                   : "Imaginators speaks its disc's languages again (" + std::to_string(restored) +
+                                   : name + " speaks its disc's languages again (" + std::to_string(restored) +
                                          " archives restored).")
-                         : (german ? "Zur\xC3\xBC" "cksetzen ging nicht ganz (l\xC3\xA4uft Imaginators?)."
-                                   : "Couldn't restore everything (is Imaginators running?).");
+                         : (german ? "Zur\xC3\xBC" "cksetzen ging nicht ganz (l\xC3\xA4uft " + name + "?)."
+                                   : "Couldn't restore everything (is " + name + " running?).");
     HubLog("language import: " + shared->summary);
     shared->done = true;
   }).detach();
@@ -1221,7 +1327,7 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
       job->text_archives += n ? 1 : 0;
     }
     DiscOwn(*job);
-    const int platform_missing = PlatformStrings(*job);
+    const int platform_missing = PlatformStrings(*job);  // Imaginators: its place is Spanish
     // Voices: every Spanish voice bank.
     const std::vector<std::string> voice_paks = ArchiveNames(job->archives, kSpanishVoices);
     for (size_t k = 0; k < voice_paks.size(); ++k) {
@@ -1258,6 +1364,126 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
       return finish(german ? "Keine Texte gefunden: passt die Disc zu diesem Imaginators?"
                            : "No texts found: does the disc match this Imaginators?");
     }
+    finish(text);
+  }).detach();
+}
+
+void LanguageImport::StartSuperChargers(const fs::path& source, const fs::path& rom, const std::string& language,
+                                        bool german) {
+  if (running()) return;
+  shared_ = std::make_shared<Shared>();
+  std::thread([shared = shared_, source, rom, language, german] {
+    auto job = std::make_unique<Job>();
+    job->archives = rom / "archives";
+    job->backup = job->archives / kBackupDir;
+    job->lang = SuperChargersInfoOf(language);
+    job->from_ps3 = false;
+    job->german = german;
+    job->report = [shared](const std::string& step, float progress) {
+      std::lock_guard lock(shared->mutex);
+      shared->step = step;
+      shared->progress = progress;
+    };
+    const auto finish = [&](const std::string& summary) {
+      std::lock_guard lock(shared->mutex);
+      shared->summary = summary;
+      HubLog("language import: " + summary);
+      shared->done = true;
+    };
+    std::error_code ec;
+    if (!job->lang || !fs::is_directory(job->archives, ec)) {
+      return finish(german ? "SuperChargers hat noch keine Disc: zuerst seine Xbox-360-Disc einlesen."
+                           : "SuperChargers has no disc yet: set its Xbox 360 disc up first.");
+    }
+    // The place: Spanish if the install has it (the Python tool's default), else its other language.
+    const std::vector<std::string> install = InstallLanguages(job->archives);
+    std::string place = std::find(install.begin(), install.end(), "es") != install.end() ? "es" : "";
+    for (const std::string& code : install) {
+      if (place.empty() && code != language) place = code;
+    }
+    if (std::find(install.begin(), install.end(), language) != install.end()) {
+      return finish(german ? "SuperChargers hat diese Sprache schon." : "SuperChargers has that language already.");
+    }
+    job->place = SuperChargersInfoOf(place);
+    if (!job->place) {
+      return finish(german ? "Die Sprachen dieser Installation sind unbekannt." : "This install's languages are unknown.");
+    }
+    std::vector<std::string> has;
+    if (!IsSuperChargersDisc(source, &has) || !job->disc.Open(source)) {
+      return finish(german ? "Das ist keine Xbox-360-Disc von SuperChargers." : "That isn't an Xbox 360 disc of SuperChargers.");
+    }
+    if (std::find(has.begin(), has.end(), language) == has.end()) {
+      return finish(german ? "Diese Disc hat die Sprache nicht." : "That disc doesn't have the language.");
+    }
+    const std::string before = ImportedLanguage(rom);
+    if (!before.empty()) {
+      job->report(german ? "die vorige Sprache wird zur\xC3\xBC" "ckgesetzt" : "undoing the previous language", 0.01f);
+      int restored = 0;
+      if (!Restore(job->archives, &restored)) {
+        return finish(german ? "Die vorige Sprache lie\xC3\x9F sich nicht zur\xC3\xBC" "cksetzen (l\xC3\xA4uft SuperChargers?)."
+                             : "Couldn't undo the previous language (is SuperChargers running?).");
+      }
+    }
+    fs::create_directories(job->backup, ec);
+    // Text: every archive with text in the place's language, against the other disc's archive of the
+    // same name.
+    std::vector<std::string> text_archives;
+    const std::vector<std::string> paks = ArchiveNames(job->archives, ".pak");
+    for (size_t k = 0; k < paks.size(); ++k) {
+      if (k % 200 == 0) job->report(german ? "Texte werden gesucht" : "looking for the texts", 0.05f * float(k) / float(paks.size()));
+      if (EndsWith(Lower(paks[k]), PlaceVoices(*job))) continue;
+      Iga x;
+      if (!x.Open(FileReader(job->archives / Path(paks[k])))) continue;
+      for (const Iga::File& f : x.files()) {
+        if (EndsWith(Lower(f.name), PlaceText(*job))) {
+          text_archives.push_back(paks[k]);
+          break;
+        }
+      }
+    }
+    for (size_t k = 0; k < text_archives.size(); ++k) {
+      job->report((german ? "Texte " : "texts ") + std::to_string(k + 1) + " / " + std::to_string(text_archives.size()),
+                  0.05f + 0.45f * float(k) / float(std::max<size_t>(1, text_archives.size())));
+      const std::string twin = Lower(text_archives[k]);
+      if (!job->disc.Has(twin)) continue;
+      const int n = Patch(*job, text_archives[k], twin, false);
+      job->texts += n;
+      job->text_archives += n ? 1 : 0;
+    }
+    DiscOwn(*job);
+    // Voices: every voice bank of the place's language, against the other disc's bank in the new one.
+    const std::vector<std::string> voice_paks = ArchiveNames(job->archives, PlaceVoices(*job).c_str());
+    for (size_t k = 0; k < voice_paks.size(); ++k) {
+      job->report((german ? "Stimmen " : "voices ") + std::to_string(k + 1) + " / " + std::to_string(voice_paks.size()),
+                  0.5f + 0.5f * float(k) / float(std::max<size_t>(1, voice_paks.size())));
+      const std::string lower = Lower(voice_paks[k]);
+      const std::string twin = lower.substr(0, lower.size() - PlaceVoices(*job).size()) + job->lang->suffix + ".pak";
+      if (!job->disc.Has(twin)) continue;
+      const int n = Patch(*job, voice_paks[k], twin, true);
+      job->voices += n;
+      job->voice_archives += n ? 1 : 0;
+    }
+    // Which language it is and in whose place, once all of it is in.
+    {
+      std::ofstream note(job->backup / kLanguageNote, std::ios::binary | std::ios::trunc);
+      note << language << "\n" << place << "\n";
+    }
+    HubLog("language import: SuperChargers, " + std::to_string(job->text_archives) + " text archives, " +
+           std::to_string(job->voice_archives) + " voice archives, in place of " + place);
+    if (!job->texts) {
+      return finish(german ? "Keine Texte gefunden: passt die Disc zu diesem SuperChargers?"
+                           : "No texts found: does the disc match this SuperChargers?");
+    }
+    std::string place_name = place, name = language;
+    for (const LanguageImport::Language& l : kSuperChargersLanguages) {
+      if (place == l.code) place_name = l.own;
+      if (language == l.code) name = german ? l.name_de : l.name_en;
+    }
+    char text[400];
+    std::snprintf(text, sizeof(text),
+                  german ? "SuperChargers spricht jetzt %s (%d Texte, %d Stimmen). Im Spiel unter F4 > Spiel > Sprache: %s."
+                         : "SuperChargers speaks %s now (%d texts, %d voices). In the game's F4 > Game > Language: %s.",
+                  name.c_str(), job->texts, job->voices, place_name.c_str());
     finish(text);
   }).detach();
 }
