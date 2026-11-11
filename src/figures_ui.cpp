@@ -1460,18 +1460,17 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
 }
 
 bool FiguresScreen::CanReset(const Figure& f) {
-  return !f.file.empty() && f.played() && f.game != "Imaginators";
+  return !f.file.empty() && f.played();
 }
 
-// Zurücksetzen (#75): the file backed up first (nothing changes if that fails), then a blank figure
-// of the same toy, variant and serial written over it.
+// Zurücksetzen (#75): the file backed up first (nothing changes if that fails), then the figure as it
+// comes out of the box written over it (StartedOver: the same toy, variant and serial; an Imaginators
+// toy keeps its signed blocks).
 static bool ResetFigureFile(const fs::path& file, const fs::path& figures_dir) {
   const std::optional<sp::FigureData> old = sp::LoadFigureFile(file);
   if (!old) return false;
   if (sp::BackUpFigureFile(file, sp::FigureBackupDir(file, figures_dir)).empty()) return false;
-  const std::array<uint8_t, 4> serial = {(*old)[0], (*old)[1], (*old)[2], (*old)[3]};
-  return sp::SaveFigureFileAtomic(
-      file, sp::CreateBlankFigure(sp::ReadFigureId(*old), sp::ReadFigureVariant(*old), serial));
+  return sp::SaveFigureFileAtomic(file, StartedOver(*old, false));
 }
 
 void FiguresScreen::DrawManage(float width, float height, float u) {

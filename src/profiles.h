@@ -17,6 +17,8 @@
 #include <string>
 #include <vector>
 
+#include "portal/figure_file.h"
+
 namespace coreoflight {
 
 struct Game;
@@ -66,6 +68,12 @@ void AddPlaySeconds(const Profile& p, const std::string& game_key, uint64_t seco
 // new figures (the same Skylanders back at the start, new serial numbers). Figures already there
 // stay. The number copied.
 int CopyFigures(const Profile& from, const Profile& to, bool as_new);
+
+// A figure as it comes out of the box: a blank figure of the same toy and variant, with its serial
+// or a new one (`new_serial`, for a new profile's copies). An Imaginators toy is signed by its maker,
+// so a blank one is turned down: it keeps the signed blocks and the sector trailers, the rest
+// emptied, which the game's own check takes. For "Start over" copies and Reset in the library (#75).
+skylanders::portal::FigureData StartedOver(const skylanders::portal::FigureData& data, bool new_serial);
 
 // The command line the launcher adds for the active profile when it starts a game's exe: nothing
 // for the main profile.

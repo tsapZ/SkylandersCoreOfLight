@@ -309,6 +309,13 @@ sp::FigureData EmptiedKeepingSignature(const sp::FigureData& data) {
 
 }  // namespace
 
+sp::FigureData StartedOver(const sp::FigureData& data, bool new_serial) {
+  const uint16_t id = sp::ReadFigureId(data), variant = sp::ReadFigureVariant(data);
+  if (IsImaginatorsToy(id, variant)) return EmptiedKeepingSignature(data);
+  if (new_serial) return sp::CreateBlankFigure(id, variant);
+  return sp::CreateBlankFigure(id, variant, {data[0], data[1], data[2], data[3]});
+}
+
 int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
   const fs::path source = ProfileFiguresDir(from), target = ProfileFiguresDir(to);
   if (source == target) return 0;
@@ -325,10 +332,7 @@ int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
     const auto data = sp::LoadFigureFile(it->path());
     if (!data) continue;
     fs::create_directories(dest.parent_path(), rel_ec);
-    const uint16_t id = sp::ReadFigureId(*data), variant = sp::ReadFigureVariant(*data);
-    const sp::FigureData out = !as_new                         ? *data
-                               : IsImaginatorsToy(id, variant) ? EmptiedKeepingSignature(*data)
-                                                               : sp::CreateBlankFigure(id, variant);
+    const sp::FigureData out = as_new ? StartedOver(*data, true) : *data;
     if (sp::SaveFigureFileAtomic(dest, out)) ++copied;
   }
   return copied;

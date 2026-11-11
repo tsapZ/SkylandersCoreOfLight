@@ -137,10 +137,10 @@ class FiguresScreen {
   // Start / Del on one of the owner's figures (#75): Behalten / Zurücksetzen / Löschen, "Behalten"
   // chosen first (as the games' own questions: A on a reflex changes nothing). Zurücksetzen: the
   // file backed up into Backups\Figures (skylanders-portal BackUpFigureFile; the games' portal menu
-  // lists it under Backups), then a blank figure of the same toy, variant and serial written over it
-  // (CreateBlankFigure, what the portal menu makes for a new one; the games set it up as a new toy).
-  // Only for a figure played at all, and never for an Imaginators toy: those are signed by their
-  // maker, a blank one can't be made. Löschen: the file into the recycle bin.
+  // lists it under Backups), then the figure as it comes out of the box written over it (StartedOver,
+  // profiles.h: a blank figure of the same toy, variant and serial, what the portal menu makes for a
+  // new one; an Imaginators toy keeps the blocks its maker signed). Only for a figure played at all.
+  // Löschen: the file into the recycle bin.
   void DrawManage(float width, float height, float u);
   static bool CanReset(const Figure& f);
   bool managing_ = false;

@@ -340,10 +340,11 @@ exe and gets out of the way while the game runs; no game needs it.
   **Start (Del)** on one of the owner's figures asks **Behalten / Zurücksetzen / Löschen** (#75,
   "Behalten" chosen first, left / right and A, or a click): Zurücksetzen backs the file up into
   `Backups\Figures` (skylanders-portal `BackUpFigureFile`; the games' portal menu lists it under
-  Sicherungen) and writes a blank figure of the same toy, variant and serial over it
-  (`CreateBlankFigure`, what the portal menu makes for a new one: the games set it up as a new toy).
-  It is offered only for a played figure and never for an Imaginators toy (signed by its maker, so
-  a blank one can't be made). Löschen puts the file into the recycle bin (`MoveToRecycleBin`, shared
+  Sicherungen) and writes the figure as it comes out of the box over it (`StartedOver`: a blank
+  figure of the same toy, variant and serial, what the portal menu makes for a new one, so the games
+  set it up as a new toy; an Imaginators toy, signed by its maker, keeps the signed blocks and the
+  sector trailers with the rest emptied, as a new profile's copies do). It is offered only for a
+  played figure. Löschen puts the file into the recycle bin (`MoveToRecycleBin`, shared
   with the profiles' delete). Both are refused while a game runs: it could still write the figure.
   `figures = <folder>` in coreoflight.ini uses another figure folder (as the games'
   `portal_figures_dir`); the pictures are then in the `Pictures` folder next to it.
