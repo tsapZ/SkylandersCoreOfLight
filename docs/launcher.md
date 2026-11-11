@@ -322,6 +322,14 @@ exe and gets out of the way while the game runs; no game needs it.
   games leave the trees of the owner's figures (`upgrades-<id>-<variant>.txt` and their pictures).
   Copies the
   games keep in a `real` folder before they write to a real figure are left out.
+  **Start (Del)** on one of the owner's figures asks **Behalten / Zurücksetzen / Löschen** (#75,
+  "Behalten" chosen first, left / right and A, or a click): Zurücksetzen backs the file up into
+  `Backups\Figures` (skylanders-portal `BackUpFigureFile`; the games' portal menu lists it under
+  Sicherungen) and writes a blank figure of the same toy, variant and serial over it
+  (`CreateBlankFigure`, what the portal menu makes for a new one: the games set it up as a new toy).
+  It is offered only for a played figure and never for an Imaginators toy (signed by its maker, so
+  a blank one can't be made). Löschen puts the file into the recycle bin (`MoveToRecycleBin`, shared
+  with the profiles' delete). Both are refused while a game runs: it could still write the figure.
   `figures = <folder>` in coreoflight.ini uses another figure folder (as the games'
   `portal_figures_dir`); the pictures are then in the `Pictures` folder next to it.
 - **Profiles** (#4, Back / P / a click on the profile at the top right), like an Xbox account:

@@ -177,6 +177,7 @@ void FiguresScreen::Configure(bool only_mine, bool marks, bool progress) {
 void FiguresScreen::Open(const fs::path& figures_dir) {
   open_ = true;
   copying_ = false;
+  managing_ = false;
   figures_dir_ = figures_dir;
   selected_ = 0;
   // Each game leaves the pictures it reads from its disc there (skylanders-portal
@@ -705,6 +706,11 @@ void FiguresScreen::Draw(float width, float height) {
     ImGui::End();
     return;
   }
+  if (managing_) {
+    DrawManage(width, height, u);
+    ImGui::End();
+    return;
+  }
   // Back / R: the Rangliste of the profile's figures (#13).
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_R, false)) {
     board_ = true;
@@ -955,6 +961,19 @@ void FiguresScreen::Draw(float width, float height) {
       copying_ = true;
     }
   }
+  // Start / Del: reset or delete the chosen figure of the owner's (#75), asked first.
+  if (n && !shown[selected_]->file.empty() &&
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false) || ImGui::IsKeyPressed(ImGuiKey_Delete, false))) {
+    if (game_running_) {
+      message_ = german_ ? "Erst das Spiel beenden: Es k\xC3\xB6nnte die Figur noch schreiben."
+                         : "Close the game first: it could still write this figure.";
+      message_until_ = ImGui::GetTime() + 5.0;
+    } else {
+      manage_figure_ = *shown[selected_];
+      manage_choice_ = 0;
+      managing_ = true;
+    }
+  }
   // Y / C on a figure without a file: "I own it", or not any more. The lists are read again, so
   // nothing of this frame's is used after it.
   if (n && marks_enabled_ && shown[selected_]->file.empty() &&
@@ -1190,6 +1209,13 @@ void FiguresScreen::Draw(float width, float height) {
               !f.file.empty() ? (german_ ? "In anderes Profil kopieren" : "Copy to another profile")
               : f.marked      ? (german_ ? "Hab ich nicht" : "I don't own it")
                               : (german_ ? "Hab ich" : "I own it"));
+  }
+  if (n && !shown[selected_]->file.empty()) {
+    hx = Hint(dl, bold_, hs, {hx, hy}, "Start", Rgba(80, 90, 140),
+              CanReset(*shown[selected_])
+                  ? (german_ ? "Zur\xC3\xBC" "cksetzen / L\xC3\xB6schen" : "Reset / delete")
+                  : (german_ ? "L\xC3\xB6schen" : "Delete"),
+              "Del");
   }
   hx = Hint(dl, bold_, hs, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Rangliste" : "Leaderboard");
   hx = Hint(dl, bold_, hs, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
@@ -1431,6 +1457,126 @@ void FiguresScreen::DrawBoard(float width, float height, float u) {
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Liste" : "List");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur" "\xC3\xBC" "ck" : "Back");
+}
+
+bool FiguresScreen::CanReset(const Figure& f) {
+  return !f.file.empty() && f.played() && f.game != "Imaginators";
+}
+
+// Zurücksetzen (#75): the file backed up first (nothing changes if that fails), then a blank figure
+// of the same toy, variant and serial written over it.
+static bool ResetFigureFile(const fs::path& file, const fs::path& figures_dir) {
+  const std::optional<sp::FigureData> old = sp::LoadFigureFile(file);
+  if (!old) return false;
+  if (sp::BackUpFigureFile(file, sp::FigureBackupDir(file, figures_dir)).empty()) return false;
+  const std::array<uint8_t, 4> serial = {(*old)[0], (*old)[1], (*old)[2], (*old)[3]};
+  return sp::SaveFigureFileAtomic(
+      file, sp::CreateBlankFigure(sp::ReadFigureId(*old), sp::ReadFigureVariant(*old), serial));
+}
+
+void FiguresScreen::DrawManage(float width, float height, float u) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImGuiIO& io = ImGui::GetIO();
+  auto once = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, false); };
+  const Figure& f = manage_figure_;
+  // The buttons: Behalten, Zurücksetzen (when it can), Löschen.
+  std::vector<int> buttons = {0};
+  if (CanReset(f)) buttons.push_back(1);
+  buttons.push_back(2);
+  const int count = int(buttons.size());
+  int at = int(std::find(buttons.begin(), buttons.end(), manage_choice_) - buttons.begin());
+  if (at >= count) at = 0;
+  if (once(ImGuiKey_GamepadDpadLeft) || once(ImGuiKey_GamepadLStickLeft) || once(ImGuiKey_LeftArrow)) {
+    at = (at + count - 1) % count;
+  }
+  if (once(ImGuiKey_GamepadDpadRight) || once(ImGuiKey_GamepadLStickRight) || once(ImGuiKey_RightArrow)) {
+    at = (at + 1) % count;
+  }
+  const float pw = std::min(760 * u, width - 96 * u), ph = 300 * u;
+  const ImVec2 a{(width - pw) * 0.5f, (height - ph) * 0.5f};
+  dl->AddRectFilled({0, 0}, {width, height}, Rgba(0, 0, 0, 140));
+  dl->AddRectFilled(a, {a.x + pw, a.y + ph}, kPanel, 18 * u);
+  dl->AddRect(a, {a.x + pw, a.y + ph}, kGold, 18 * u, 0, 3 * u);
+  const float x = a.x + 28 * u, w = pw - 56 * u;
+  const std::string title = count == 3 ? (german_ ? "Zur\xC3\xBC" "cksetzen oder l\xC3\xB6schen: " : "Reset or delete: ")
+                                       : (german_ ? "L\xC3\xB6schen: " : "Delete: ");
+  Text(dl, bold_, 26 * u, {x, a.y + 20 * u}, kGold, Fit(bold_, 26 * u, title + f.name, w));
+  // A click on a button chooses it and does it, as A would.
+  const float bw = (w - 20 * u * float(count - 1)) / float(count), bh = 52 * u, by = a.y + ph - bh - 22 * u;
+  bool clicked = false;
+  for (int k = 0; k < count; ++k) {
+    const ImVec2 p{x + float(k) * (bw + 20 * u), by}, q{p.x + bw, p.y + bh};
+    if (io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      at = k;
+      clicked = true;
+    }
+  }
+  manage_choice_ = buttons[size_t(at)];
+  static constexpr const char* kWhatEn[] = {
+      "Nothing changes.",
+      "Back to a new toy: level 1, no gold, upgrades, hat or nickname. The file as it is now is kept in "
+      "Backups\\Figures, and the portal menu in the game can put it back (Backups).",
+      "The file goes to the recycle bin (it can be restored from there)."};
+  static constexpr const char* kWhatDe[] = {
+      "Es \xC3\xA4ndert sich nichts.",
+      "Zur\xC3\xBC" "ck wie ein neues Spielzeug: Stufe 1, kein Gold, keine Upgrades, kein Hut, kein Spitzname. Die "
+      "Datei, wie sie jetzt ist, bleibt in Backups\\Figures, und das Portal-Men\xC3\xBC im Spiel kann sie "
+      "zur\xC3\xBC" "ckholen (Sicherungen).",
+      "Die Datei kommt in den Papierkorb (von dort l\xC3\xA4sst sie sich wiederherstellen)."};
+  Text(dl, regular_, 20 * u, {x, a.y + 72 * u}, kWhite,
+       german_ ? kWhatDe[manage_choice_] : kWhatEn[manage_choice_], w);
+  for (int k = 0; k < count; ++k) {
+    const int b = buttons[size_t(k)];
+    const bool on = k == at;
+    const ImVec2 p{x + float(k) * (bw + 20 * u), by}, q{p.x + bw, p.y + bh};
+    dl->AddRectFilled(p, q, on ? (b == 0 ? Rgba(60, 80, 160) : Rgba(150, 50, 50)) : Rgba(30, 34, 60), 12 * u);
+    dl->AddRect(p, q, on ? kGold : kEdge, 12 * u, 0, (on ? 3.0f : 1.5f) * u);
+    const std::string label = b == 0   ? (german_ ? "Behalten" : "Keep it")
+                              : b == 1 ? (german_ ? "Zur\xC3\xBC" "cksetzen" : "Reset")
+                                       : (german_ ? "L\xC3\xB6schen" : "Delete");
+    const std::string shown_label = Fit(bold_, 22 * u, label, bw - 16 * u);
+    Text(dl, bold_, 22 * u, {p.x + (bw - TextWidth(bold_, 22 * u, shown_label)) * 0.5f, p.y + 13 * u}, kWhite,
+         shown_label);
+  }
+  const bool go = clicked || once(ImGuiKey_GamepadFaceDown) || once(ImGuiKey_Enter);
+  if (go && manage_choice_ != 0) {
+    const bool reset = manage_choice_ == 1;
+    const std::string name = f.name;
+    const fs::path file = f.file;
+    const bool done = reset ? ResetFigureFile(file, figures_dir_) : MoveToRecycleBin(file);
+    message_ = reset ? (done ? (german_ ? "Zur\xC3\xBC" "ckgesetzt: " : "Reset: ") + name +
+                                   (german_ ? " (die alte Datei liegt in Backups\\Figures)"
+                                            : " (the old file is in Backups\\Figures)")
+                             : (german_ ? "Die Figur lie\xC3\x9F sich nicht zur\xC3\xBC" "cksetzen."
+                                        : "Could not reset the figure."))
+                     : (done ? (german_ ? "Gel\xC3\xB6scht: " : "Deleted: ") + name +
+                                   (german_ ? " (im Papierkorb)" : " (in the recycle bin)")
+                             : (german_ ? "Die Figur lie\xC3\x9F sich nicht l\xC3\xB6schen."
+                                        : "Could not delete the figure."));
+    message_until_ = ImGui::GetTime() + 6.0;
+    // The lists again (f is gone with them), the same tab and chip; after a reset the same figure
+    // chosen, after a delete the one that took its place.
+    const int tab = tab_, element = element_, selected = selected_;
+    const bool all = all_;
+    Open(figures_dir_);
+    tab_ = tab;
+    element_ = element;
+    all_ = all;
+    selected_ = selected;
+    if (reset) {
+      const std::vector<const Figure*> shown = Shown();
+      for (size_t i = 0; i < shown.size(); ++i) {
+        if (shown[i]->file == file) selected_ = int(i);
+      }
+    }
+  } else if (go || once(ImGuiKey_Escape) || once(ImGuiKey_GamepadFaceRight)) {
+    managing_ = false;
+  }
+  float hx = 48 * u;
+  const float hy = height - 52 * u;
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "W\xC3\xA4hlen" : "Choose");
+  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(80, 90, 140), german_ ? "Behalten" : "Keep it");
 }
 
 void FiguresScreen::DrawCopy(float width, float height, float u) {

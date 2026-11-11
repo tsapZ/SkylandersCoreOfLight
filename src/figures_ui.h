@@ -33,6 +33,9 @@ class FiguresScreen {
   // Reads the figure folder again and opens the screen.
   void Open(const std::filesystem::path& figures_dir);
   bool is_open() const { return open_; }
+  // A game runs (the launcher's, each frame before Draw): no reset or delete meanwhile, it could
+  // still write the figure.
+  void set_game_running(bool running) { game_running_ = running; }
   void Draw(float width, float height);
 
  private:
@@ -130,6 +133,20 @@ class FiguresScreen {
   int copy_target_ = 0;
   std::filesystem::path figures_dir_;  // the folder the library shows
   Figure copy_figure_;
+
+  // Start / Del on one of the owner's figures (#75): Behalten / Zurücksetzen / Löschen, "Behalten"
+  // chosen first (as the games' own questions: A on a reflex changes nothing). Zurücksetzen: the
+  // file backed up into Backups\Figures (skylanders-portal BackUpFigureFile; the games' portal menu
+  // lists it under Backups), then a blank figure of the same toy, variant and serial written over it
+  // (CreateBlankFigure, what the portal menu makes for a new one; the games set it up as a new toy).
+  // Only for a figure played at all, and never for an Imaginators toy: those are signed by their
+  // maker, a blank one can't be made. Löschen: the file into the recycle bin.
+  void DrawManage(float width, float height, float u);
+  static bool CanReset(const Figure& f);
+  bool managing_ = false;
+  int manage_choice_ = 0;  // 0 Behalten, 1 Zurücksetzen, 2 Löschen
+  Figure manage_figure_;
+  bool game_running_ = false;
 
   // Y on a figure without a file: "I own it" (#8), for figures the owner has on the shelf but
   // not as a file. Kept per profile next to its figure folder, Skylanders\owned.txt, one

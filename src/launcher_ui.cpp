@@ -2428,6 +2428,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
     return true;
   }
   if (figures_screen_.is_open()) {
+    figures_screen_.set_game_running(!running_key_.empty());
     figures_screen_.Draw(width, height);
     return true;
   }

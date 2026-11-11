@@ -11,6 +11,7 @@
 
 #include "games.h"
 #include "portal/data_folder.h"
+#include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 
 namespace coreoflight {
@@ -184,6 +185,18 @@ bool SaveProfile(const Profile& p) {
   return WriteIniValues(p.root / kProfileFile, {{"name", p.name}, {"picture", PictureText(p)}});
 }
 
+bool MoveToRecycleBin(const fs::path& path) {
+  // SHFileOperation wants the paths ended by two null characters.
+  std::wstring from = path.wstring();
+  from.push_back(L'\0');
+  from.push_back(L'\0');
+  SHFILEOPSTRUCTW op = {};
+  op.wFunc = FO_DELETE;
+  op.pFrom = from.c_str();
+  op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+  return SHFileOperationW(&op) == 0 && !op.fAnyOperationsAborted;
+}
+
 bool DeleteProfile(const Profile& p, bool to_recycle_bin) {
   if (IsMainProfile(p) || p.root.empty() || p.root.parent_path() != ProfilesDir()) return false;
   if (!to_recycle_bin) {
@@ -193,15 +206,7 @@ bool DeleteProfile(const Profile& p, bool to_recycle_bin) {
     if (ActiveProfile().id == p.id) WriteIniValues(ProfilesDir() / kListFile, {{"active", ""}});
     return true;
   }
-  // SHFileOperation wants the paths ended by two null characters.
-  std::wstring from = p.root.wstring();
-  from.push_back(L'\0');
-  from.push_back(L'\0');
-  SHFILEOPSTRUCTW op = {};
-  op.wFunc = FO_DELETE;
-  op.pFrom = from.c_str();
-  op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
-  if (SHFileOperationW(&op) != 0 || op.fAnyOperationsAborted) return false;
+  if (!MoveToRecycleBin(p.root)) return false;
   if (ActiveProfile().id == p.id) WriteIniValues(ProfilesDir() / kListFile, {{"active", ""}});
   return true;
 }
@@ -277,6 +282,33 @@ void AddPlaySeconds(const Profile& p, const std::string& game_key, uint64_t seco
   fs::rename(temp, PlayTimeFile(p), ec);
 }
 
+namespace {
+
+// Imaginators' toys are signed by their maker: an Ed25519 signature over blocks 0 and 1 (serial,
+// kind), spread over blocks 2, 4, 34 and 62, the key's number in byte 63 (ImaginatorsRecomp
+// src/game/figure_check.cpp). So one can't be made with a new serial, and the game turns a blank
+// one (CreateBlankFigure) down ("unknown key"). "Made new" keeps those blocks and every sector
+// trailer and empties the rest, as a new toy comes out of the box; the game's own check takes it
+// (a sensei and a creation crystal, 2026-11-11).
+bool IsImaginatorsToy(uint16_t id, uint16_t variant) {
+  if (const sp::SkylanderInfo* info = sp::FindSkylander(id, variant)) return info->game == "Imaginators";
+  for (const sp::SkylanderInfo& info : sp::AllSkylanders()) {
+    if (info.id == id) return info.game == "Imaginators";
+  }
+  return false;
+}
+
+sp::FigureData EmptiedKeepingSignature(const sp::FigureData& data) {
+  sp::FigureData out{};
+  for (size_t block = 0; block < out.size() / 16; ++block) {
+    const bool signed_block = block <= 2 || block == 4 || block == 34 || block == 62;
+    if (signed_block || block % 4 == 3) std::copy_n(data.begin() + block * 16, 16, out.begin() + block * 16);
+  }
+  return out;
+}
+
+}  // namespace
+
 int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
   const fs::path source = ProfileFiguresDir(from), target = ProfileFiguresDir(to);
   if (source == target) return 0;
@@ -293,8 +325,10 @@ int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
     const auto data = sp::LoadFigureFile(it->path());
     if (!data) continue;
     fs::create_directories(dest.parent_path(), rel_ec);
-    const sp::FigureData out = as_new ? sp::CreateBlankFigure(sp::ReadFigureId(*data), sp::ReadFigureVariant(*data))
-                                      : *data;
+    const uint16_t id = sp::ReadFigureId(*data), variant = sp::ReadFigureVariant(*data);
+    const sp::FigureData out = !as_new                         ? *data
+                               : IsImaginatorsToy(id, variant) ? EmptiedKeepingSignature(*data)
+                                                               : sp::CreateBlankFigure(id, variant);
     if (sp::SaveFigureFileAtomic(dest, out)) ++copied;
   }
   return copied;
