@@ -71,8 +71,8 @@ class LanguageImport {
   // SuperChargers (Core of Light #77): `language` from another Xbox 360 disc of the game (`source`,
   // its .iso or unpacked folder) in place of one of the install's two languages: Spanish if it has
   // it, else its other one (`ImportedPlace` says which; the game's F4 > Game > Language picks it by
-  // that name). Text, the licence and the voices, as SuperChargersRecomp's tools/add_language.py
-  // --xbox360 does; no movies. An earlier import is undone first.
+  // that name). Text, the licence, the voices and the story movies, as SuperChargersRecomp's
+  // tools/add_language.py --xbox360 --movies does. An earlier import is undone first.
   void StartSuperChargers(const std::filesystem::path& source, const std::filesystem::path& rom,
                           const std::string& language, bool german);
   // Undoes every import into `rom` (also on a thread of its own); `game` names it in the summary.

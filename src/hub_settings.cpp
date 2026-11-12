@@ -361,15 +361,16 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   sc_language.de = "SuperChargers-Sprache";
   sc_language.help_en = "Each European disc of SuperChargers speaks two of its six languages. Another Xbox 360 disc of "
                         "the game has others, also one that can't run here itself (another build): pick the language, "
-                        "then that disc (its .iso or unpacked folder), and the launcher puts its texts and voices into "
-                        "your SuperChargers, in place of one of its two languages. A few minutes; your saves stay. The "
-                        "disc's own languages come back here too.";
+                        "then that disc (its .iso or unpacked folder), and the launcher puts its texts, voices and movies "
+                        "into your SuperChargers, in place of one of its two languages. A few minutes, and about 2.5 GB "
+                        "for a copy of your disc's own movies; your saves stay. The disc's own languages come back here "
+                        "too.";
   sc_language.help_de = "Jede europ\xC3\xA4ische Disc von SuperChargers spricht zwei seiner sechs Sprachen. Eine andere "
                         "Xbox-360-Disc des Spiels hat andere, auch eine, die hier selbst nicht l\xC3\xA4uft (ein anderer "
                         "Build): w\xC3\xA4hle die Sprache, dann diese Disc (ihre .iso oder ihren entpackten Ordner), und "
-                        "Core of Light bringt Texte und Stimmen in dein SuperChargers, anstelle einer seiner zwei "
-                        "Sprachen. Ein paar Minuten; Spielst\xC3\xA4nde bleiben. Hier kommen auch die Sprachen der Disc "
-                        "zur\xC3\xBC" "ck.";
+                        "Core of Light bringt Texte, Stimmen und Filme in dein SuperChargers, anstelle einer seiner zwei "
+                        "Sprachen. Ein paar Minuten und etwa 2,5 GB f\xC3\xBCr eine Kopie der Filme deiner Disc; "
+                        "Spielst\xC3\xA4nde bleiben. Hier kommen auch die Sprachen der Disc zur\xC3\xBC" "ck.";
   sc_language.type = "action";
   sc_language.options = {{"", "Choose", "W\xC3\xA4hlen"}};
   page.settings.push_back(std::move(sc_language));
