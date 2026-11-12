@@ -228,6 +228,35 @@ void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fi
   Text(dl, font, size, pos, fill, text);
 }
 
+// The title as in the concept (#78; the owner 2026-11-13: the Skylanders logo from the game): the logo
+// from the player's own Spyro's Adventure disc, whose dashboard background (nxebg.jpg, 1920x1080) has it
+// on plain dark blue (16, 40, 88) at 570,350 (770x366); that blue made clear at run time, so nothing of
+// it is in the repository. Its "SPYRO'S ADVENTURE" (13.6-86.4 % of the logo's width, 50.5-69 % of its
+// height) is covered by our CORE OF LIGHT banner; the elements' symbols stay under it. False without the
+// picture (no Spyro's Adventure set up, --no_game_art): then the lettering below is drawn instead.
+bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background, float cx, float u) {
+  const ImTextureID logo = LoadTextureKeyed(ssa_background, 570, 350, 770, 366, 0x102858, 10, 28);
+  if (!logo) return false;
+  const float lh = 196 * u, lw = lh * 770.0f / 366.0f;
+  const ImVec2 a{cx - lw * 0.5f, 12 * u};
+  dl->AddImage(logo, a, {a.x + lw, a.y + lh});
+  // The banner: a long hexagon over the subtitle, dark blue with a light rim, CORE OF LIGHT in gold.
+  const float x0 = a.x + lw * 0.115f, x1 = a.x + lw * 0.885f, y0 = a.y + lh * 0.488f, y1 = a.y + lh * 0.708f;
+  const float h = y1 - y0, mid = (y0 + y1) * 0.5f;
+  const ImVec2 pts[6] = {{x0, mid}, {x0 + h * 0.5f, y0}, {x1 - h * 0.5f, y0}, {x1, mid}, {x1 - h * 0.5f, y1}, {x0 + h * 0.5f, y1}};
+  dl->AddConvexPolyFilled(pts, 6, Rgba(22, 46, 98, 252));
+  dl->AddPolyline(pts, 6, Rgba(150, 190, 240), ImDrawFlags_Closed, 3.5f * u);
+  const char* title = "CORE OF LIGHT";
+  float size = h * 0.66f;
+  while (TextWidth(bold, size, title) > (x1 - x0) - h * 1.6f && size > 8) size -= 1;
+  const float tw = TextWidth(bold, size, title), ty = mid - size * 0.5f;
+  dl->AddLine({cx - tw * 0.5f - h * 0.75f, mid}, {cx - tw * 0.5f - h * 0.2f, mid}, kGold, 3 * u);
+  dl->AddLine({cx + tw * 0.5f + h * 0.2f, mid}, {cx + tw * 0.5f + h * 0.75f, mid}, kGold, 3 * u);
+  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 2.5f * u}, Rgba(60, 35, 0, 220), title);
+  Text(dl, bold, size, {cx - tw * 0.5f, ty}, kGold, title);
+  return true;
+}
+
 // The title at the top, centred on `cx`, as the concept's logo: a big SKYLANDERS, white with a dark
 // blue outline and a light blue lower half, and under it a banner with pointed ends, CORE OF LIGHT
 // in gold between two gold lines. Our own lettering, not the games' logo. Returns the banner's bottom.
@@ -731,6 +760,41 @@ void LauncherUi::OpenSettings(size_t index) {
   settings_.Open(german_ ? game.name_de : game.name_en, &loaders_[index], GameBackground(index));
 }
 
+void LauncherUi::DrawStartBackdrop(ImDrawList* dl, float width, float height) {
+  // The chosen game's picture, else any game's (the first with one), else the deep blue alone.
+  auto picture_of = [&](size_t game) -> std::filesystem::path {
+    if (game < background_art_.size() && !background_art_[game].empty()) return background_art_[game];
+    for (const std::filesystem::path& p : background_art_) {
+      if (!p.empty()) return p;
+    }
+    return {};
+  };
+  if (selected_ != backdrop_game_) {
+    backdrop_from_ = backdrop_game_;
+    backdrop_game_ = selected_;
+    backdrop_since_ = ImGui::GetTime();
+  }
+  const float fade = backdrop_from_ == SIZE_MAX || !hub_.animations
+                         ? 1.0f
+                         : std::clamp(float((ImGui::GetTime() - backdrop_since_) / 0.35), 0.0f, 1.0f);
+  dl->AddRectFilledMultiColor({0, 0}, {width, height}, Rgba(10, 22, 60), Rgba(10, 22, 60), Rgba(3, 7, 22), Rgba(3, 7, 22));
+  auto draw = [&](const std::filesystem::path& picture, float alpha) {
+    if (picture.empty() || alpha <= 0.0f) return;
+    if (const ImTextureID texture = LoadTexture(picture)) {
+      const float scale = std::max(width / 1920.0f, height / 1080.0f), bw = 1920 * scale, bh = 1080 * scale;
+      dl->AddImage(texture, {(width - bw) * 0.5f, (height - bh) * 0.5f}, {(width + bw) * 0.5f, (height + bh) * 0.5f},
+                   {0, 0}, {1, 1}, IM_COL32(255, 255, 255, int(alpha * 255)));
+    }
+  };
+  if (fade < 1.0f) draw(picture_of(backdrop_from_), 1.0f);
+  draw(picture_of(backdrop_game_), fade);
+  // A light shade only: at the top for the title, at the bottom for the bar.
+  dl->AddRectFilledMultiColor({0, 0}, {width, height * 0.28f}, Rgba(6, 16, 44, 80), Rgba(6, 16, 44, 80),
+                              Rgba(6, 16, 44, 0), Rgba(6, 16, 44, 0));
+  dl->AddRectFilledMultiColor({0, height * 0.72f}, {width, height}, Rgba(4, 10, 30, 0), Rgba(4, 10, 30, 0),
+                              Rgba(4, 10, 30, 150), Rgba(4, 10, 30, 150));
+}
+
 void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool selected) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const Game& game = AllGames()[index];
@@ -738,8 +802,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   const bool installed = !f.exe.empty();
   const float s = h / 420.0f;  // the card's own scale
   const float r = 26 * s;
-  if (selected) {
-    // The light of the core behind the chosen card.
+  // The light of the core behind the chosen card; not with morpheus284's lit frame, which is the light
+  // itself (the owner, 2026-11-13: no extra glow behind it).
+  if (selected && !LoadUiTexture(kUiCardLight)) {
     for (int k = 6; k > 0; --k) {
       const float grow = k * 7 * s;
       dl->AddRectFilled({x - grow, y - grow}, {x + w + grow, y + h + grow}, Rgba(255, 210, 90, 10), r + grow);
@@ -2933,17 +2998,19 @@ bool LauncherUi::DrawScreens(float width, float height) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = UiScale(width, height);
 
-  // Background: a Skylands sky with drifting clouds (morpheus284's concept, #78; the other screens
-  // keep the chosen game's dashboard picture from its disc), the Core of Light's glow in the middle.
-  DrawSky(dl, width, height, u, hub_.animations);
-  const ImVec2 core{width * 0.5f, height * 0.56f};
-  for (int k = 14; k > 0; --k) dl->AddCircleFilled(core, k * 38 * u, Rgba(255, 244, 210, 4), 64);
+  // Background (#78; the owner 2026-11-13: the drawn sky out, a picture from the game): the chosen
+  // card's dashboard picture from the player's disc, as the other screens have it, faded over.
+  DrawStartBackdrop(dl, width, height);
 
-  // The profile the games start with at the top right, the title plate in the middle (left of the
-  // profile and the controllers when the window is narrow).
+  // The profile the games start with at the top right, the title in the middle (left of the profile
+  // and the controllers when the window is narrow): the Skylanders logo from Spyro's Adventure's disc
+  // with our banner, or the lettering drawn from shapes without it.
   const bool profile_clicked = DrawProfileBadge(width, u);
   DrawUpdateAll(width, u);  // "Alle aktualisieren", while there are updates
-  DrawTitlePlate(dl, bold_, TitlePlateCenter(bold_, width, badge_left_, u), u);
+  const float title_cx = TitlePlateCenter(bold_, width, badge_left_, u);
+  if (!DrawTitleLogo(dl, bold_, background_art_.empty() ? std::filesystem::path() : background_art_[0], title_cx, u)) {
+    DrawTitlePlate(dl, bold_, title_cx, u);
+  }
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();

@@ -63,6 +63,8 @@ class LauncherUi {
   void Start(size_t index);
   void OpenSettings(size_t index);
   void DrawCard(size_t index, float x, float y, float w, float h, bool selected);
+  // The start screen's background: the chosen card's dashboard picture from its disc, faded over.
+  void DrawStartBackdrop(ImDrawList* dl, float width, float height);
   // The active profile at the top right; true when clicked. A click on a pad left of it sets
   // pad_clicked_ (its settings, #35).
   bool DrawProfileBadge(float width, float u);
@@ -93,6 +95,9 @@ class LauncherUi {
   ImFont* bold_ = nullptr;
   bool german_ = false;
   size_t selected_ = 0;
+  // DrawStartBackdrop: the game whose picture is shown, the one it fades over from, since when.
+  size_t backdrop_game_ = SIZE_MAX, backdrop_from_ = SIZE_MAX;
+  double backdrop_since_ = 0;
   int figures_ = 0;
   std::wstring error_;
   double error_until_ = 0;

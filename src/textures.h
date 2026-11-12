@@ -3,6 +3,7 @@
 // Pictures from PNG files as Dear ImGui textures (textures.cpp): Windows' WIC decodes, Direct3D 11
 // holds them. UI thread only.
 
+#include <cstdint>
 #include <filesystem>
 
 #include "imgui.h"
@@ -25,6 +26,13 @@ constexpr int kUiCardBase = 101;
 constexpr int kUiCardLight = 102;
 constexpr int kUiOptionBar = 103;
 ImTextureID LoadUiTexture(int resource_id);
+
+// A part of the picture in `path` (x, y, w, h in its pixels) with the colour `key_rgb` (0xRRGGBB) made clear:
+// colours within `low` (the sum of the three channels' differences) clear, beyond `high` solid, a ramp
+// between (for the soft edges of a JPEG). For a logo on a plain background in one of the games' own
+// pictures (the player's disc), so it is game art: --no_game_art gives none. Kept like LoadTexture.
+ImTextureID LoadTextureKeyed(const std::filesystem::path& path, int x, int y, int w, int h, uint32_t key_rgb,
+                             int low, int high);
 
 // Drops every texture (before the device goes).
 void ReleaseTextures();
