@@ -348,7 +348,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // which settings file says whether it starts in fullscreen.
   std::wstring iso;
   std::wstring portable_update;
-  std::wstring sc_language;
+  std::wstring sc_language, im_language;
   bool fullscreen_arg = false;
   int argc = 0;
   if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
@@ -381,6 +381,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       } else if (arg.starts_with(L"--sc_language=")) {
         // A test of SuperChargers' language import without the window (language_import.h).
         sc_language = arg.substr(14);
+      } else if (arg.starts_with(L"--im_language=")) {
+        // The same for Imaginators' import from its PS3 disc.
+        im_language = arg.substr(14);
       } else if (arg == L"--fullscreen") {
         // Fullscreen for this start, whatever the setting says (Steam's launch options on a
         // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
@@ -411,13 +414,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     coreoflight::HubLog(done ? "portable update test: done, the new launcher started" : "portable update test: " + why);
     return done ? 0 : 1;
   }
-  if (!sc_language.empty()) {
+  if (!sc_language.empty() || !im_language.empty()) {
     // "<code>|<source disc>|<rom folder>", or "restore|<rom folder>": the import (or its undoing) on
     // its thread, waited for; its summary goes to the log.
+    const bool im = sc_language.empty();
+    const std::wstring& spec = im ? im_language : sc_language;
+    const std::string tag = im ? "im language test: " : "sc language test: ";
     std::vector<std::wstring> parts;
     for (size_t at = 0;;) {
-      const size_t bar = sc_language.find(L'|', at);
-      parts.push_back(sc_language.substr(at, bar == std::wstring::npos ? std::wstring::npos : bar - at));
+      const size_t bar = spec.find(L'|', at);
+      parts.push_back(spec.substr(at, bar == std::wstring::npos ? std::wstring::npos : bar - at));
       if (bar == std::wstring::npos) break;
       at = bar + 1;
     }
@@ -425,16 +431,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     for (wchar_t c : parts[0]) code += static_cast<char>(c);
     coreoflight::LanguageImport job;
     if (parts.size() == 2 && code == "restore") {
-      job.StartRestore(parts[1], false, "SuperChargers");
+      job.StartRestore(parts[1], false, im ? "Imaginators" : "SuperChargers");
+    } else if (parts.size() == 3 && im) {
+      job.Start(parts[1], parts[2], code, false);
     } else if (parts.size() == 3) {
       job.StartSuperChargers(parts[1], parts[2], code, false);
     } else {
-      coreoflight::HubLog("sc language test: --sc_language=\"<code>|<source disc>|<rom folder>\" or \"restore|<rom folder>\"");
+      coreoflight::HubLog(tag + (im ? "--im_language" : "--sc_language") +
+                          "=\"<code>|<source disc>|<rom folder>\" or \"restore|<rom folder>\"");
       return 1;
     }
     while (job.running()) Sleep(200);
     const std::string summary = job.TakeSummary();
-    coreoflight::HubLog("sc language test: " + summary);
+    coreoflight::HubLog(tag + summary);
     return summary.empty() ? 1 : 0;
   }
   const float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
