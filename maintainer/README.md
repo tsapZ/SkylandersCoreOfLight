@@ -52,7 +52,7 @@ saves and figures are never touched.
 |---|---|
 | `smoke.ps1 -Repo <Repo> -Route <route> [-Build devkit]` | one run along a route with window shots, then one verdict line: crash or trouble lines, whether the script reached its end, the FPS samples. `-Build devkit` runs the developer kit's build (`out\build\win-amd64-devkit`, the private SkylandersDevKit: level loading and level sweeps) |
 | `selftest.ps1` | the tools themselves, a few seconds: every PowerShell script parses, every Python script compiles, every list parameter splits a comma list (`powershell -File` hands "A,B" over as one string); before a release |
-| `smoke_all.ps1` | `smoke.ps1` for all six games with their usual route, about 15 minutes; after anything that touches every game |
+| `smoke_all.ps1` | `smoke.ps1` for all six games with their usual route, about 15 minutes; after anything that touches every game. `-Vulkan` runs each route again on Vulkan and keeps both sets of pictures (`runs\smoke\<Repo>_d3d12`, `_vulkan`) to compare: use it when the SDK or a GPU default changes |
 | `crash_hunt.ps1 -Repo <Repo> -Route <route> [-Seconds 1800] [-Seed 2]` | a route, then random play for that long (`wander.py`), a shot every minute, the threads' call chains every three |
 | `crash_all.ps1 [-Minutes 20] [-Seed 1]` | `crash_hunt.ps1` for all six on their usual routes, one after the other (about 2.5 hours at 20 minutes); for a release candidate |
 | `game_keys.ps1 -Repo <Repo> -Keys "wait:3000,0x73,shot:f4"` | real key presses for what the virtual controller can't reach (ImGui fields, the keyboard binds); stops when another window is in front, and when the game's log doesn't name the scratch user data folder |
