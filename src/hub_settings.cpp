@@ -340,13 +340,14 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   im_language.cvar = "im_language";
   im_language.en = "Imaginators language";
   im_language.de = "Imaginators-Sprache";
-  im_language.help_en = "The European Xbox 360 disc of Imaginators only speaks Spanish and Italian. Your PS3 disc of "
-                        "the game has more: pick English, German or French, then the PS3 disc (a decrypted .iso or "
-                        "its unpacked folder), and the launcher puts that language's texts, voices and movies into "
-                        "your Imaginators. About a minute; your saves stay. The disc's own languages come back here "
-                        "too.";
-  im_language.help_de = "Die europ\xC3\xA4ische Xbox-360-Disc von Imaginators spricht nur Spanisch und Italienisch. "
-                        "Deine PS3-Disc des Spiels hat mehr: w\xC3\xA4hle Englisch, Deutsch oder Franz\xC3\xB6sisch, "
+  im_language.help_en = "The European Xbox 360 discs of Imaginators speak two languages each: Spanish and Italian, or "
+                        "French and Dutch. Your PS3 disc of the game has more: pick English, German or French, then "
+                        "the PS3 disc (a decrypted .iso or its unpacked folder), and the launcher puts that "
+                        "language's texts, voices and movies into your Imaginators. About a minute; your saves "
+                        "stay. The disc's own languages come back here too.";
+  im_language.help_de = "Die europ\xC3\xA4ischen Xbox-360-Discs von Imaginators sprechen je zwei Sprachen: Spanisch "
+                        "und Italienisch oder Franz\xC3\xB6sisch und Niederl\xC3\xA4ndisch. Deine PS3-Disc des Spiels "
+                        "hat mehr: w\xC3\xA4hle Englisch, Deutsch oder Franz\xC3\xB6sisch, "
                         "dann die PS3-Disc (eine entschl\xC3\xBCsselte .iso oder ihren entpackten Ordner), und Core of Light "
                         "bringt Texte, Stimmen und Filme dieser Sprache in dein Imaginators. Etwa eine Minute; "
                         "Spielst\xC3\xA4nde bleiben. Hier kommen auch die Sprachen der Disc zur\xC3\xBC" "ck.";

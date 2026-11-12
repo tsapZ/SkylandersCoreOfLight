@@ -52,8 +52,6 @@ constexpr uint32_t kBlock = 0x8000;
 constexpr uint32_t kStored = 0xFFFFFFFF;
 constexpr uint32_t kPlatformPs3 = 6;
 constexpr uint32_t kPlatformXenon = 5;
-constexpr char kSpanishText[] = "_es.lng";
-constexpr char kSpanishVoices[] = "_es.pak";
 constexpr char kBackupDir[] = "german_text_backup";  // the Python tool's name, so both undo each other
 constexpr char kMoviesDir[] = "movies";
 constexpr char kLanguageNote[] = "language.txt";
@@ -80,6 +78,15 @@ constexpr LanguageImport::Language kLanguages[] = {
 };
 // Imaginators' place for the import: its disc's Spanish.
 constexpr LanguageInfo kImaginatorsSpanish = {"es", "_es", "/spanish/", "_es.wav", 0};
+// The European discs speak two languages each: Spanish / Italian (the owner's) or French / Dutch
+// (Core of Light #82). The place is the first of these the install has that isn't the language
+// asked for: Spanish on the first disc, as before, French on the second.
+constexpr LanguageInfo kImaginatorsPlaces[] = {
+    kImaginatorsSpanish,
+    {"fr", "_fr", "/french/", "_fr.wav", 0},
+    {"it", "_it", "/italian/", "_it.wav", 0},
+    {"nl", "_nl", "/dutch/", "_nl.wav", 0},
+};
 
 // SuperChargers (SuperChargersRecomp's tools/add_language.py, branch feat/language-any): read off its
 // Spanish / Italian and English / German discs, 2026-11-11: voice banks <bank>_xx.pak, voices in
@@ -722,8 +729,8 @@ std::optional<std::vector<uint8_t>> RewriteLng(const std::vector<uint8_t>& data,
 struct Job {
   fs::path archives, backup;
   const LanguageInfo* lang = nullptr;
-  // The install's language that gets the new one (Imaginators: Spanish), and whether the source is a
-  // PS3 disc ("/xenon/" paths are "/ps3/" there).
+  // The install's language that gets the new one (Imaginators: Spanish, French on the French / Dutch
+  // disc), and whether the source is a PS3 disc ("/xenon/" paths are "/ps3/" there).
   const LanguageInfo* place = &kImaginatorsSpanish;
   bool from_ps3 = true;
   SourceDisc disc;
@@ -838,8 +845,9 @@ int PlatformStrings(Job& job) {
   Iga x, p;
   if (!x.Open(FileReader(path)) || !p.Open(DiscReader(job.disc, "permanent_ps3.pak"))) return 0;
   std::optional<size_t> i;
+  const std::string place = job.place->suffix;
   for (size_t k = 0; k < x.files().size() && !i; ++k) {
-    if (EndsWith(Lower(x.files()[k].name), "/xenonplatformstrings_es.lng")) i = k;
+    if (EndsWith(Lower(x.files()[k].name), "/xenonplatformstrings" + place + ".lng")) i = k;
   }
   if (!i) return 0;
   auto xenon = x.Read(*i);
@@ -854,8 +862,8 @@ int PlatformStrings(Job& job) {
   };
   const std::string suffix = job.lang->suffix;
   const std::pair<std::map<std::string, std::string>, std::map<std::string, std::string>> sources[] = {
-      {source_texts("ps3platformstrings_es.lng"), source_texts("ps3platformstrings" + suffix + ".lng")},
-      {source_texts("pcplatformstrings_es.lng"), source_texts("pcplatformstrings" + suffix + ".lng")}};
+      {source_texts("ps3platformstrings" + place + ".lng"), source_texts("ps3platformstrings" + suffix + ".lng")},
+      {source_texts("pcplatformstrings" + place + ".lng"), source_texts("pcplatformstrings" + suffix + ".lng")}};
   const std::string code = job.lang->code;
   const std::map<std::string, std::string>* hand = code == "de"   ? &kXenonGerman
                                                    : code == "en" ? &kXenonEnglish
@@ -1269,6 +1277,14 @@ std::string LanguageName(const std::string& code, bool german) {
   return code;
 }
 
+// A place's name: the six-language list has the Imaginators places too (Spanish, Italian, Dutch).
+std::string PlaceName(const std::string& code, bool german) {
+  for (const LanguageImport::Language& l : kSuperChargersLanguages) {
+    if (code == l.code) return german ? l.name_de : l.name_en;
+  }
+  return code;
+}
+
 }  // namespace
 
 const LanguageImport::Language* LanguageImport::Languages(size_t* count) {
@@ -1410,6 +1426,23 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
                                "unpacked folder.");
       }
     }
+    // The place: one of the install's two languages, by its voice banks (Spanish on the Spanish /
+    // Italian disc, French on the French / Dutch one).
+    const auto install_has = [&](const LanguageInfo& info) {
+      return !ArchiveNames(job->archives, (std::string(info.suffix) + ".pak").c_str()).empty();
+    };
+    for (const LanguageInfo& info : kImaginatorsPlaces) {
+      if (language == info.code && install_has(info)) {
+        return finish(german ? "Imaginators hat diese Sprache schon." : "Imaginators has that language already.");
+      }
+    }
+    job->place = nullptr;
+    for (const LanguageInfo& info : kImaginatorsPlaces) {
+      if (!job->place && language != info.code && install_has(info)) job->place = &info;
+    }
+    if (!job->place) {
+      return finish(german ? "Die Sprachen dieser Installation sind unbekannt." : "This install's languages are unknown.");
+    }
     // Another language before: undone first (an entry is pointed at one twin only).
     const std::string before = ImportedLanguage(rom);
     if (!before.empty() && before != language) {
@@ -1421,16 +1454,16 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
       }
     }
     fs::create_directories(job->backup, ec);
-    // Text: every archive with Spanish text.
+    // Text: every archive with text in the place's language.
     std::vector<std::string> text_archives;
     const std::vector<std::string> paks = ArchiveNames(job->archives, ".pak");
     for (size_t k = 0; k < paks.size(); ++k) {
       if (k % 200 == 0) job->report(german ? "Texte werden gesucht" : "looking for the texts", 0.05f * float(k) / float(paks.size()));
-      if (EndsWith(Lower(paks[k]), kSpanishVoices)) continue;
+      if (EndsWith(Lower(paks[k]), PlaceVoices(*job))) continue;
       Iga x;
       if (!x.Open(FileReader(job->archives / Path(paks[k])))) continue;
       for (const Iga::File& f : x.files()) {
-        if (EndsWith(Lower(f.name), kSpanishText)) {
+        if (EndsWith(Lower(f.name), PlaceText(*job))) {
           text_archives.push_back(paks[k]);
           break;
         }
@@ -1446,39 +1479,56 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
       job->text_archives += n ? 1 : 0;
     }
     DiscOwn(*job);
-    const int platform_missing = PlatformStrings(*job);  // Imaginators: its place is Spanish
-    // Voices: every Spanish voice bank.
-    const std::vector<std::string> voice_paks = ArchiveNames(job->archives, kSpanishVoices);
+    const int platform_missing = PlatformStrings(*job);
+    // Voices: every voice bank in the place's language.
+    const std::vector<std::string> voice_paks = ArchiveNames(job->archives, PlaceVoices(*job).c_str());
     for (size_t k = 0; k < voice_paks.size(); ++k) {
       job->report((german ? "Stimmen " : "voices ") + std::to_string(k + 1) + " / " + std::to_string(voice_paks.size()),
                   0.5f + 0.35f * float(k) / float(std::max<size_t>(1, voice_paks.size())));
       const std::string lower = Lower(voice_paks[k]);
-      const std::string twin = lower.substr(0, lower.size() - std::strlen(kSpanishVoices)) + job->lang->suffix + ".pak";
+      const std::string twin = lower.substr(0, lower.size() - PlaceVoices(*job).size()) + job->lang->suffix + ".pak";
       if (!job->disc.Has(twin)) continue;
       const int n = Patch(*job, voice_paks[k], twin, true);
       job->voices += n;
       job->voice_archives += n ? 1 : 0;
     }
     std::vector<std::string> skipped;
-    job->movies = Movies(*job, skipped);
+    // The movies' spoken tracks (kThisDiscSpoken) are known for the Spanish / Italian disc only.
+    const bool spanish_place = std::string(job->place->code) == "es";
+    if (spanish_place) job->movies = Movies(*job, skipped);
     // Which language it is, once all of it is in (an interrupted run reads as "?": undone first).
     {
       std::ofstream note(job->backup / kLanguageNote, std::ios::binary | std::ios::trunc);
       note << language << "\n";
     }
     const std::string name = LanguageName(language, german);
-    // The game shows it in place of Spanish: whatever its F4 > Game > Language says but Italian.
     char text[400];
-    std::snprintf(text, sizeof(text),
-                  german ? "Imaginators spricht jetzt %s (%d Texte, %d Stimmen, %d Filme). Im Spiel unter F4 > Spiel > "
-                           "Sprache alles au\xC3\x9F" "er Italienisch."
-                         : "Imaginators speaks %s now (%d texts, %d voices, %d movies). In the game's F4 > Game > "
-                           "Language, anything but Italian.",
-                  name.c_str(), job->texts, job->voices, job->movies);
+    if (spanish_place) {
+      // The game shows it in place of Spanish: whatever its F4 > Game > Language says but Italian.
+      std::snprintf(text, sizeof(text),
+                    german ? "Imaginators spricht jetzt %s (%d Texte, %d Stimmen, %d Filme). Im Spiel unter F4 > Spiel > "
+                             "Sprache alles au\xC3\x9F" "er Italienisch."
+                           : "Imaginators speaks %s now (%d texts, %d voices, %d movies). In the game's F4 > Game > "
+                             "Language, anything but Italian.",
+                    name.c_str(), job->texts, job->voices, job->movies);
+    } else {
+      // In place of the disc's other language (French on the French / Dutch disc): the game shows it
+      // when its language setting names that language.
+      const std::string place_name = PlaceName(job->place->code, german);
+      std::snprintf(text, sizeof(text),
+                    german ? "Imaginators spricht jetzt %s (%d Texte, %d Stimmen; die Filme bleiben). Im Spiel unter "
+                             "F4 > Spiel > Sprache %s w\xC3\xA4hlen."
+                           : "Imaginators speaks %s now (%d texts, %d voices; the movies stay). In the game's F4 > "
+                             "Game > Language, choose %s.",
+                    name.c_str(), job->texts, job->voices, place_name.c_str());
+      HubLog("language import: the movies stay as they are (their spoken tracks are known for the Spanish / "
+             "Italian disc only)");
+    }
+    HubLog("language import: in place of " + std::string(job->place->code));
     HubLog("language import: " + std::to_string(job->text_archives) + " text archives, " +
            std::to_string(job->voice_archives) + " voice archives");
     for (const std::string& s : skipped) HubLog("language import: movie left as it is: " + s);
-    if (platform_missing > 0) HubLog("language import: " + std::to_string(platform_missing) + " platform texts stay Spanish");
+    if (platform_missing > 0) HubLog("language import: " + std::to_string(platform_missing) + " platform texts stay in the disc's language");
     if (!job->texts) {
       return finish(german ? "Keine Texte gefunden: passt die Disc zu diesem Imaginators?"
                            : "No texts found: does the disc match this Imaginators?");

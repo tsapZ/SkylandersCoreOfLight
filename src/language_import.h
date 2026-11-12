@@ -2,7 +2,9 @@
 
 // Imaginators in another language, from the player's own PS3 disc of the game (the owner's wish,
 // 2026-10-25: "nur die PS3-ISO einbinden, der Hub holt sich die Sprachpakete"). The European Xbox
-// 360 disc that the port is built for only has Spanish and Italian; the European PS3 disc has ten
+// 360 disc that the port is built for only has Spanish and Italian (another European one French and
+// Dutch, Core of Light #82: there French takes the place Spanish has below, and the movies stay, as
+// their spoken tracks are known for the Spanish / Italian disc only); the European PS3 disc has ten
 // languages. The PS3 disc's archives are the same as the 360's (same paths, same IGA format,
 // big-endian), only their platform data differs, so the text, the voices and the movies' spoken
 // track can be taken from it, as ImaginatorsRecomp's tools/add_language.py does (this is a C++ port
@@ -65,7 +67,8 @@ class LanguageImport {
   static const Language* SuperChargersLanguages(size_t* count);
 
   // Starts on a thread of its own: `source` the PS3 disc (.iso or folder), `rom` the installed
-  // Imaginators' disc folder. An earlier import of another language is undone first.
+  // Imaginators' disc folder, in place of its Spanish (or French on the French / Dutch disc). An
+  // earlier import of another language is undone first.
   void Start(const std::filesystem::path& source, const std::filesystem::path& rom, const std::string& language,
              bool german);
   // SuperChargers (Core of Light #77): `language` from another Xbox 360 disc of the game (`source`,
