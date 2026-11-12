@@ -364,6 +364,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         // controller's while the screenshot script presses keys (hints.h).
         coreoflight::SetNoGameArt(true);
         coreoflight::KeepControllerHints();
+      } else if (arg == L"--start_backdrop=game") {
+        coreoflight::SetStartBackdropFromGame(true);  // launcher_ui.h (#78: to compare the two)
       } else if (arg == L"--own_font") {
         g_own_font = true;  // the fallback font (Noto Sans) as under Wine
       } else if (arg == L"--offline") {

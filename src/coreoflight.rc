@@ -1,9 +1,11 @@
-// The launcher's icon (#11): our own drawing of the Core of Light, made by tools/make_icon.ps1.
-// The first icon is what Explorer and shortcuts show; main.cpp gives it to the window too.
-1 ICON "coreoflight.ico"
+// The launcher's icon (#78): morpheus284's (CC BY 4.0, assets\ui\morpheus284\icon.png, made into an icon of
+// seven sizes); the earlier one, our own drawing, is coreoflight.ico (tools/make_icon.ps1). The first icon is
+// what Explorer and shortcuts show; main.cpp gives it to the window too.
+1 ICON "coreoflight_morpheus284.ico"
 
-// morpheus284's frames for the start screen (#78, CC BY 4.0: assets\ui\morpheus284\README.md), as PNG
-// data; textures.h LoadUiTexture decodes them. The numbers are kUiCardBase... in textures.h.
+// morpheus284's frames and background for the start screen (#78, CC BY 4.0: assets\ui\morpheus284\README.md),
+// as PNG / JPEG data; textures.h LoadUiTexture decodes them. The numbers are kUiCardBase... in textures.h.
 101 RCDATA "..\\assets\\ui\\morpheus284\\card_base.png"
 102 RCDATA "..\\assets\\ui\\morpheus284\\card_light.png"
 103 RCDATA "..\\assets\\ui\\morpheus284\\option_bar.png"
+104 RCDATA "..\\assets\\ui\\morpheus284\\background.jpg"

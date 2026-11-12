@@ -760,8 +760,29 @@ void LauncherUi::OpenSettings(size_t index) {
   settings_.Open(german_ ? game.name_de : game.name_en, &loaders_[index], GameBackground(index));
 }
 
+bool g_backdrop_from_game = false;
+
+void SetStartBackdropFromGame(bool on) { g_backdrop_from_game = on; }
+
 void LauncherUi::DrawStartBackdrop(ImDrawList* dl, float width, float height) {
-  // The chosen game's picture, else any game's (the first with one), else the deep blue alone.
+  // morpheus284's background (#78, CC BY 4.0, built into the exe; made from scratch, no game picture as
+  // its reference), filling the window, with the same light shade as below.
+  auto shade = [&] {
+    dl->AddRectFilledMultiColor({0, 0}, {width, height * 0.28f}, Rgba(6, 16, 44, 80), Rgba(6, 16, 44, 80),
+                                Rgba(6, 16, 44, 0), Rgba(6, 16, 44, 0));
+    dl->AddRectFilledMultiColor({0, height * 0.72f}, {width, height}, Rgba(4, 10, 30, 0), Rgba(4, 10, 30, 0),
+                                Rgba(4, 10, 30, 150), Rgba(4, 10, 30, 150));
+  };
+  if (!g_backdrop_from_game) {
+    if (const ImTextureID art = LoadUiTexture(kUiBackground)) {
+      const float scale = std::max(width / 1920.0f, height / 1080.0f), bw = 1920 * scale, bh = 1080 * scale;
+      dl->AddImage(art, {(width - bw) * 0.5f, (height - bh) * 0.5f}, {(width + bw) * 0.5f, (height + bh) * 0.5f});
+      shade();
+      return;
+    }
+  }
+  // --start_backdrop=game, or without it: the chosen game's picture, else any game's (the first with
+  // one), else the deep blue alone.
   auto picture_of = [&](size_t game) -> std::filesystem::path {
     if (game < background_art_.size() && !background_art_[game].empty()) return background_art_[game];
     for (const std::filesystem::path& p : background_art_) {
@@ -789,10 +810,7 @@ void LauncherUi::DrawStartBackdrop(ImDrawList* dl, float width, float height) {
   if (fade < 1.0f) draw(picture_of(backdrop_from_), 1.0f);
   draw(picture_of(backdrop_game_), fade);
   // A light shade only: at the top for the title, at the bottom for the bar.
-  dl->AddRectFilledMultiColor({0, 0}, {width, height * 0.28f}, Rgba(6, 16, 44, 80), Rgba(6, 16, 44, 80),
-                              Rgba(6, 16, 44, 0), Rgba(6, 16, 44, 0));
-  dl->AddRectFilledMultiColor({0, height * 0.72f}, {width, height}, Rgba(4, 10, 30, 0), Rgba(4, 10, 30, 0),
-                              Rgba(4, 10, 30, 150), Rgba(4, 10, 30, 150));
+  shade();
 }
 
 void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool selected) {
@@ -3211,7 +3229,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   DrawBottomBar(dl, {bar_l, bar_t}, {bar_r, bar_b}, u);
   const char* version = "Core of Light " COREOFLIGHT_VERSION;
   // Under it the credit for the look (#78, promised there).
-  const char* credit = german_ ? "Design und Rahmen: morpheus284 (CC BY 4.0)" : "Design and frames: morpheus284 (CC BY 4.0)";
+  const char* credit = german_ ? "Design: morpheus284 (CC BY 4.0)" : "Design: morpheus284 (CC BY 4.0)";
   const float version_w = std::max(TextWidth(regular_, 16 * u, version), TextWidth(regular_, 13 * u, credit));
   const float vy = bar_t + (bar_b - bar_t) * 0.5f;
   Text(dl, regular_, 16 * u, {bar_r - 26 * u - TextWidth(regular_, 16 * u, version), vy - 18 * u}, kDim, version);

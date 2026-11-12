@@ -25,6 +25,7 @@ ImTextureID LoadTexture(const std::filesystem::path& path);
 constexpr int kUiCardBase = 101;
 constexpr int kUiCardLight = 102;
 constexpr int kUiOptionBar = 103;
+constexpr int kUiBackground = 104;
 ImTextureID LoadUiTexture(int resource_id);
 
 // A part of the picture in `path` (x, y, w, h in its pixels) with the colour `key_rgb` (0xRRGGBB) made clear:

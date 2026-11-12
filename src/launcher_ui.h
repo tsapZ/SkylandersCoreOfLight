@@ -31,6 +31,10 @@ struct ImFont;
 
 namespace coreoflight {
 
+// --start_backdrop=game: the start screen shows the chosen game's dashboard picture from its disc
+// instead of morpheus284's background (#78; to compare the two).
+void SetStartBackdropFromGame(bool on);
+
 class LauncherUi {
  public:
   void Init(const std::filesystem::path& launcher_dir, ImFont* regular, ImFont* bold);
