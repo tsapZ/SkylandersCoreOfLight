@@ -18,6 +18,14 @@ void SetTextureDevice(ID3D11Device* device);
 // read; a missing file is looked for again only after a while.
 ImTextureID LoadTexture(const std::filesystem::path& path);
 
+// The launcher's own pictures built into the exe (coreoflight.rc, RCDATA): morpheus284's frames for the
+// start screen (#78, CC BY 4.0). Not the games' art, so --no_game_art keeps them. Decoded once and kept;
+// ImTextureID{} if the resource is missing or can't be read (the screen then draws its own shapes).
+constexpr int kUiCardBase = 101;
+constexpr int kUiCardLight = 102;
+constexpr int kUiOptionBar = 103;
+ImTextureID LoadUiTexture(int resource_id);
+
 // Drops every texture (before the device goes).
 void ReleaseTextures();
 

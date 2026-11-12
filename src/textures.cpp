@@ -21,19 +21,19 @@ struct Entry {
 };
 std::unordered_map<std::wstring, Entry> g_textures;
 
-ID3D11ShaderResourceView* Decode(const std::filesystem::path& path) {
-  if (!g_device) return nullptr;
-  if (!g_wic && FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_wic)))) {
-    return nullptr;
-  }
-  IWICBitmapDecoder* decoder = nullptr;
+std::unordered_map<int, Entry> g_ui_textures;
+
+bool Wic() {
+  return g_wic || SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_wic)));
+}
+
+// The first frame of `decoder` as a texture (RGBA, at most 4096 a side), or nullptr.
+ID3D11ShaderResourceView* TextureFrom(IWICBitmapDecoder* decoder) {
   IWICBitmapFrameDecode* frame = nullptr;
   IWICFormatConverter* converter = nullptr;
   ID3D11ShaderResourceView* view = nullptr;
   UINT w = 0, h = 0;
-  if (SUCCEEDED(g_wic->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand,
-                                                 &decoder)) &&
-      SUCCEEDED(decoder->GetFrame(0, &frame)) && SUCCEEDED(g_wic->CreateFormatConverter(&converter)) &&
+  if (SUCCEEDED(decoder->GetFrame(0, &frame)) && SUCCEEDED(g_wic->CreateFormatConverter(&converter)) &&
       SUCCEEDED(converter->Initialize(frame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0,
                                       WICBitmapPaletteTypeCustom)) &&
       SUCCEEDED(converter->GetSize(&w, &h)) && w && h && w <= 4096 && h <= 4096) {
@@ -58,7 +58,39 @@ ID3D11ShaderResourceView* Decode(const std::filesystem::path& path) {
   }
   if (converter) converter->Release();
   if (frame) frame->Release();
+  return view;
+}
+
+ID3D11ShaderResourceView* Decode(const std::filesystem::path& path) {
+  if (!g_device || !Wic()) return nullptr;
+  IWICBitmapDecoder* decoder = nullptr;
+  ID3D11ShaderResourceView* view = nullptr;
+  if (SUCCEEDED(g_wic->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand,
+                                                 &decoder))) {
+    view = TextureFrom(decoder);
+  }
   if (decoder) decoder->Release();
+  return view;
+}
+
+// A PNG built into the exe (RCDATA), through a WIC stream over the resource's memory.
+ID3D11ShaderResourceView* DecodeResource(int id) {
+  if (!g_device || !Wic()) return nullptr;
+  HRSRC res = FindResourceW(nullptr, MAKEINTRESOURCEW(id), RT_RCDATA);
+  HGLOBAL mem = res ? LoadResource(nullptr, res) : nullptr;
+  void* data = mem ? LockResource(mem) : nullptr;
+  const DWORD size = res ? SizeofResource(nullptr, res) : 0;
+  if (!data || !size) return nullptr;
+  IWICStream* stream = nullptr;
+  IWICBitmapDecoder* decoder = nullptr;
+  ID3D11ShaderResourceView* view = nullptr;
+  if (SUCCEEDED(g_wic->CreateStream(&stream)) &&
+      SUCCEEDED(stream->InitializeFromMemory(static_cast<BYTE*>(data), size)) &&
+      SUCCEEDED(g_wic->CreateDecoderFromStream(stream, nullptr, WICDecodeMetadataCacheOnDemand, &decoder))) {
+    view = TextureFrom(decoder);
+  }
+  if (decoder) decoder->Release();
+  if (stream) stream->Release();
   return view;
 }
 
@@ -86,11 +118,25 @@ ImTextureID LoadTexture(const std::filesystem::path& path) {
   return e.view ? reinterpret_cast<ImTextureID>(e.view) : ImTextureID{};
 }
 
+ImTextureID LoadUiTexture(int resource_id) {
+  Entry& e = g_ui_textures[resource_id];
+  // Built in: one try (once the device is there) is enough.
+  if (!e.view && e.tried == std::chrono::steady_clock::time_point{} && g_device) {
+    e.tried = std::chrono::steady_clock::now();
+    e.view = DecodeResource(resource_id);
+  }
+  return e.view ? reinterpret_cast<ImTextureID>(e.view) : ImTextureID{};
+}
+
 void ReleaseTextures() {
   for (auto& [path, e] : g_textures) {
     if (e.view) e.view->Release();
   }
   g_textures.clear();
+  for (auto& [id, e] : g_ui_textures) {
+    if (e.view) e.view->Release();
+  }
+  g_ui_textures.clear();
   if (g_wic) g_wic->Release();
   g_wic = nullptr;
 }

@@ -275,7 +275,9 @@ The pictures at the top of this page are drawn by `tools/make_banner.ps1`, the i
   fork with the shared menus on top. Submodule; keeps its own license.
 - **[morpheus284](https://github.com/morpheus284)**: the start screen's look (the sky, the framed
   cards with their badges, the title plate and the bar at the bottom) follows his concept
-  ([#78](https://github.com/tsapZ/SkylandersCoreOfLight/issues/78)).
+  ([#78](https://github.com/tsapZ/SkylandersCoreOfLight/issues/78)); the card frames and the bottom
+  bar are his artwork, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+  (`assets/ui/morpheus284`).
 - **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut draws the launcher. Submodule
   (MIT).
 - **[stb_image](https://github.com/nothings/stb)** by Sean Barrett: its zlib decoder unpacks

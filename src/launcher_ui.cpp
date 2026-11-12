@@ -265,6 +265,18 @@ float DrawTitlePlate(ImDrawList* dl, ImFont* bold, float cx, float u) {
 
 // The bar at the bottom: a long plate with cut corners, a light rim and a dark line inside it.
 void DrawBottomBar(ImDrawList* dl, ImVec2 a, ImVec2 b, float u) {
+  // morpheus284's bar (#78, CC BY 4.0, built into the exe): its cut ends (the outer 3 % of the
+  // picture, 1811x110) keep their shape at the bar's height, the middle stretches.
+  if (const ImTextureID bar = LoadUiTexture(kUiOptionBar)) {
+    constexpr float kCap = 0.03f;
+    const float cap = kCap * (1811.0f / 110.0f) * (b.y - a.y);
+    if (b.x - a.x > 2 * cap) {
+      dl->AddImage(bar, a, {a.x + cap, b.y}, {0, 0}, {kCap, 1});
+      dl->AddImage(bar, {a.x + cap, a.y}, {b.x - cap, b.y}, {kCap, 0}, {1 - kCap, 1});
+      dl->AddImage(bar, {b.x - cap, a.y}, b, {1 - kCap, 0}, {1, 1});
+      return;
+    }
+  }
   const float c = (b.y - a.y) * 0.32f;
   const ImVec2 pts[8] = {{a.x, a.y + c}, {a.x + c, a.y}, {b.x - c, a.y}, {b.x, a.y + c},
                          {b.x, b.y - c}, {b.x - c, b.y}, {a.x + c, b.y}, {a.x, b.y - c}};
@@ -733,8 +745,20 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
       dl->AddRectFilled({x - grow, y - grow}, {x + w + grow, y + h + grow}, Rgba(255, 210, 90, 10), r + grow);
     }
   }
+  // morpheus284's frame (#78, CC BY 4.0, built into the exe): its top (the rim and the picture's
+  // window) and its bottom (the rim and the medallion) keep their shape at the card's width; only the
+  // text area between them stretches with the card's height. card_light is the chosen card's, lit.
+  // Without it (or on a card too short for it) the frame drawn from shapes, as before.
+  const ImTextureID frame = LoadUiTexture(selected ? kUiCardLight : kUiCardBase);
+  constexpr float kFrameAspect = 959.0f / 491.0f;  // card_base.png's height / width
+  constexpr float kTopV = 0.42f, kBottomV = 0.80f;  // where its stretchable middle begins and ends
+  const float frame_h = w * kFrameAspect;
+  const float top_h = frame_h * kTopV, bottom_h = frame_h * (1.0f - kBottomV);
+  const bool framed = frame && h > top_h + bottom_h;
+  // Its picture window, from the frame's alpha (2026-11-12): x 6.1-93.9 %, y 3.3-40.3 % of the picture.
+  const ImVec2 win_a{x + 0.061f * w, y + 0.033f * frame_h}, win_b{x + 0.939f * w, y + 0.403f * frame_h};
   // The frame (#78): a thick steel-blue rim, a gold line inside it on the chosen card.
-  DrawCardFrame(dl, {x, y}, {x + w, y + h}, r, s, selected);
+  if (!framed) DrawCardFrame(dl, {x, y}, {x + w, y + h}, r, s, selected);
   // Two sparks running round the chosen card's border (the owner's wish for more life, 2026-10-24).
   if (selected && hub_.animations) {
     const float head = float(ImGui::GetTime()) * 260 * s;
@@ -750,7 +774,29 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   const ImTextureID tile =
       index < tile_art_.size() && !tile_art_[index].empty() ? LoadTexture(tile_art_[index]) : ImTextureID{};
   float content_y = 0;  // where the hero's picture goes; 0: the layout without a tile
-  if (tile) {
+  if (framed) {
+    // The window: the tile fills its width, on the game's colour where it is shorter; the frame
+    // drawn over it hides the edges.
+    dl->AddRectFilled(win_a, win_b, tile ? Rgba(30, 50, 92) : installed ? kAccents[index % 6] : Rgba(70, 75, 100));
+    if (tile) {
+      const float tw = win_b.x - win_a.x, th = tw * 320.0f / 420.0f;
+      const float ty = win_a.y + std::max(0.0f, (win_b.y - win_a.y - th) * 0.5f);
+      dl->AddImage(tile, {win_a.x, ty}, {win_b.x, std::min(ty + th, win_b.y)}, {0, 0},
+                   {1, std::min(1.0f, (win_b.y - ty) / th)});
+      const float ys = 15 * s, yw = TextWidth(bold_, ys, year);
+      dl->AddRectFilled({win_a.x + 6 * s, win_a.y + 6 * s}, {win_a.x + 18 * s + yw, win_a.y + 10 * s + ys},
+                        Rgba(10, 14, 40, 170), 8 * s);
+      Text(dl, bold_, ys, {win_a.x + 12 * s, win_a.y + 8 * s}, kWhite, year);
+    } else {
+      const float year_size = 40 * s;
+      Text(dl, bold_, year_size, {x + (w - TextWidth(bold_, year_size, year)) * 0.5f, win_a.y + 10 * s}, kWhite, year);
+    }
+    const float mid_h = h - top_h - bottom_h;
+    dl->AddImage(frame, {x, y}, {x + w, y + top_h}, {0, 0}, {1, kTopV});
+    dl->AddImage(frame, {x, y + top_h}, {x + w, y + top_h + mid_h}, {0, kTopV}, {1, kBottomV});
+    dl->AddImage(frame, {x, y + h - bottom_h}, {x + w, y + h}, {0, kBottomV}, {1, 1});
+    content_y = win_b.y + 14 * s;
+  } else if (tile) {
     const float tw = w - 17 * s, th = tw * 320.0f / 420.0f;
     dl->AddImageRounded(tile, {x + 8.5f * s, y + 8.5f * s}, {x + 8.5f * s + tw, y + 8.5f * s + th}, {0, 0}, {1, 1},
                         kWhite, r - 8.5f * s, ImDrawFlags_RoundCornersTop);
@@ -779,7 +825,8 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   }
   // In a round frame, as the concept's character icons (#78). Smaller where the card is short (two
   // rows of cards in a narrow window), none where it wouldn't fit above the chosen card's button.
-  const float hero_y = tile ? content_y + 4 * s : y + 144 * s;
+  // (On the framed card without a tile, the name goes under the window first.)
+  const float hero_y = tile ? content_y + 4 * s : framed ? content_y + 44 * s : y + 144 * s;
   const float hero_room = std::min(74 * s, y + h - 126 * s - hero_y - 4 * s);
   const float hero_side = hero_room >= 36 * s ? hero_room : 0.0f;
   if (!hero_pictures_[index].empty() && hero_side > 0) {
@@ -796,7 +843,7 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     const char* name = german_ ? game.name_de : game.name_en;
     float name_size = 34 * s;
     while (TextWidth(bold_, name_size, name) > w - 28 * s && name_size > 12) name_size -= 1;
-    Text(dl, bold_, name_size, {x + (w - TextWidth(bold_, name_size, name)) * 0.5f, y + 110 * s},
+    Text(dl, bold_, name_size, {x + (w - TextWidth(bold_, name_size, name)) * 0.5f, framed ? content_y : y + 110 * s},
          installed ? kWhite : kDim, name);
   }
   // The active profile's play time and achievements (the owner's choice, 2026-10-22: these, not the
@@ -836,7 +883,7 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     // As many as fit between the hero's picture (or the name) and the disc's state at the bottom,
     // or the chosen card's play button (at h - 122).
     const bool hero_shown = !hero_pictures_[index].empty() && hero_side > 0;
-    float ly = tile ? hero_y + (hero_shown ? hero_side + 14 * s : 0) : y + (hero_shown ? 230 : 170) * s;
+    float ly = (tile || framed) ? hero_y + (hero_shown ? hero_side + 14 * s : 0) : y + (hero_shown ? 230 : 170) * s;
     const float lines_end = y + h - 96 * s;  // above the state, as on the concept's cards
     const size_t fit = size_t(std::max(0.0f, (lines_end - ly) / (21 * s)));
     if (lines.size() > fit) lines.resize(fit);
@@ -900,8 +947,8 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     Text(dl, regular_, 13.5f * s, {text_x, y + h - 66 * s}, Rgba(226, 234, 248), when.c_str(), w - 48 * s);
   }
   // The medallion on the frame's bottom edge (#78): the rim bulges round it, a portal emblem inside,
-  // lit gold on the chosen card.
-  {
+  // lit gold on the chosen card. morpheus284's frame has its own.
+  if (!framed) {
     const ImVec2 bc{x + w * 0.5f, y + h - 2 * s};
     const float br = 24 * s;
     if (selected) dl->AddCircleFilled(bc, br + 14 * s, Rgba(255, 210, 90, 50), 40);
@@ -3097,7 +3144,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   DrawBottomBar(dl, {bar_l, bar_t}, {bar_r, bar_b}, u);
   const char* version = "Core of Light " COREOFLIGHT_VERSION;
   // Under it the credit for the look (#78, promised there).
-  const char* credit = german_ ? "Design-Idee: morpheus284" : "Design idea: morpheus284";
+  const char* credit = german_ ? "Design und Rahmen: morpheus284 (CC BY 4.0)" : "Design and frames: morpheus284 (CC BY 4.0)";
   const float version_w = std::max(TextWidth(regular_, 16 * u, version), TextWidth(regular_, 13 * u, credit));
   const float vy = bar_t + (bar_b - bar_t) * 0.5f;
   Text(dl, regular_, 16 * u, {bar_r - 26 * u - TextWidth(regular_, 16 * u, version), vy - 18 * u}, kDim, version);
