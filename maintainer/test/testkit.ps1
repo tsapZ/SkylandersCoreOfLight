@@ -115,11 +115,61 @@ function Get-ScriptShots([string]$Script) {
   $steps -join "; "
 }
 
+# The longest a route can take: its waits, holds and taps, and each waitfor's limit.
+function Get-ScriptLength([string]$Script) {
+  $t = 0.0
+  foreach ($cmd in ((Get-Content $Script) -join ";").Split(";")) {
+    $w = $cmd.Trim() -split '\s+'
+    switch ($w[0]) {
+      "wait" { $t += [double]::Parse($w[1], [Globalization.CultureInfo]::InvariantCulture) }
+      "waitfor" { if ($w.Count -ge 3) { $t += [double]::Parse($w[2], [Globalization.CultureInfo]::InvariantCulture) } }
+      "tap" { $t += 0.12 }
+      "key" { $t += 0.12 }
+      "hold" { $t += [double]$w[2] / 1000 }
+      "stick" { $t += [double]$w[3] / 1000 }
+      "fps" { $t += [double]$w[1] }
+    }
+  }
+  $t
+}
+
+# A window picture of the running game (as run_scripted.ps1's "shot": 640 wide, overlays included).
+function Save-GameWindow([System.Diagnostics.Process]$Process, [string]$Path) {
+  if (-not ("TestkitWindow" -as [type])) {
+    Add-Type -AssemblyName System.Drawing
+    Add-Type @"
+using System; using System.Runtime.InteropServices;
+public static class TestkitWindow {
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+}
+"@
+  }
+  $Process.Refresh()
+  $hwnd = $Process.MainWindowHandle
+  if ($hwnd -eq [IntPtr]::Zero) { return }
+  $rect = New-Object TestkitWindow+RECT
+  [TestkitWindow]::GetClientRect($hwnd, [ref]$rect) | Out-Null
+  $bmp = New-Object System.Drawing.Bitmap ([math]::Max(1, $rect.R - $rect.L)), ([math]::Max(1, $rect.B - $rect.T))
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $hdc = $g.GetHdc()
+  [TestkitWindow]::PrintWindow($hwnd, $hdc, 3) | Out-Null
+  $g.ReleaseHdc($hdc); $g.Dispose()
+  $small = New-Object System.Drawing.Bitmap $bmp, 640, ([int](640 * $bmp.Height / $bmp.Width))
+  $small.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  $small.Dispose(); $bmp.Dispose()
+}
+
 # The game started through its tools\run_scripted.ps1 (window shots on a timeline), muted (only the
 # samples are zeroed: SDL and the sound driver run as usual), then its newest log copied to the run.
 # -Build: the build folder's name after win-amd64- (release, or devkit for the developer kit's build).
 function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]$Run, [string]$Shots,
-                     [string]$Extra = "", [int]$QuitTimeout = 180, [string]$Build = "release") {
+                     [string]$Extra = "", [int]$QuitTimeout = 180, [string]$Build = "release",
+                     [switch]$ShotsFromLog) {
+  # The game of a run just before can still be closing (saving, its threads ending): up to 60 s for it
+  # to go before calling it another run (2026-11-12: three runs of a chain were lost to this).
+  for ($i = 0; $i -lt 120 -and (Get-Process *recompiled* -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
   if (Get-Process *recompiled* -ErrorAction SilentlyContinue) { throw "a game is already running" }
   $repoDir = Get-RepoDir $Repo
   $logDir = Join-Path $repoDir "out\build\win-amd64-$Build\logs"
@@ -137,10 +187,37 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   # The shared runner in the game's skylanders-portal; an older checkout still has its own copy.
   $runner = ".\thirdparty\skylanders-portal\tools\run_scripted.ps1"
   if (-not (Test-Path $runner)) { $runner = ".\tools\run_scripted.ps1" }
-  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $Shots -Config $Build -KeepRunning 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
+  # -ShotsFromLog: no timeline; each picture is taken a second after the game logs the route's
+  # "log shot <name>" line, so a waitfor before it (any length) can't put it off (2026-11-12).
+  $timeline = if ($ShotsFromLog) { "" } else { $Shots }
+  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $timeline -Config $Build -KeepRunning 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
   finally { Pop-Location }
   $exe = $script:Games[$Repo].Exe
-  for ($i = 0; $i -lt 2 * $QuitTimeout -and (Get-Process $exe -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
+  $limit = 2 * $QuitTimeout
+  if ($ShotsFromLog) { $limit += 2 * [int](Get-ScriptLength $Script) }
+  $reader = $null
+  try {
+    for ($i = 0; $i -lt $limit -and (Get-Process $exe -ErrorAction SilentlyContinue); $i++) {
+      Start-Sleep -Milliseconds 500
+      if (-not $ShotsFromLog) { continue }
+      if (-not $reader) {
+        $file = Get-ChildItem $logDir -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt $before } |
+          Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $file) { continue }
+        $stream = [IO.File]::Open($file.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        $reader = New-Object IO.StreamReader($stream)
+      }
+      while ($null -ne ($line = $reader.ReadLine())) {
+        if ($line -match 'Input script: shot (\S+)') {
+          Start-Sleep -Milliseconds 1000
+          $game = Get-Process $exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($game) { Save-GameWindow $game (Join-Path $Run "$($Matches[1]).png") }
+        }
+      }
+    }
+  } finally {
+    if ($reader) { $reader.Dispose() }
+  }
   Get-Process $exe -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
   Start-Sleep -Milliseconds 500
   $log = Get-ChildItem $logDir -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt $before } |
