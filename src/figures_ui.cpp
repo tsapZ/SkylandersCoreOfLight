@@ -254,15 +254,23 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.owned = true;
     f.stats = sp::ParseFigureStats(*data);
     f.trap = sp::ReadTrapVillain(*data);
+    // UTF-8, not path::string(): that throws for a name outside the Windows code page (#60).
+    const std::u8string stem8 = it->path().stem().u8string();
+    const std::string stem(stem8.begin(), stem8.end());
     if (const sp::SkylanderInfo* info = sp::FindSkylander(f.id, f.variant)) {
+      // Another variant than the real toys' (an emulator's own figure: RPCS3 writes 0 for Trap
+      // Team's adventure packs, Core of Light #92): the plain version of the character stands for
+      // it (its game, lists, picture), under the file's own name, which can say more (a series
+      // figure, another trap shape). FigureDisplayName is empty then.
       const std::string shown = sp::FigureDisplayName(*data);
-      f.name = sp::DisplayName(shown.empty() ? info->name : shown);
+      f.name = shown.empty() ? stem : sp::DisplayName(shown);
+      f.variant = info->variant;
       f.game = std::string(info->game);
       f.category = std::string(info->category);
       f.badge = sp::VersionBadge(*info);
       f.element = sp::FigureElement(*info);
     } else {
-      f.name = it->path().stem().string();
+      f.name = stem;
       f.category = german_ ? "Unbekannt" : "Unknown";
     }
     have.insert({f.id, f.variant});
@@ -297,12 +305,15 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   }
   for (const auto& [key, copy] : real_toys) {
     const sp::SkylanderInfo* info = sp::FindSkylander(key.first, key.second);
-    if (!info || have.contains(key) || marked_.contains(key)) continue;
+    if (!info) continue;
+    // The catalog's version of it, as for the files above.
+    const std::pair<uint16_t, uint16_t> plain{info->id, info->variant};
+    if (have.contains(plain) || marked_.contains(plain)) continue;
     const auto data = sp::LoadFigureFile(copy);
     if (!data) continue;
     Figure f;
-    f.id = key.first;
-    f.variant = key.second;
+    f.id = plain.first;
+    f.variant = plain.second;
     f.owned = true;
     f.stats = sp::ParseFigureStats(*data);
     f.trap = sp::ReadTrapVillain(*data);
@@ -312,7 +323,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.category = std::string(info->category);
     f.badge = sp::VersionBadge(*info);
     f.element = sp::FigureElement(*info);
-    have.insert(key);
+    have.insert(plain);
     owned_.push_back(std::move(f));
   }
   // In release order, then by kind of figure as the catalog orders them, then by name.
