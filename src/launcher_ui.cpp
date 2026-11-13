@@ -231,30 +231,86 @@ void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fi
 // The title as in the concept (#78; the owner 2026-11-13: the Skylanders logo from the game): the logo
 // from the player's own Spyro's Adventure disc, whose dashboard background (nxebg.jpg, 1920x1080) has it
 // on plain dark blue (16, 40, 88) at 570,350 (770x366); that blue made clear at run time, so nothing of
-// it is in the repository. Its "SPYRO'S ADVENTURE" (11-89 % of the logo's width, 42-72 % of its
-// height) is covered by our CORE OF LIGHT banner; the elements' symbols stay under it. False without the
-// picture (no Spyro's Adventure set up, --no_game_art): then the lettering below is drawn instead.
+// it is in the repository. Its "SPYRO'S ADVENTURE" is covered by our CORE OF LIGHT banner, bent like the
+// subtitle (the owner, 2026-11-13: "so nen Bogen drum"); the elements' symbols stay under it. False without
+// the picture (no Spyro's Adventure set up, --no_game_art): then the lettering below is drawn instead.
 bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background, float cx, float u) {
   const ImTextureID logo = LoadTextureKeyed(ssa_background, 570, 350, 770, 366, 0x102858, 10, 28);
   if (!logo) return false;
   const float lh = 196 * u, lw = lh * 770.0f / 366.0f;
   const ImVec2 a{cx - lw * 0.5f, 12 * u};
   dl->AddImage(logo, a, {a.x + lw, a.y + lh});
-  // The banner: a long hexagon over the subtitle, dark blue with a light rim, CORE OF LIGHT in gold.
-  // (The subtitle's letters rise towards the middle: from about 43 % of the height there, seen 2026-11-13.)
-  const float x0 = a.x + lw * 0.11f, x1 = a.x + lw * 0.89f, y0 = a.y + lh * 0.418f, y1 = a.y + lh * 0.718f;
-  const float h = y1 - y0, mid = (y0 + y1) * 0.5f;
-  const ImVec2 pts[6] = {{x0, mid}, {x0 + h * 0.5f, y0}, {x1 - h * 0.5f, y0}, {x1, mid}, {x1 - h * 0.5f, y1}, {x0 + h * 0.5f, y1}};
-  dl->AddConvexPolyFilled(pts, 6, Rgba(22, 46, 98, 252));
-  dl->AddPolyline(pts, 6, Rgba(150, 190, 240), ImDrawFlags_Closed, 3.5f * u);
+  // The banner follows the subtitle's arc (measured on a grid, 2026-11-13): its letters run from 14.5 % to
+  // 86 % of the logo's width, 49-65 % of its height in the middle and 56-78 % at the ends, bigger there.
+  // So the band's edges are parabolas over t = -1 .. 1 (left to right), a little beyond the letters, with a
+  // point at each end; dark blue with a light rim, CORE OF LIGHT in gold along its middle.
+  const float half = lw * 0.375f;
+  auto top = [&](float t) { return a.y + lh * (0.455f + 0.09f * t * t); };
+  auto bottom = [&](float t) { return a.y + lh * (0.672f + 0.125f * t * t); };
+  auto middle = [&](float t) { return (top(t) + bottom(t)) * 0.5f; };
+  constexpr int kSteps = 48;
+  for (int i = 0; i < kSteps; ++i) {
+    const float t0 = -1.0f + 2.0f * i / kSteps, t1 = -1.0f + 2.0f * (i + 1) / kSteps;
+    const float xa = cx + t0 * half, xb = cx + t1 * half;
+    dl->AddQuadFilled({xa, top(t0)}, {xb, top(t1)}, {xb, bottom(t1)}, {xa, bottom(t0)}, Rgba(22, 46, 98, 252));
+  }
+  const float tip = lw * 0.03f;
+  const ImVec2 left{cx - half - tip, middle(-1)}, right{cx + half + tip, middle(1)};
+  dl->AddTriangleFilled({cx - half, top(-1)}, left, {cx - half, bottom(-1)}, Rgba(22, 46, 98, 252));
+  dl->AddTriangleFilled({cx + half, top(1)}, right, {cx + half, bottom(1)}, Rgba(22, 46, 98, 252));
+  // The rim: morpheus284's stone edge (#78, CC BY 4.0; the owner, 2026-11-13: "mehr mit diesem Stein-Muster")
+  // laid along the top and the bottom, its outer side outwards, the whole strip over the banner's length.
+  // Under it, and alone without that picture: a light line along the top, round the right point, back along
+  // the bottom, round the left one.
+  std::vector<ImVec2> rim;
+  rim.push_back(left);
+  for (int i = 0; i <= kSteps; ++i) {
+    const float t = -1.0f + 2.0f * i / kSteps;
+    rim.push_back({cx + t * half, top(t)});
+  }
+  rim.push_back(right);
+  for (int i = kSteps; i >= 0; --i) {
+    const float t = -1.0f + 2.0f * i / kSteps;
+    rim.push_back({cx + t * half, bottom(t)});
+  }
+  dl->AddPolyline(rim.data(), int(rim.size()), Rgba(150, 190, 240), ImDrawFlags_Closed, 3.5f * u);
+  if (const ImTextureID stone = LoadUiTexture(kUiStoneEdge)) {
+    const float th = lh * 0.065f;  // the strip's thickness
+    for (int i = 0; i < kSteps; ++i) {
+      const float t0 = -1.0f + 2.0f * i / kSteps, t1 = -1.0f + 2.0f * (i + 1) / kSteps;
+      const float u0 = float(i) / kSteps, u1 = float(i + 1) / kSteps;
+      const float xa = cx + t0 * half, xb = cx + t1 * half;
+      dl->AddImageQuad(stone, {xa, top(t0) - th * 0.6f}, {xb, top(t1) - th * 0.6f}, {xb, top(t1) + th * 0.4f},
+                       {xa, top(t0) + th * 0.4f}, {u0, 0}, {u1, 0}, {u1, 1}, {u0, 1});
+      dl->AddImageQuad(stone, {xa, bottom(t0) + th * 0.6f}, {xb, bottom(t1) + th * 0.6f}, {xb, bottom(t1) - th * 0.4f},
+                       {xa, bottom(t0) - th * 0.4f}, {u0, 0}, {u1, 0}, {u1, 1}, {u0, 1});
+    }
+  }
+  // CORE OF LIGHT letter by letter, each on the band's middle line where it stands (no turning: the arc is
+  // gentle where the name is), between two gold lines that follow the arc.
   const char* title = "CORE OF LIGHT";
-  float size = h * 0.66f;
-  while (TextWidth(bold, size, title) > (x1 - x0) - h * 1.6f && size > 8) size -= 1;
-  const float tw = TextWidth(bold, size, title), ty = mid - size * 0.5f;
-  dl->AddLine({cx - tw * 0.5f - h * 0.75f, mid}, {cx - tw * 0.5f - h * 0.2f, mid}, kGold, 3 * u);
-  dl->AddLine({cx + tw * 0.5f + h * 0.2f, mid}, {cx + tw * 0.5f + h * 0.75f, mid}, kGold, 3 * u);
-  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 2.5f * u}, Rgba(60, 35, 0, 220), title);
-  Text(dl, bold, size, {cx - tw * 0.5f, ty}, kGold, title);
+  const float band = bottom(0) - top(0);
+  float size = band * 0.72f;
+  while (TextWidth(bold, size, title) > half * 1.25f && size > 8) size -= 1;
+  const float tw = TextWidth(bold, size, title);
+  float x = cx - tw * 0.5f;
+  for (const char* p = title; *p; ++p) {
+    const char letter[2] = {*p, 0};
+    const float w = TextWidth(bold, size, letter);
+    const float y = middle((x + w * 0.5f - cx) / half) - size * 0.5f;
+    Text(dl, bold, size, {x + 2 * u, y + 2.5f * u}, Rgba(60, 35, 0, 220), letter);
+    Text(dl, bold, size, {x, y}, kGold, letter);
+    x += w;
+  }
+  for (int side = -1; side <= 1; side += 2) {
+    std::vector<ImVec2> line;
+    const float from = (tw * 0.5f + band * 0.25f) / half, to = (tw * 0.5f + band * 1.05f) / half;
+    for (int i = 0; i <= 8; ++i) {
+      const float t = side * (from + (to - from) * i / 8.0f);
+      line.push_back({cx + t * half, middle(t)});
+    }
+    dl->AddPolyline(line.data(), int(line.size()), kGold, 0, 3 * u);
+  }
   return true;
 }
 
@@ -821,9 +877,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   const bool installed = !f.exe.empty();
   const float s = h / 420.0f;  // the card's own scale
   const float r = 26 * s;
-  // The light of the core behind the chosen card; not with morpheus284's lit frame, which is the light
-  // itself (the owner, 2026-11-13: no extra glow behind it).
-  if (selected && !LoadUiTexture(kUiCardLight)) {
+  // The light of the core behind the chosen card; not with morpheus284's frame, where only the medallion
+  // lights up (the owner, 2026-11-13: no glow round the whole card).
+  if (selected && !LoadUiTexture(kUiCardBase)) {
     for (int k = 6; k > 0; --k) {
       const float grow = k * 7 * s;
       dl->AddRectFilled({x - grow, y - grow}, {x + w + grow, y + h + grow}, Rgba(255, 210, 90, 10), r + grow);
@@ -833,7 +889,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   // window) and its bottom (the rim and the medallion) keep their shape at the card's width; only the
   // text area between them stretches with the card's height. card_light is the chosen card's, lit.
   // Without it (or on a card too short for it) the frame drawn from shapes, as before.
-  const ImTextureID frame = LoadUiTexture(selected ? kUiCardLight : kUiCardBase);
+  // The chosen card has the plain frame too: only its medallion lights up, pulsing (the owner, 2026-11-13:
+  // no glow round the whole card), from card_light's petals below.
+  const ImTextureID frame = LoadUiTexture(kUiCardBase);
   constexpr float kFrameAspect = 959.0f / 491.0f;  // card_base.png's height / width
   constexpr float kTopV = 0.42f, kBottomV = 0.80f;  // where its stretchable middle begins and ends
   const float frame_h = w * kFrameAspect;
@@ -844,7 +902,8 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   // The frame (#78): a thick steel-blue rim, a gold line inside it on the chosen card.
   if (!framed) DrawCardFrame(dl, {x, y}, {x + w, y + h}, r, s, selected);
   // Two sparks running round the chosen card's border (the owner's wish for more life, 2026-10-24).
-  if (selected && hub_.animations) {
+  // Not on morpheus284's frame: there only the medallion lights up (the owner, 2026-11-13).
+  if (selected && hub_.animations && !framed) {
     const float head = float(ImGui::GetTime()) * 260 * s;
     const float half = (w + h) - 4 * r + 3.14159265f * r;  // half the border
     auto along = [&](float d) { return AlongRoundedRect({x, y}, {x + w, y + h}, r, d); };
@@ -879,6 +938,21 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     dl->AddImage(frame, {x, y}, {x + w, y + top_h}, {0, 0}, {1, kTopV});
     dl->AddImage(frame, {x, y + top_h}, {x + w, y + top_h + mid_h}, {0, kTopV}, {1, kBottomV});
     dl->AddImage(frame, {x, y + h - bottom_h}, {x + w, y + h}, {0, kBottomV}, {1, 1});
+    if (selected) {
+      // Only the medallion lights up on the chosen card, pulsing (the owner, 2026-11-13): a soft golden
+      // light round it and card_light's glowing petals (its inner circle: 42.5-57.5 % across, 89.8-98.5 %
+      // down the picture, where both frames match but for the glow) over the plain ones.
+      auto frame_y = [&](float fy) { return y + h - bottom_h + (fy - kBottomV) / (1.0f - kBottomV) * bottom_h; };
+      const float pulse = hub_.animations ? 0.5f + 0.5f * std::sin(float(ImGui::GetTime()) * 3.5f) : 1.0f;
+      const ImVec2 c{x + w * 0.5f, frame_y(0.942f)};
+      for (int k = 5; k > 0; --k) {
+        dl->AddCircleFilled(c, w * (0.06f + 0.022f * k), Rgba(255, 205, 90, int(8 + 9 * pulse)), 40);
+      }
+      if (const ImTextureID lit = LoadUiTexture(kUiCardLight)) {
+        dl->AddImage(lit, {x + w * 0.425f, frame_y(0.898f)}, {x + w * 0.575f, frame_y(0.985f)}, {0.425f, 0.898f},
+                     {0.575f, 0.985f}, IM_COL32(255, 255, 255, int(255 * (0.55f + 0.45f * pulse))));
+      }
+    }
     content_y = win_b.y + 14 * s;
   } else if (tile) {
     const float tw = w - 17 * s, th = tw * 320.0f / 420.0f;
@@ -3228,14 +3302,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // The bar at the bottom (#78): the buttons, the launcher's version at its right end (#22).
   const float bar_l = 40 * u, bar_r = width - 40 * u, bar_t = height - 112 * u, bar_b = height - 36 * u;
   DrawBottomBar(dl, {bar_l, bar_t}, {bar_r, bar_b}, u);
-  const char* version = "Core of Light " COREOFLIGHT_VERSION;
-  // Under it the credit for the look (#78, promised there).
-  const char* credit = german_ ? "Design: morpheus284 (CC BY 4.0)" : "Design: morpheus284 (CC BY 4.0)";
-  const float version_w = std::max(TextWidth(regular_, 16 * u, version), TextWidth(regular_, 13 * u, credit));
-  const float vy = bar_t + (bar_b - bar_t) * 0.5f;
-  Text(dl, regular_, 16 * u, {bar_r - 26 * u - TextWidth(regular_, 16 * u, version), vy - 18 * u}, kDim, version);
-  Text(dl, regular_, 13 * u, {bar_r - 26 * u - TextWidth(regular_, 13 * u, credit), vy + 2 * u}, Rgba(150, 175, 215),
-       credit);
+  // The launcher's version and the credit for the look (#78, CC BY 4.0), small in the corner under the bar
+  // (the owner, 2026-11-13: they needn't be that big), so the bar has room for the buttons alone.
+  const std::string corner =
+      std::string("Core of Light " COREOFLIGHT_VERSION) + "  \xC2\xB7  Design: morpheus284 (CC BY 4.0)";
+  const float corner_size = 12.5f * u;
+  Text(dl, regular_, corner_size, {bar_r - 12 * u - TextWidth(regular_, corner_size, corner.c_str()), bar_b + 10 * u},
+       Rgba(170, 190, 225, 190), corner.c_str());
   // While a game writes its pictures (UpdatePictureExport), a note above the bar's right end: the
   // game runs for it in the background, and should its window show for a moment, it isn't a pop-up
   // to close (a colleague did, 2026-10-23).
@@ -3273,7 +3346,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   hx = Hint(dl, bold_, hs, {hx, hy}, "LB", Rgba(80, 90, 140), "Launcher");
   hx = Hint(dl, bold_, hs, {hx, hy}, "B", Rgba(200, 60, 60),
             import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));
-  hint_row.End(bar_l + 28 * u, hx, bar_r - 50 * u - version_w);
+  hint_row.End(bar_l + 28 * u, hx, bar_r - 28 * u);
   // The disc being set up: what happens, and how far the unpacking is (above the bar).
   const DiscImport::Phase phase = import_.phase();  // UpdateImport follows it
   if (import_.running() || (phase != DiscImport::Phase::kIdle && ImGui::GetTime() < import_shown_until_)) {
