@@ -231,7 +231,7 @@ void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fi
 // The title as in the concept (#78; the owner 2026-11-13: the Skylanders logo from the game): the logo
 // from the player's own Spyro's Adventure disc, whose dashboard background (nxebg.jpg, 1920x1080) has it
 // on plain dark blue (16, 40, 88) at 570,350 (770x366); that blue made clear at run time, so nothing of
-// it is in the repository. Its "SPYRO'S ADVENTURE" (11-89 % of the logo's width, 45-71 % of its
+// it is in the repository. Its "SPYRO'S ADVENTURE" (11-89 % of the logo's width, 42-72 % of its
 // height) is covered by our CORE OF LIGHT banner; the elements' symbols stay under it. False without the
 // picture (no Spyro's Adventure set up, --no_game_art): then the lettering below is drawn instead.
 bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background, float cx, float u) {
@@ -241,8 +241,8 @@ bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ss
   const ImVec2 a{cx - lw * 0.5f, 12 * u};
   dl->AddImage(logo, a, {a.x + lw, a.y + lh});
   // The banner: a long hexagon over the subtitle, dark blue with a light rim, CORE OF LIGHT in gold.
-  // (The subtitle's letters rise towards the middle: from 46 % of the height there, measured 2026-11-13.)
-  const float x0 = a.x + lw * 0.11f, x1 = a.x + lw * 0.89f, y0 = a.y + lh * 0.452f, y1 = a.y + lh * 0.712f;
+  // (The subtitle's letters rise towards the middle: from about 43 % of the height there, seen 2026-11-13.)
+  const float x0 = a.x + lw * 0.11f, x1 = a.x + lw * 0.89f, y0 = a.y + lh * 0.418f, y1 = a.y + lh * 0.718f;
   const float h = y1 - y0, mid = (y0 + y1) * 0.5f;
   const ImVec2 pts[6] = {{x0, mid}, {x0 + h * 0.5f, y0}, {x1 - h * 0.5f, y0}, {x1, mid}, {x1 - h * 0.5f, y1}, {x0 + h * 0.5f, y1}};
   dl->AddConvexPolyFilled(pts, 6, Rgba(22, 46, 98, 252));
