@@ -1,9 +1,12 @@
 # SuperChargers, a copy of the owner's save: title -> the first slot -> the ship (the game's hub),
-# A presses 8 s apart (an A on a screen that isn't up yet does no harm), Chop Chop on the portal.
+# A presses 8 s apart (an A on a screen that isn't up yet does no harm), Chop Chop on the portal and
+# Shark Tank with him: without a vehicle the ship asked for one, the portal menu opened by itself for
+# it, and the menus route's F6 closed it again, so its portal_menu picture showed the game (2026-11-13).
 # save: yes
 # shots: wait 100, full a, wait 6, full b
 wait 10
 place 0 {figures}\Spyro's Adventure\Chop Chop.dump
+place 1 {figures}\SuperChargers\Shark Tank.dump
 wait 4; tap start; wait 8; tap a; wait 8; tap a; wait 8; tap a; wait 8; tap a; wait 60
 log on the ship
 fps 2; wait 10
