@@ -32,14 +32,14 @@ wait 1
 tap down; wait 0.6; tap down; wait 0.6; tap down; wait 2
 log shot traps_fire
 wait 1
-tap x; wait 2
+tap right; wait 1; tap x; wait 2
 log shot details_fire
 wait 1
-tap b; wait 2
+tap b; wait 2; tap left; wait 1
 tap down; wait 0.6; tap down; wait 0.6; tap down; wait 0.6; tap down; wait 2
 log shot traps_life
 wait 1
-tap x; wait 2
+tap up; wait 0.6; tap right; wait 0.6; tap right; wait 0.6; tap right; wait 1; tap x; wait 2
 log shot details_life
 wait 1
 tap b; wait 1; tap b
