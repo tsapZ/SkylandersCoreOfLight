@@ -239,7 +239,7 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
     HubLog("disc import: default.xex " + (id.header.empty() ? std::string("without an XEX2 header") : id.header) +
            ", SHA-256 " + hash + (id.code_pin.empty() ? "" : ", code " + id.code_pin));
     if (game < 0) {
-      // Another build of SuperChargers (#77, a French / Dutch disc): it can't run, but its languages
+      // Another build of SuperChargers (e.g. non-European): it can't run, but its languages
       // can come into a SuperChargers set up from a matching disc.
       if (IsSuperChargersDisc(iso)) {
         say(german ? "Diese SuperChargers-Disc ist ein anderer Build und l\xC3\xA4uft so nicht. Ihre Sprachen gehen aber: "

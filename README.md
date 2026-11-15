@@ -107,7 +107,7 @@ figures should go too.
 | **Giants** (2012) | [GiantsRecomp](https://github.com/tsapZ/GiantsRecomp) | the intro and Chapter 1; real 5.1 sound |
 | **Swap Force** (2013) | [SwapForceRecomp](https://github.com/tsapZ/SwapForceRecomp) | the tutorial and Woodburrow; swappers, real USB portals |
 | **Trap Team** (2014) | [TrapTeamRecomp](https://github.com/tsapZ/TrapTeamRecomp) | Chapter 1 and the Academy, with traps and villains |
-| **SuperChargers** (2015) | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | the first level and the ship; both European discs |
+| **SuperChargers** (2015) | [SuperChargersRecomp](https://github.com/tsapZ/SuperChargersRecomp) | the first level and the ship; all three European discs |
 | **Imaginators** (2016) | [ImaginatorsRecomp](https://github.com/tsapZ/ImaginatorsRecomp) | the first level; English, German or French from your PS3 disc |
 
 None of them has been played to the end yet. Each one runs on its own as well; the launcher just
