@@ -199,76 +199,73 @@ float TitlePlateCenter(ImFont* bold, float width, float badge_left, float u) {
   return std::max(TitlePlateHalf(bold, u) + 24 * u, std::min(width * 0.5f, badge_left - TitlePlateHalf(bold, u) - 24 * u));
 }
 
-// A band between two edges (`top(t)` and `bottom(t)` give their y over t = -1 .. 1, x = cx + t * half): dark
-// blue, pointed at both ends, morpheus284's stone strip along both edges (#78, CC BY 4.0: border_top.png, a
-// piece of his frame's top edge cut between two of its notches so it repeats without a seam, 156x32). The
-// pieces are laid end to end at the strip's own shape, a whole number of them over the band, so the stones
-// stay sharp (the owner, 2026-11-16: stretched over the whole band they looked pixelated). `th`: the strip's
-// thickness; mostly outside the band, its shadow side inwards.
+// A band between two edges (`top(t)` and `bottom(t)` give their y over t = -1 .. 1, x = cx + t * half), in
+// the Skylanders logo's own look (the owner, 2026-11-16, on stone strips and separately drawn points: "als
+// hätte ich das mit Paint gemacht"): one closed outline (the top edge, the right point, the bottom edge, the
+// left point), a navy fill that gets lighter towards the top, drawn as one mesh (no seams between pieces), a
+// soft shadow under it, and a light blue rim with a thin dark line inside, as round the logo's letters.
 template <typename Top, typename Bottom>
-void DrawStoneBand(ImDrawList* dl, float cx, float half, Top top, Bottom bottom, float th, float u) {
+void DrawTitleBand(ImDrawList* dl, float cx, float half, Top top, Bottom bottom, float u) {
   constexpr int kSteps = 64;
-  const ImU32 fill = Rgba(22, 46, 98, 252);
-  // The fill in pieces without anti-aliasing: with it, each piece's soft rim showed as a thin line between
-  // the pieces (the owner saw such lines, 2026-11-16); the stones cover the outer edges.
-  const ImDrawListFlags flags = dl->Flags;
-  dl->Flags &= ~ImDrawListFlags_AntiAliasedFill;
+  const float tip = (bottom(-1.0f) - top(-1.0f)) * 0.45f;
+  auto mid = [&](float t) { return (top(t) + bottom(t)) * 0.5f; };
+  auto outline = [&](float in) {  // `in`: how far inside the band's edge
+    std::vector<ImVec2> pts;
+    pts.reserve(2 * kSteps + 4);
+    for (int i = 0; i <= kSteps; ++i) {
+      const float t = -1.0f + 2.0f * i / kSteps;
+      pts.push_back({cx + t * half, top(t) + in});
+    }
+    pts.push_back({cx + half + tip - in * 1.8f, mid(1.0f)});
+    for (int i = kSteps; i >= 0; --i) {
+      const float t = -1.0f + 2.0f * i / kSteps;
+      pts.push_back({cx + t * half, bottom(t) - in});
+    }
+    pts.push_back({cx - half - tip + in * 1.8f, mid(-1.0f)});
+    return pts;
+  };
+  std::vector<ImVec2> shadow = outline(0);
+  for (ImVec2& p : shadow) p.y += 5 * u;
+  dl->AddPolyline(shadow.data(), int(shadow.size()), Rgba(0, 8, 28, 80), ImDrawFlags_Closed, 10 * u);
+  // The fill: a strip of quads from the top edge (lighter) to the bottom edge, the two points as triangles.
+  const ImU32 light = Rgba(44, 84, 156), dark = Rgba(14, 32, 78), middle = Rgba(28, 58, 117);
+  const ImVec2 uv = dl->_Data->TexUvWhitePixel;
+  dl->PrimReserve(kSteps * 6 + 6, (kSteps + 1) * 2 + 2);
+  const unsigned base = dl->_VtxCurrentIdx;
+  for (int i = 0; i <= kSteps; ++i) {
+    const float t = -1.0f + 2.0f * i / kSteps;
+    dl->PrimWriteVtx({cx + t * half, top(t)}, uv, light);
+    dl->PrimWriteVtx({cx + t * half, bottom(t)}, uv, dark);
+  }
+  dl->PrimWriteVtx({cx + half + tip, mid(1.0f)}, uv, middle);
+  dl->PrimWriteVtx({cx - half - tip, mid(-1.0f)}, uv, middle);
   for (int i = 0; i < kSteps; ++i) {
-    const float t0 = -1.0f + 2.0f * i / kSteps, t1 = -1.0f + 2.0f * (i + 1) / kSteps;
-    dl->AddQuadFilled({cx + t0 * half, top(t0)}, {cx + t1 * half, top(t1)}, {cx + t1 * half, bottom(t1)},
-                      {cx + t0 * half, bottom(t0)}, fill);
+    const unsigned a = base + unsigned(i) * 2;
+    for (const unsigned k : {a, a + 2, a + 3, a, a + 3, a + 1}) dl->PrimWriteIdx(ImDrawIdx(k));
   }
-  dl->Flags = flags;
-  // The pointed ends, clockwise; their two sides in the stones' blue.
-  const float tip = (bottom(-1.0f) - top(-1.0f)) * 0.42f;
-  const ImVec2 lp{cx - half - tip, (top(-1.0f) + bottom(-1.0f)) * 0.5f}, lt{cx - half, top(-1.0f)},
-      lb{cx - half, bottom(-1.0f)};
-  const ImVec2 rp{cx + half + tip, (top(1.0f) + bottom(1.0f)) * 0.5f}, rt{cx + half, top(1.0f)},
-      rb{cx + half, bottom(1.0f)};
-  dl->AddTriangleFilled(lp, lt, lb, fill);
-  dl->AddTriangleFilled(rt, rp, rb, fill);
-  const ImU32 rim = Rgba(92, 150, 214);
-  const ImVec2 left[3] = {{lt.x + 1, lt.y - th * 0.15f}, lp, {lb.x + 1, lb.y + th * 0.15f}};
-  const ImVec2 right[3] = {{rt.x - 1, rt.y - th * 0.15f}, rp, {rb.x - 1, rb.y + th * 0.15f}};
-  dl->AddPolyline(left, 3, rim, 0, th * 0.45f);
-  dl->AddPolyline(right, 3, rim, 0, th * 0.45f);
-  const ImTextureID stone = LoadUiTexture(kUiStoneEdge);
-  if (!stone) {  // without the picture: light lines on the edges
-    std::vector<ImVec2> edge;
-    for (int side = 0; side < 2; ++side) {
-      edge.clear();
-      for (int i = 0; i <= kSteps; ++i) {
-        const float t = -1.0f + 2.0f * i / kSteps;
-        edge.push_back({cx + t * half, side ? bottom(t) : top(t)});
-      }
-      dl->AddPolyline(edge.data(), int(edge.size()), rim, 0, 3.5f * u);
-    }
-    return;
+  const unsigned tips = base + (kSteps + 1) * 2, last = base + kSteps * 2;
+  for (const unsigned k : {last, tips, last + 1, base, base + 1, tips + 1}) dl->PrimWriteIdx(ImDrawIdx(k));
+  // The rim over the fill's edge, then a thin dark line inside it.
+  const std::vector<ImVec2> rim = outline(0), inner = outline(4.2f * u);
+  dl->AddPolyline(rim.data(), int(rim.size()), Rgba(156, 210, 250), ImDrawFlags_Closed, 4.5f * u);
+  dl->AddPolyline(inner.data(), int(inner.size()), Rgba(8, 20, 52, 210), ImDrawFlags_Closed, 1.6f * u);
+}
+
+// Gold lettering with a dark brown rim and a soft shadow, as the logo's subtitles.
+void GoldText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, float u, const char* text) {
+  Text(dl, font, size, {pos.x + 1.5f * u, pos.y + 3 * u}, Rgba(0, 8, 28, 140), text);
+  for (int k = 0; k < 8; ++k) {
+    const float a = float(k) * 0.7853982f;
+    Text(dl, font, size, {pos.x + std::cos(a) * 1.6f * u, pos.y + std::sin(a) * 1.6f * u}, Rgba(64, 34, 0), text);
   }
-  const float len = 2 * half;
-  const int tiles = std::max(1, int(std::lround(len / (th * 156.0f / 32.0f))));
-  const float tile = len / float(tiles);
-  constexpr int kPer = 10;  // pieces per tile, to follow a curve
-  for (int k = 0; k < tiles; ++k) {
-    for (int j = 0; j < kPer; ++j) {
-      const float x0 = -half + tile * float(k) + tile * float(j) / kPer, x1 = x0 + tile / kPer;
-      const float t0 = x0 / half, t1 = x1 / half;
-      const float u0 = float(j) / kPer, u1 = float(j + 1) / kPer;
-      dl->AddImageQuad(stone, {cx + x0, top(t0) - th * 0.6f}, {cx + x1, top(t1) - th * 0.6f},
-                       {cx + x1, top(t1) + th * 0.4f}, {cx + x0, top(t0) + th * 0.4f}, {u0, 0}, {u1, 0}, {u1, 1},
-                       {u0, 1});
-      dl->AddImageQuad(stone, {cx + x0, bottom(t0) + th * 0.6f}, {cx + x1, bottom(t1) + th * 0.6f},
-                       {cx + x1, bottom(t1) - th * 0.4f}, {cx + x0, bottom(t0) - th * 0.4f}, {u0, 0}, {u1, 0},
-                       {u1, 1}, {u0, 1});
-    }
-  }
+  Text(dl, font, size, pos, kGold, text);
 }
 
 // The title as in the concept (#78; the owner 2026-11-13 and again 2026-11-16: the Skylanders logo from the
 // game): the logo from the player's own Spyro's Adventure disc, whose dashboard background (nxebg.jpg,
 // 1920x1080) has it on plain dark blue (16, 40, 88) at 570,350 (770x366); that blue made clear at run time,
 // so nothing of it is in the repository. Its "SPYRO'S ADVENTURE" is covered by our CORE OF LIGHT band, bent
-// like the subtitle, with stone edges (the owner, 2026-11-16: no gold dashes, stone edges, sharp); the
+// like the subtitle, in the logo's own look (the owner, 2026-11-16: no gold dashes, no rough edges); the
 // elements' symbols stay under it. False without the picture (no Spyro's Adventure set up, --no_game_art):
 // then the plate below is drawn instead.
 bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background, float cx, float u) {
@@ -284,7 +281,7 @@ bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ss
   auto top = [&](float t) { return a.y + lh * (0.455f + 0.09f * t * t); };
   auto bottom = [&](float t) { return a.y + lh * (0.672f + 0.125f * t * t); };
   auto middle = [&](float t) { return (top(t) + bottom(t)) * 0.5f; };
-  DrawStoneBand(dl, cx, half, top, bottom, lh * 0.105f, u);
+  DrawTitleBand(dl, cx, half, top, bottom, u);
   // CORE OF LIGHT letter by letter, each on the band's middle line where it stands (no turning: the arc is
   // gentle where the name is).
   const char* title = "CORE OF LIGHT";
@@ -297,23 +294,21 @@ bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ss
     const char letter[2] = {*p, 0};
     const float w = TextWidth(bold, size, letter);
     const float y = middle((x + w * 0.5f - cx) / half) - size * 0.5f;
-    Text(dl, bold, size, {x + 2 * u, y + 2.5f * u}, Rgba(60, 35, 0, 220), letter);
-    Text(dl, bold, size, {x, y}, kGold, letter);
+    GoldText(dl, bold, size, {x, y}, u, letter);
     x += w;
   }
   return true;
 }
 
 // Without the logo (no Spyro's Adventure set up, --no_game_art): CORE OF LIGHT in gold on a straight band with
-// the same stone edges, centred on `cx`. Our own lettering, nobody's logo. Returns the band's bottom.
+// the same look, centred on `cx`. Our own lettering, nobody's logo. Returns the band's bottom.
 float DrawTitlePlate(ImDrawList* dl, ImFont* bold, float cx, float u) {
   const char* title = "CORE OF LIGHT";
   const float size = 54 * u, tw = TextWidth(bold, size, title);
   const float top = 28 * u, h = 80 * u, half = tw * 0.5f + 40 * u;
-  DrawStoneBand(dl, cx, half, [&](float) { return top; }, [&](float) { return top + h; }, 21 * u, u);
+  DrawTitleBand(dl, cx, half, [&](float) { return top; }, [&](float) { return top + h; }, u);
   const float ty = top + (h - size) * 0.5f;
-  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 3 * u}, Rgba(60, 35, 0, 220), title);
-  Text(dl, bold, size, {cx - tw * 0.5f, ty}, kGold, title);
+  GoldText(dl, bold, size, {cx - tw * 0.5f, ty}, u, title);
   return top + h;
 }
 
