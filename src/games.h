@@ -93,8 +93,8 @@ struct Found {
 // game's default.xex on a background thread.
 void FindGames(std::vector<Found>& found, const std::filesystem::path& launcher_dir);
 
-// Starts a game's exe in its own folder; false (and `error`) if Windows refused.
-bool StartGame(const Found& game, std::wstring& error, void** process);
+// Starts a game's exe in its own folder; false (and `error`) if the OS refused.
+bool StartGame(const Found& game, std::string& error, void** process);
 
 
 // Installing a game from the launcher (the owner's wish, 2026-10-23): its own setup

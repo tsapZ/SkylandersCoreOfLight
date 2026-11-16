@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "hub_log.h"
+#include "platform.h"
 
 namespace coreoflight {
 
@@ -41,19 +42,7 @@ float ScreenInches() {
   return inches;
 }
 
-std::string CpuName() {
-  wchar_t name[256] = L"";
-  DWORD size = sizeof(name);
-  if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"ProcessorNameString",
-                   RRF_RT_REG_SZ, nullptr, name, &size) != ERROR_SUCCESS) {
-    return {};
-  }
-  std::string out;
-  for (const wchar_t* c = name; *c; ++c) out += *c < 128 ? char(*c) : '?';
-  out.erase(0, out.find_first_not_of(' '));
-  out.erase(out.find_last_not_of(' ') + 1);  // the name is padded with spaces
-  return out;
-}
+std::string CpuName() { return CpuModelName(); }
 
 }  // namespace
 

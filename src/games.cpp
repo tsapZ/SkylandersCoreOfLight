@@ -1,13 +1,10 @@
 #include "games.h"
 
 #include <windows.h>
-#include <bcrypt.h>
-#include <shlobj.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
-#include <cwchar>
 #include <cwctype>
 #include <iterator>
 #include <fstream>
@@ -21,6 +18,7 @@
 #include "gpu_tier.h"
 #include "handheld.h"
 #include "hub_log.h"  // WineVersion
+#include "platform.h"
 #include "profiles.h"
 #include "xiso.h"  // Sha256Hex
 
@@ -79,18 +77,6 @@ std::string Trim(std::string s) {
   return first == std::string::npos ? std::string() : s.substr(first, last - first + 1);
 }
 
-fs::path Utf8Path(const std::string& s) {
-  return fs::path(std::u8string(reinterpret_cast<const char8_t*>(s.data()), s.size()));
-}
-
-fs::path KnownFolder(REFKNOWNFOLDERID id) {
-  PWSTR path = nullptr;
-  fs::path out;
-  if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &path))) out = path;
-  CoTaskMemFree(path);
-  return out;
-}
-
 }  // namespace
 
 std::unordered_map<std::string, std::string> ReadIni(const fs::path& path) {
@@ -115,7 +101,7 @@ namespace {
 fs::path g_documents_dir;  // --documents=<folder>
 }  // namespace
 
-fs::path DocumentsDir() { return g_documents_dir.empty() ? KnownFolder(FOLDERID_Documents) : g_documents_dir; }
+fs::path DocumentsDir() { return g_documents_dir.empty() ? skylanders::DocumentsFolder() : g_documents_dir; }
 
 void SetDocumentsDir(const fs::path& dir) { g_documents_dir = dir; }
 
@@ -141,14 +127,13 @@ fs::path SkylandersDir() {
 
 std::string StoredFolder(const fs::path& dir) {
   const fs::path portable = skylanders::PortableFolder();
-  const std::wstring inside = portable.native() + L"\\";
+  const fs::path::string_type inside = portable.native() + fs::path::preferred_separator;
   const fs::path keep = !portable.empty() && dir.native().starts_with(inside) ? dir.lexically_relative(portable) : dir;
-  const std::u8string u8 = keep.u8string();
-  return std::string(u8.begin(), u8.end());
+  return PathUtf8(keep);
 }
 
 fs::path FolderFromStored(const std::string& text) {
-  fs::path dir = Utf8Path(text);
+  fs::path dir = PathFromUtf8(text);
   if (dir.is_relative()) {
     const fs::path portable = skylanders::PortableFolder();
     if (!portable.empty()) dir = portable / dir;
@@ -160,7 +145,7 @@ void SetSkylandersDirOverride(const fs::path& dir) { g_skylanders_override = dir
 
 fs::path GameFolderName(const fs::path& exe) {
   const std::string_view folder = skylanders::GameFolderForExe(UserDataName(exe));
-  return Utf8Path(folder.empty() ? UserDataName(exe) : std::string(folder));
+  return PathFromUtf8(folder.empty() ? UserDataName(exe) : std::string(folder));
 }
 
 namespace {
@@ -187,42 +172,11 @@ void FindRom(const fs::path& exe, fs::path& workdir, fs::path& rom) {
   rom = workdir / "rom";
 }
 
-// SHA-256 of a file with Windows' own CNG, as lower-case hex; empty if it can't be read.
-std::string Sha256(const fs::path& path) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) return {};
-  BCRYPT_ALG_HANDLE alg = nullptr;
-  BCRYPT_HASH_HANDLE hash = nullptr;
-  if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return {};
-  std::string out;
-  if (BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) == 0) {
-    std::vector<char> buffer(1 << 20);
-    bool ok = true;
-    while (in) {
-      in.read(buffer.data(), std::streamsize(buffer.size()));
-      const auto n = in.gcount();
-      if (n > 0 && BCryptHashData(hash, reinterpret_cast<PUCHAR>(buffer.data()), ULONG(n), 0) != 0) {
-        ok = false;
-        break;
-      }
-    }
-    unsigned char digest[32];
-    if (ok && BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
-      char hex[65];
-      for (int i = 0; i < 32; ++i) std::snprintf(hex + 2 * i, 3, "%02x", digest[i]);
-      out.assign(hex, 64);
-    }
-    BCryptDestroyHash(hash);
-  }
-  BCryptCloseAlgorithmProvider(alg, 0);
-  return out;
-}
-
 // Where the game's installer put it: InstallLocation of its uninstall entry (per user, else for
 // everyone), wherever that is (a library folder, a folder chosen in the setup).
 fs::path InstalledByEntry(const Game& game) {
   const std::wstring key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
-                           Utf8Path(game.app_id).wstring() + L"_is1";
+                           PathFromUtf8(game.app_id).wstring() + L"_is1";
   for (HKEY root : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
     wchar_t value[MAX_PATH * 2] = L"";
     DWORD size = sizeof(value);
@@ -238,7 +192,8 @@ fs::path InstalledByEntry(const Game& game) {
 // The game in the games folder: <folder>\<app name>, <folder>\<repo>, the folder itself, then any
 // folder up to two levels down that holds its exe (folders named as the owner likes).
 fs::path FindInGamesFolder(const Game& game, const fs::path& folder) {
-  for (const fs::path& p : {folder / Utf8Path(game.app_name) / game.exe, folder / game.repo / game.exe, folder / game.exe}) {
+  for (const fs::path& p :
+       {folder / PathFromUtf8(game.app_name) / game.exe, folder / game.repo / game.exe, folder / game.exe}) {
     if (IsFile(p)) return p;
   }
   std::error_code ec;
@@ -263,7 +218,7 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
                  bool& copied) {
   copied = false;
   if (auto it = ini.find(game.key); it != ini.end() && !it->second.empty()) {
-    fs::path p = Utf8Path(it->second);
+    fs::path p = PathFromUtf8(it->second);
     if (fs::is_directory(p)) p /= game.exe;
     if (IsFile(p)) return p;
   }
@@ -282,7 +237,7 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
   if (portable) {
     if (fs::path p = InstalledByEntry(game); !p.empty()) return p;
   }
-  const fs::path installed = KnownFolder(FOLDERID_LocalAppData) / "Programs" / game.app_name / game.exe;
+  const fs::path installed = LocalAppDataDir() / "Programs" / game.app_name / game.exe;
   if (IsFile(installed)) return installed;
   for (const fs::path& p : {launcher_dir / game.exe, launcher_dir / game.repo / game.exe,
                             launcher_dir / game.app_name / game.exe}) {
@@ -334,7 +289,7 @@ fs::path g_install_dir;  // --install_dir, or "library" in coreoflight.ini
 
 void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   const auto ini = ReadIni(launcher_dir / kConfigFile);
-  if (auto it = ini.find("figures"); it != ini.end()) g_figures_dir = Utf8Path(it->second);
+  if (auto it = ini.find("figures"); it != ini.end()) g_figures_dir = PathFromUtf8(it->second);
   if (auto it = ini.find("library"); it != ini.end() && g_install_dir.empty()) g_install_dir = FolderFromStored(it->second);
   const fs::path games_folder = g_install_dir.empty() && !skylanders::PortableFolder().empty() ? GamesFolder() : g_install_dir;
   found = std::vector<Found>(kGames.size());
@@ -363,14 +318,12 @@ void FindGames(std::vector<Found>& found, const fs::path& launcher_dir) {
   }
 }
 
-bool StartGame(const Found& game, std::wstring& error, void** process) {
-  STARTUPINFOW startup = {sizeof(startup)};
-  PROCESS_INFORMATION info = {};
+bool StartGame(const Found& game, std::string& error, void** process) {
   // The active profile's own user data (profiles.h); nothing for the main profile. Started from
   // here, the game's F4 menu leaves out the graphics and start-up settings: they are on its card
   // (skylanders-portal settings_menu.h, #10).
-  std::wstring command = L"\"" + game.exe.wstring() + L"\"" + ProfileArguments(game.exe) +
-                         L" --started_by_launcher=true";
+  std::vector<std::string> args = ProfileArgs(game.exe);
+  args.emplace_back("--started_by_launcher=true");
   // The profile's name as the player's gamertag, where a game shows one (the SDK's user_name, up to
   // 15 characters; quotes left out so the command line stays whole).
   std::string name = ActiveProfile().name;
@@ -378,17 +331,13 @@ bool StartGame(const Found& game, std::wstring& error, void** process) {
   size_t keep = std::min<size_t>(name.size(), 15);
   while (keep > 0 && keep < name.size() && (static_cast<unsigned char>(name[keep]) & 0xC0) == 0x80) --keep;
   name.resize(keep);  // whole UTF-8 characters only
-  if (!name.empty()) command += L" \"--user_name=" + Utf8Path(name).wstring() + L"\"";
-  if (!CreateProcessW(game.exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
-                      game.workdir.c_str(), &startup, &info)) {
-    wchar_t text[256] = L"";
-    FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, GetLastError(), 0,
-                   text, 255, nullptr);
-    error = text;
+  if (!name.empty()) args.push_back("--user_name=" + name);
+  void* spawned = SpawnProcess(game.exe, args, game.workdir);
+  if (!spawned) {
+    error = LastSystemError();
     return false;
   }
-  CloseHandle(info.hThread);
-  *process = info.hProcess;
+  *process = spawned;
   return true;
 }
 
@@ -426,12 +375,12 @@ fs::path GamesFolder() {
   if (!g_install_dir.empty()) return g_install_dir;
   // Portable (#47): the games next to Core of Light as well.
   if (const fs::path portable = skylanders::PortableFolder(); !portable.empty()) return portable / "Games";
-  return KnownFolder(FOLDERID_LocalAppData) / "Programs";
+  return LocalAppDataDir() / "Programs";
 }
 
 bool GamesFolderChosen() { return !g_install_dir.empty(); }
 
-fs::path InstallFolder(const Game& game) { return GamesFolder() / Utf8Path(game.app_name); }
+fs::path InstallFolder(const Game& game) { return GamesFolder() / PathFromUtf8(game.app_name); }
 
 std::string SetupVersion(const Game& game, const fs::path& setup) {
   const std::string name = setup.stem().string();
@@ -483,7 +432,7 @@ bool VersionLess(const std::string& a, const std::string& b) {
 
 std::string InstalledVersion(const Game& game, const fs::path& exe) {
   const std::wstring key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
-                           Utf8Path(game.app_id).wstring() + L"_is1";
+                           PathFromUtf8(game.app_id).wstring() + L"_is1";
   for (HKEY root : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
     wchar_t location[MAX_PATH * 2] = L"", version[128] = L"";
     DWORD size = sizeof(location), vsize = sizeof(version);
@@ -536,9 +485,7 @@ fs::path FindSetup(const Game& game, const fs::path& launcher_dir) {
 namespace {
 
 fs::path SetupLog(size_t game) {
-  wchar_t temp[MAX_PATH] = L"";
-  GetTempPathW(MAX_PATH, temp);
-  return fs::path(temp) / "CoreOfLight" / (std::string(kGames[game].key) + "-setup.log");
+  return TempDir() / "CoreOfLight" / (std::string(kGames[game].key) + "-setup.log");
 }
 
 }  // namespace
@@ -558,26 +505,29 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
   const bool light = g_handheld_active || DetectGpu().weak;
   // No desktop shortcut per game: the launcher is where they start (the setup's own wizard still
   // offers one when run by hand).
-  std::wstring command = L"\"" + setup.wstring() + L"\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL" +
-                         L" \"/MERGETASKS=!desktopicon\"" +
-                         L" /NOROM=1 /PORTAL=hybrid /SCALE=" + std::wstring(light ? L"1" : L"2") + L" /LANGUAGE=" +
-                         (german ? L"german" : L"english") + L" /RESOLUTION=" + std::to_wstring(w) + L"x" +
-                         std::to_wstring(h) + L" \"/LOG=" + log.wstring() + L"\"";
+  std::vector<std::string> args = {
+      "/VERYSILENT",
+      "/SUPPRESSMSGBOXES",
+      "/NORESTART",
+      "/NOCANCEL",
+      "/MERGETASKS=!desktopicon",
+      "/NOROM=1",
+      "/PORTAL=hybrid",
+      light ? "/SCALE=1" : "/SCALE=2",
+      german ? "/LANGUAGE=german" : "/LANGUAGE=english",
+      "/RESOLUTION=" + std::to_string(w) + "x" + std::to_string(h),
+      "/LOG=" + PathUtf8(log),
+  };
   // An update goes where the game is (its exe's folder: the setup's entry would know it, a copied
   // game has none); a new install into the games folder when one is set.
   if (update && !dir.empty()) {
-    command += L" \"/DIR=" + dir.wstring() + L"\"";
+    args.push_back("/DIR=" + PathUtf8(dir));
   } else if (!g_install_dir.empty() && !update) {
-    command += L" \"/DIR=" + (g_install_dir / Utf8Path(kGames[game].app_name)).wstring() + L"\"";
+    args.push_back("/DIR=" + PathUtf8(g_install_dir / PathFromUtf8(kGames[game].app_name)));
   }
-  STARTUPINFOW startup = {sizeof(startup)};
-  PROCESS_INFORMATION info = {};
-  if (!CreateProcessW(setup.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
-                      setup.parent_path().c_str(), &startup, &info)) {
-    return false;
-  }
-  CloseHandle(info.hThread);
-  *process = info.hProcess;
+  void* spawned = SpawnProcess(setup, args, setup.parent_path(), true);
+  if (!spawned) return false;
+  *process = spawned;
   return true;
 }
 
@@ -593,32 +543,13 @@ std::string GameInstallError(size_t game) {
 
 fs::path PicturesDir(size_t game) {
   if (game >= kGames.size()) return {};
-  return MainFiguresDir().parent_path() / "Pictures" / Utf8Path(kGames[game].name_en);
+  return MainFiguresDir().parent_path() / "Pictures" / PathFromUtf8(kGames[game].name_en);
 }
 
 fs::path TitleMusicFile(size_t game) {
   if (game >= kGames.size()) return {};
-  return MainFiguresDir().parent_path() / "Pictures" / Utf8Path(kGames[game].name_en) / "title_music.wav";
+  return MainFiguresDir().parent_path() / "Pictures" / PathFromUtf8(kGames[game].name_en) / "title_music.wav";
 }
-
-namespace {
-
-// Whether the exe knows `text` (a flag's name): a build from before it would start the whole game.
-bool ExeMentions(const fs::path& exe, std::string_view text) {
-  std::ifstream in(exe, std::ios::binary);
-  std::string buffer(size_t(4) << 20, '\0');
-  size_t keep = 0;
-  while (in) {
-    in.read(buffer.data() + keep, std::streamsize(buffer.size() - keep));
-    const size_t n = keep + size_t(in.gcount());
-    if (std::string_view(buffer.data(), n).find(text) != std::string_view::npos) return true;
-    keep = std::min(text.size(), n);
-    std::copy(buffer.begin() + ptrdiff_t(n - keep), buffer.begin() + ptrdiff_t(n), buffer.begin());
-  }
-  return false;
-}
-
-}  // namespace
 
 namespace {
 
@@ -626,8 +557,10 @@ namespace {
 // export (checked: no visible window in 1115 polls, the export complete); older builds don't know
 // the setting, so it is only passed where the game's runtime mentions it (the SDK's settings are
 // in rexruntime.dll next to the exe, not in the exe).
-std::wstring HiddenWindowFlag(const Found& found) {
-  return ExeMentions(found.exe.parent_path() / "rexruntime.dll", "window_hidden") ? L" --window_hidden=true" : L"";
+void AppendHiddenWindowFlag(const Found& found, std::vector<std::string>& args) {
+  if (BinaryContainsString(found.exe.parent_path() / "rexruntime.dll", "window_hidden")) {
+    args.emplace_back("--window_hidden=true");
+  }
 }
 
 // For the older builds: SW_HIDE in the start-up info hides only the first window a program shows;
@@ -657,72 +590,47 @@ void KeepWindowsHidden(HANDLE process) {
 }  // namespace
 
 bool StartTitleMusicExport(size_t game, const Found& found, void** process) {
-  if (found.exe.empty() || !ExeMentions(found.exe, "export_title_music")) return false;
-  wchar_t temp[MAX_PATH] = L"";
-  GetTempPathW(MAX_PATH, temp);
-  const fs::path data = fs::path(temp) / "CoreOfLight" / "title_music" / Utf8Path(UserDataName(found.exe));
-  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_title_music=" +
-                               TitleMusicFile(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
-                               L"\" --started_by_launcher=true" + HiddenWindowFlag(found);
-  STARTUPINFOW startup = {sizeof(startup)};
-  startup.dwFlags = STARTF_USESHOWWINDOW;
-  startup.wShowWindow = SW_HIDE;
-  PROCESS_INFORMATION info = {};
-  std::wstring line = command;
-  if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
-                      found.workdir.c_str(), &startup, &info)) {
-    return false;
-  }
-  CloseHandle(info.hThread);
-  KeepWindowsHidden(info.hProcess);
-  *process = info.hProcess;
+  if (found.exe.empty() || !BinaryContainsString(found.exe, "export_title_music")) return false;
+  const fs::path data = TempDir() / "CoreOfLight" / "title_music" / PathFromUtf8(UserDataName(found.exe));
+  std::vector<std::string> args = {"--export_title_music=" + PathUtf8(TitleMusicFile(game)),
+                                   "--user_data_root=" + PathUtf8(data), "--started_by_launcher=true"};
+  AppendHiddenWindowFlag(found, args);
+  void* spawned = SpawnProcess(found.exe, args, found.workdir, true);
+  if (!spawned) return false;
+  KeepWindowsHidden(static_cast<HANDLE>(spawned));
+  *process = spawned;
   return true;
 }
 
 bool StartFigureCheck(const Found& found, const fs::path& list, void** process) {
-  if (found.exe.empty() || !ExeMentions(found.exe, "check_figures")) return false;
-  wchar_t temp[MAX_PATH] = L"";
-  GetTempPathW(MAX_PATH, temp);
-  const fs::path data = fs::path(temp) / "CoreOfLight" / "figure_check";
-  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--check_figures=" + list.wstring() +
-                               L"\" \"--user_data_root=" + data.wstring() +
-                               L"\" --audio_mute=true --started_by_launcher=true" + HiddenWindowFlag(found);
-  STARTUPINFOW startup = {sizeof(startup)};
-  startup.dwFlags = STARTF_USESHOWWINDOW;
-  startup.wShowWindow = SW_HIDE;
-  PROCESS_INFORMATION info = {};
-  std::wstring line = command;
-  if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
-                      found.workdir.c_str(), &startup, &info)) {
-    return false;
-  }
-  CloseHandle(info.hThread);
-  KeepWindowsHidden(info.hProcess);
-  *process = info.hProcess;
+  if (found.exe.empty() || !BinaryContainsString(found.exe, "check_figures")) return false;
+  const fs::path data = TempDir() / "CoreOfLight" / "figure_check";
+  std::vector<std::string> args = {"--check_figures=" + PathUtf8(list), "--user_data_root=" + PathUtf8(data),
+                                   "--audio_mute=true", "--started_by_launcher=true"};
+  AppendHiddenWindowFlag(found, args);
+  void* spawned = SpawnProcess(found.exe, args, found.workdir, true);
+  if (!spawned) return false;
+  KeepWindowsHidden(static_cast<HANDLE>(spawned));
+  *process = spawned;
   return true;
 }
 
 bool StartPictureExport(size_t game, const Found& found, void** process) {
-  if (found.exe.empty() || !ExeMentions(found.exe, "export_pictures")) return false;
-  wchar_t temp[MAX_PATH] = L"";
-  GetTempPathW(MAX_PATH, temp);
-  const fs::path data = fs::path(temp) / "CoreOfLight" / "pictures" / Utf8Path(UserDataName(found.exe));
-  const std::wstring command = L"\"" + found.exe.wstring() + L"\" \"--export_pictures=" +
-                               PicturesDir(game).wstring() + L"\" \"--user_data_root=" + data.wstring() +
-                               L"\" --audio_mute=true --fullscreen=false --window_width=320 --window_height=180"
-                               L" --portal_mode=software --started_by_launcher=true" + HiddenWindowFlag(found);
-  STARTUPINFOW startup = {sizeof(startup)};
-  startup.dwFlags = STARTF_USESHOWWINDOW;
-  startup.wShowWindow = SW_HIDE;
-  PROCESS_INFORMATION info = {};
-  std::wstring line = command;
-  if (!CreateProcessW(found.exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
-                      found.workdir.c_str(), &startup, &info)) {
-    return false;
-  }
-  CloseHandle(info.hThread);
-  KeepWindowsHidden(info.hProcess);
-  *process = info.hProcess;
+  if (found.exe.empty() || !BinaryContainsString(found.exe, "export_pictures")) return false;
+  const fs::path data = TempDir() / "CoreOfLight" / "pictures" / PathFromUtf8(UserDataName(found.exe));
+  std::vector<std::string> args = {"--export_pictures=" + PathUtf8(PicturesDir(game)),
+                                   "--user_data_root=" + PathUtf8(data),
+                                   "--audio_mute=true",
+                                   "--fullscreen=false",
+                                   "--window_width=320",
+                                   "--window_height=180",
+                                   "--portal_mode=software",
+                                   "--started_by_launcher=true"};
+  AppendHiddenWindowFlag(found, args);
+  void* spawned = SpawnProcess(found.exe, args, found.workdir, true);
+  if (!spawned) return false;
+  KeepWindowsHidden(static_cast<HANDLE>(spawned));
+  *process = spawned;
   return true;
 }
 
@@ -733,8 +641,8 @@ fs::path MainFiguresDir() {
 fs::path FiguresDir() { return ProfileFiguresDir(ActiveProfile()); }
 
 fs::path FigurePicture(uint16_t id, uint16_t variant) {
-  wchar_t name[32];
-  std::swprintf(name, std::size(name), L"%u-%u.png", unsigned(id), unsigned(variant));
+  char name[32];
+  std::snprintf(name, sizeof(name), "%u-%u.png", unsigned(id), unsigned(variant));
   // The figure's own game first (the owner's wish: each figure as its own game shows it; the games
   // themselves fill gaps from later games), then the newest game's. The pictures are the discs',
   // the same for every profile: the main profile's too.
@@ -744,7 +652,7 @@ fs::path FigurePicture(uint16_t id, uint16_t variant) {
   const fs::path roots[] = {ProfilePicturesDir(ActiveProfile()), MainFiguresDir().parent_path() / "Pictures"};
   for (const std::string& game : games) {
     for (const fs::path& root : roots) {
-      const fs::path p = root / Utf8Path(game) / name;
+      const fs::path p = root / PathFromUtf8(game) / name;
       if (IsFile(p)) return p;
     }
   }

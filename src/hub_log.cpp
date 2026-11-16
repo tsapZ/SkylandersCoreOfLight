@@ -10,13 +10,15 @@
 #include <string>
 #include <string_view>
 
+#include "platform.h"
+
 namespace coreoflight {
 
 namespace fs = std::filesystem;
 
 fs::path HubLogFile() {
-  const wchar_t* local = _wgetenv(L"LOCALAPPDATA");
-  return local ? fs::path(local) / "CoreOfLight" / "coreoflight.log" : fs::path();
+  const fs::path local = LocalAppDataDir();
+  return local.empty() ? fs::path() : local / "CoreOfLight" / "coreoflight.log";
 }
 
 namespace {
@@ -25,15 +27,6 @@ namespace {
 // SDK does it (rexglue-sdk core/logging.cpp RedactUserData): the user folder becomes %USERPROFILE%,
 // any other user's folder after \Users\ <user>, the user's and the machine's names <user> and
 // <computer>.
-std::string EnvUtf8(const wchar_t* name) {
-  const wchar_t* value = _wgetenv(name);
-  if (!value || !*value) return {};
-  const int n = WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
-  std::string out(n > 0 ? n - 1 : 0, '\0');
-  if (n > 1) WideCharToMultiByte(CP_UTF8, 0, value, -1, out.data(), n, nullptr, nullptr);
-  return out;
-}
-
 char FoldChar(char c) { return c == '/' ? '\\' : static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
 
 bool MatchesAt(const std::string& text, size_t at, std::string_view what) {
@@ -60,9 +53,9 @@ void ReplaceAll(std::string& text, std::string_view what, std::string_view with,
 }
 
 std::string RedactUserData(std::string text) {
-  static const std::string profile = EnvUtf8(L"USERPROFILE");
-  static const std::string user = EnvUtf8(L"USERNAME");
-  static const std::string computer = EnvUtf8(L"COMPUTERNAME");
+  static const std::string profile = EnvVarUtf8("USERPROFILE");
+  static const std::string user = CurrentUserName();
+  static const std::string computer = CurrentComputerName();
   if (profile.size() >= 4) ReplaceAll(text, profile, "%USERPROFILE%", false);
   constexpr std::string_view marker = "\\users\\";
   for (size_t at = 0; at + marker.size() <= text.size(); ++at) {
@@ -99,11 +92,10 @@ void Write(const char* level, const std::string& line) {
   }
   std::ofstream out(file, std::ios::app);
   if (!out) return;
-  SYSTEMTIME t;
-  GetLocalTime(&t);
+  const LocalDateTime t = NowLocalDateTime();
   char stamp[48];
-  std::snprintf(stamp, sizeof(stamp), "%04u-%02u-%02u %02u:%02u:%02u.%03u [%s] ", t.wYear, t.wMonth, t.wDay, t.wHour,
-                t.wMinute, t.wSecond, t.wMilliseconds, level);
+  std::snprintf(stamp, sizeof(stamp), "%04d-%02d-%02d %02d:%02d:%02d.%03d [%s] ", t.year, t.month, t.day, t.hour,
+                t.minute, t.second, t.millisecond, level);
   out << stamp << RedactUserData(line) << "\n";
 }
 

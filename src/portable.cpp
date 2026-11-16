@@ -1,8 +1,5 @@
 #include "portable.h"
 
-#include <windows.h>
-#include <shellapi.h>
-
 #include <cstdint>
 #include <fstream>
 #include <iterator>
@@ -11,13 +8,14 @@
 #include "crc32.h"
 #include "hub_log.h"
 #include "inflate.h"
+#include "platform.h"
 
 namespace coreoflight {
 namespace fs = std::filesystem;
 
 namespace {
 
-constexpr wchar_t kMarker[] = L"portable.txt";
+constexpr char kMarker[] = "portable.txt";
 
 uint32_t Get16(const unsigned char* p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8; }
 uint32_t Get32(const unsigned char* p) { return Get16(p) | Get16(p + 2) << 16; }
@@ -114,12 +112,9 @@ bool ReadZip(const fs::path& file, std::vector<Entry>& entries, bool german, std
   return true;
 }
 
-fs::path WithSuffix(const fs::path& p, const wchar_t* suffix) { return fs::path(p.native() + suffix); }
+fs::path WithSuffix(const fs::path& p, std::string_view suffix) { return WithPathSuffix(p, suffix); }
 
-std::string Utf8(const fs::path& p) {
-  const std::u8string u8 = p.u8string();
-  return std::string(u8.begin(), u8.end());
-}
+std::string Utf8(const fs::path& p) { return PathUtf8(p); }
 
 }  // namespace
 
@@ -153,7 +148,7 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
   for (const Entry& e : entries) {
     const fs::path target = launcher_dir / e.path;
     fs::create_directories(target.parent_path(), ec);
-    const fs::path f = WithSuffix(target, L".new");
+    const fs::path f = WithSuffix(target, ".new");
     std::ofstream out(f, std::ios::binary | std::ios::trunc);
     out.write(e.data.data(), std::streamsize(e.data.size()));
     out.close();
@@ -175,7 +170,7 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
     for (auto it = swapped.rbegin(); it != swapped.rend(); ++it) {
       if (!it->old.empty()) {
         fs::remove(it->target, ec);
-        MoveFileExW(it->old.c_str(), it->target.c_str(), MOVEFILE_REPLACE_EXISTING);
+        MoveReplaceFile(it->old, it->target);
       } else {
         fs::remove(it->target, ec);
       }
@@ -187,12 +182,12 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
     Swap swap{target, {}};
     if (fs::exists(target, ec)) {
       // An .old one from an earlier update that is still in use can't go: then .old2, .old3 ...
-      fs::path old = WithSuffix(target, L".old");
+      fs::path old = WithSuffix(target, ".old");
       for (int n = 2; fs::exists(old, ec) && !fs::remove(old, ec) && n < 100; ++n) {
-        old = WithSuffix(target, (L".old" + std::to_wstring(n)).c_str());
+        old = WithSuffix(target, ".old" + std::to_string(n));
       }
-      if (!MoveFileExW(target.c_str(), old.c_str(), 0)) {
-        HubWarn("portable update: can't move " + Utf8(target) + " aside (error " + std::to_string(GetLastError()) + ")");
+      if (!MoveFileNewAside(target, old)) {
+        HubWarn("portable update: can't move " + Utf8(target) + " aside (" + LastSystemError() + ")");
         roll_back();
         error = cant_write;
         return false;
@@ -200,8 +195,8 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
       swap.old = old;
     }
     swapped.push_back(swap);
-    if (!MoveFileExW(WithSuffix(target, L".new").c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING)) {
-      HubWarn("portable update: can't put " + Utf8(target) + " in place (error " + std::to_string(GetLastError()) + ")");
+    if (!MoveReplaceFile(WithSuffix(target, ".new"), target)) {
+      HubWarn("portable update: can't put " + Utf8(target) + " in place (" + LastSystemError() + ")");
       roll_back();
       error = cant_write;
       return false;
@@ -212,29 +207,14 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
 }
 
 bool StartLauncher(const fs::path& exe) {
-  STARTUPINFOW startup = {sizeof(startup)};
-  PROCESS_INFORMATION info = {};
-  // This launcher's own arguments go along (Steam's --fullscreen, a test's --offline and
-  // --documents), except the update test's.
-  std::wstring command = L"\"" + exe.native() + L"\"";
-  int argc = 0;
-  if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
-    for (int i = 1; i < argc; ++i) {
-      const std::wstring arg = argv[i];
-      if (arg.starts_with(L"--portable_update=")) continue;
-      // Quoted; backslashes before the closing quote doubled, or they'd escape it (a folder's "C:\x\").
-      size_t trailing = 0;
-      while (trailing < arg.size() && arg[arg.size() - 1 - trailing] == L'\\') ++trailing;
-      command += L" \"" + arg + std::wstring(trailing, L'\\') + L"\"";
-    }
-    LocalFree(argv);
+  std::vector<std::string> args;
+  for (const std::string& arg : LaunchArgs()) {
+    if (arg.starts_with("--portable_update=")) continue;
+    args.push_back(arg);
   }
-  const fs::path dir = exe.parent_path();
-  if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, dir.c_str(), &startup, &info)) {
-    return false;
-  }
-  CloseHandle(info.hThread);
-  CloseHandle(info.hProcess);
+  void* process = SpawnProcess(exe, args, exe.parent_path(), false);
+  if (!process) return false;
+  CloseProcessHandle(process);
   return true;
 }
 
@@ -243,8 +223,8 @@ void RemoveUpdateLeftovers(const fs::path& launcher_dir) {
   std::vector<fs::path> leftovers;
   for (fs::recursive_directory_iterator it(launcher_dir, ec), end; !ec && it != end; it.increment(ec)) {
     if (!it->is_regular_file(ec)) continue;
-    const std::wstring ext = it->path().extension().native();
-    if (ext == L".new" || ext.starts_with(L".old")) leftovers.push_back(it->path());
+    const std::string ext = PathUtf8(it->path().extension());
+    if (ext == ".new" || ext.starts_with(".old")) leftovers.push_back(it->path());
   }
   for (const fs::path& p : leftovers) {
     // A file whose name ends in .old<n> without its file next to it isn't one of ours: leave it.

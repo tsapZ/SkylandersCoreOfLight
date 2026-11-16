@@ -1,8 +1,5 @@
 #include "profiles.h"
 
-#include <windows.h>
-#include <shellapi.h>
-
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -10,6 +7,7 @@
 #include <map>
 
 #include "games.h"
+#include "platform.h"
 #include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
@@ -23,21 +21,14 @@ namespace sp = skylanders::portal;
 constexpr char kListFile[] = "profiles.ini";
 constexpr char kProfileFile[] = "profile.ini";
 // The folder the SDK keeps the saves in under a game's user data: the profile's fixed XUID.
-constexpr wchar_t kSaveFolder[] = L"B13EBABEBABEBABE";
+constexpr char kSaveFolder[] = "B13EBABEBABEBABE";
 
 std::vector<Profile> g_profiles;
 size_t g_active = 0;
 
 fs::path ProfilesDir() { return SkylandersDir() / "Profiles"; }
 
-fs::path Utf8Path(const std::string& s) {
-  return fs::path(std::u8string(reinterpret_cast<const char8_t*>(s.data()), s.size()));
-}
-
-std::string Utf8(const fs::path& p) {
-  const std::u8string u8 = p.u8string();
-  return std::string(u8.begin(), u8.end());
-}
+std::string Utf8(const fs::path& p) { return PathUtf8(p); }
 
 // "112-4614": a figure's id and variant.
 bool ParsePicture(const std::string& text, Profile& p) {
@@ -86,14 +77,14 @@ bool WriteIniValues(const fs::path& path, const std::vector<std::pair<std::strin
   }
   std::error_code ec;
   fs::create_directories(path.parent_path(), ec);
-  const fs::path temp = path.parent_path() / (path.filename().wstring() + L".new");
+  const fs::path temp = WithPathSuffix(path, ".new");
   {
     std::ofstream out(temp, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     for (const std::string& line : lines) out << line << "\r\n";
     if (!out) return false;
   }
-  return MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+  return MoveReplaceFile(temp, path);
 }
 
 bool IsFigureFile(const fs::path& p) {
@@ -185,18 +176,6 @@ bool SaveProfile(const Profile& p) {
   return WriteIniValues(p.root / kProfileFile, {{"name", p.name}, {"picture", PictureText(p)}});
 }
 
-bool MoveToRecycleBin(const fs::path& path) {
-  // SHFileOperation wants the paths ended by two null characters.
-  std::wstring from = path.wstring();
-  from.push_back(L'\0');
-  from.push_back(L'\0');
-  SHFILEOPSTRUCTW op = {};
-  op.wFunc = FO_DELETE;
-  op.pFrom = from.c_str();
-  op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
-  return SHFileOperationW(&op) == 0 && !op.fAnyOperationsAborted;
-}
-
 bool DeleteProfile(const Profile& p, bool to_recycle_bin) {
   if (IsMainProfile(p) || p.root.empty() || p.root.parent_path() != ProfilesDir()) return false;
   if (!to_recycle_bin) {
@@ -206,7 +185,7 @@ bool DeleteProfile(const Profile& p, bool to_recycle_bin) {
     if (ActiveProfile().id == p.id) WriteIniValues(ProfilesDir() / kListFile, {{"active", ""}});
     return true;
   }
-  if (!MoveToRecycleBin(p.root)) return false;
+  if (!MovePathToTrash(p.root)) return false;
   if (ActiveProfile().id == p.id) WriteIniValues(ProfilesDir() / kListFile, {{"active", ""}});
   return true;
 }
@@ -232,10 +211,7 @@ uint64_t LastSaved(const Profile& p, const fs::path& exe) {
   for (fs::recursive_directory_iterator it(saves, ec), end; it != end; it.increment(ec)) {
     if (ec) break;
     if (!it->is_regular_file(ec)) continue;
-    WIN32_FILE_ATTRIBUTE_DATA data;
-    if (!GetFileAttributesExW(it->path().c_str(), GetFileExInfoStandard, &data)) continue;
-    const FILETIME& t = data.ftLastWriteTime;
-    newest = std::max(newest, uint64_t(t.dwHighDateTime) << 32 | t.dwLowDateTime);
+    newest = std::max(newest, PathFileTimeTicks(it->path()));
   }
   return newest;
 }
@@ -325,7 +301,7 @@ int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
     if (ec) break;
     if (!it->is_regular_file(ec) || !IsFigureFile(it->path())) continue;
     // The games' own copies of a figure before writing to it are not figures of their own.
-    if (it->path().wstring().find(L"\\real\\") != std::wstring::npos) continue;
+    if (IsRealToySubpath(it->path())) continue;
     std::error_code rel_ec;
     const fs::path dest = target / fs::relative(it->path(), source, rel_ec);
     if (rel_ec || fs::exists(dest, rel_ec)) continue;
@@ -338,14 +314,14 @@ int CopyFigures(const Profile& from, const Profile& to, bool as_new) {
   return copied;
 }
 
-std::wstring ProfileArguments(const fs::path& exe) {
+std::vector<std::string> ProfileArgs(const fs::path& exe) {
   const Profile& p = ActiveProfile();
   // The main profile is the games' own default, unless the launcher runs on a copy (--documents)
   // or keeps its data portable (#47): a game set up on this PC finds no portable-data.txt by itself.
   if (IsMainProfile(p) && !DocumentsMoved() && skylanders::PortableFolder().empty()) return {};
   const fs::path name = GameFolderName(exe);
-  return L" \"--user_data_root=" + (p.root / name).wstring() + L"\" \"--cache_root=" +
-         (SkylandersDir() / name / "cache").wstring() + L"\"";
+  return {"--user_data_root=" + PathUtf8(p.root / name),
+          "--cache_root=" + PathUtf8(SkylandersDir() / name / "cache")};
 }
 
 }  // namespace coreoflight

@@ -15,6 +15,7 @@
 #include "hub_settings.h"
 #include "imgui.h"
 #include "nxe_art.h"
+#include "platform.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -81,16 +82,7 @@ std::string Gigabytes(uint64_t bytes, bool german) {
 }
 
 // Bytes free for this user on the drive `path` is on (its nearest existing folder), or nullopt.
-std::optional<uint64_t> FreeBytes(fs::path path) {
-  std::error_code ec;
-  while (!path.empty() && !fs::exists(path, ec)) {
-    if (path == path.parent_path()) break;
-    path = path.parent_path();
-  }
-  ULARGE_INTEGER free{};
-  if (!GetDiskFreeSpaceExW(path.c_str(), &free, nullptr, nullptr)) return std::nullopt;
-  return free.QuadPart;
-}
+std::optional<uint64_t> FreeBytes(fs::path path) { return FreeDiskBytes(path); }
 
 bool Pressed(ImGuiKey key) { return ImGui::IsKeyPressed(key, true); }
 bool Once(ImGuiKey key) { return ImGui::IsKeyPressed(key, false); }

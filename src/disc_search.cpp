@@ -1,7 +1,6 @@
 #include "disc_search.h"
 
 #include <windows.h>
-#include <shlobj.h>
 
 #include <algorithm>
 #include <cwctype>
@@ -15,20 +14,14 @@
 
 #include "games.h"
 #include "language_import.h"
+#include "platform.h"
+#include "portal/data_folder.h"
 #include "xiso.h"
 
 namespace coreoflight {
 namespace {
 
 namespace fs = std::filesystem;
-
-fs::path Known(REFKNOWNFOLDERID id) {
-  PWSTR path = nullptr;
-  fs::path out;
-  if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &path))) out = path;
-  CoTaskMemFree(path);
-  return out;
-}
 
 std::wstring Lower(std::wstring s) {
   std::transform(s.begin(), s.end(), s.begin(), [](wchar_t c) { return wchar_t(std::towlower(c)); });
@@ -75,8 +68,8 @@ void FindIsos(const fs::path& dir, int depth, const std::atomic<bool>& stop, std
 
 std::shared_ptr<DiscSearch> StartDiscSearch() {
   std::vector<std::pair<fs::path, int>> roots;
-  for (REFKNOWNFOLDERID id : {FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Documents}) {
-    if (const fs::path p = Known(id); !p.empty()) roots.emplace_back(p, kPlaceDepth);
+  for (const fs::path& p : {UserDownloadsDir(), DesktopDir(), skylanders::DocumentsFolder()}) {
+    if (!p.empty()) roots.emplace_back(p, kPlaceDepth);
   }
   const DWORD drives = GetLogicalDrives();
   for (int d = 0; d < 26; ++d) {

@@ -12,8 +12,6 @@
 // A file whose bytes are in the Imaginators folder already counts as there; a new one keeps its
 // own name (or gets the figure's), numbered when the name is taken ("Starcast (2).dump").
 
-#include <windows.h>
-
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -24,6 +22,7 @@
 #include <thread>
 
 #include "hub_log.h"
+#include "platform.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_crypto.h"
 #include "portal/figure_file.h"
@@ -136,11 +135,10 @@ void FigureImport::Start(const fs::path& source, const Found& imaginators, const
       return;
     }
     // Step 2, the game.
-    wchar_t temp[MAX_PATH] = L"";
-    GetTempPathW(MAX_PATH, temp);
-    const fs::path list = fs::path(temp) / "CoreOfLight" / "figure_check.txt";
+    const fs::path list = TempDir() / "CoreOfLight" / "figure_check.txt";
     fs::create_directories(list.parent_path(), ec);
-    fs::remove(fs::path(list.wstring() + L".result"), ec);
+    const fs::path result_file = WithPathSuffix(list, ".result");
+    fs::remove(result_file, ec);
     {
       std::ofstream out(list, std::ios::binary | std::ios::trunc);
       for (const Candidate& c : candidates) out << U8(c.file) << "\n";
@@ -152,11 +150,14 @@ void FigureImport::Start(const fs::path& source, const Found& imaginators, const
       return;
     }
     // About 5 s; a minute is plenty, then it is stopped.
-    if (WaitForSingleObject(HANDLE(process), 60000) == WAIT_TIMEOUT) TerminateProcess(HANDLE(process), 1);
-    CloseHandle(HANDLE(process));
+    if (IsProcessRunning(process, 60000)) {
+      TerminateAndCloseProcess(process);
+    } else {
+      CloseProcessHandle(process);
+    }
     std::map<std::string, std::string> verdict;  // file -> "ok" / "unsigned" / "bad"
     {
-      std::ifstream in(fs::path(list.wstring() + L".result"), std::ios::binary);
+      std::ifstream in(result_file, std::ios::binary);
       std::string line;
       while (std::getline(in, line)) {
         const size_t tab = line.find('\t');
