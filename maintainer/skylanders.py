@@ -9,6 +9,7 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 TOOLS = pathlib.Path(os.environ.get("SKYLANDERS_TOOLS") or HERE.parents[2])
@@ -27,7 +28,7 @@ class Game:
 
     @property
     def dir(self):
-        return TOOLS / self.repo / self.repo
+        return repo_dir(self.repo)
 
     @property
     def title(self):
@@ -63,6 +64,12 @@ def game(repo):
 
 
 def repo_dir(repo):
+    candidates = [TOOLS / repo / repo, TOOLS / repo, TOOLS / "tsapZ" / repo, HERE.parents[1] / "tsapZ" / repo]
+    if repo == HUB:
+        candidates.insert(1, HERE.parent)
+    for c in candidates:
+        if (c / ".git").exists():
+            return c
     return TOOLS / repo / repo
 
 
@@ -88,12 +95,18 @@ def read_version(repo):
     return m.group(2) if m else None
 
 
-def release_assets(repo, version):
+def release_assets(repo, version, platform=None):
     """The files a release of `repo` at `version` uploads."""
-    out = repo_dir(repo) / "installer" / "Output"
-    if repo == HUB:
-        return [out / f"CoreOfLightSetup-{version}.exe", out / f"CoreOfLightPortable-{version}.zip"]
-    return [out / f"{repo}Setup-{version}.exe"]
+    plat = sys.platform if platform is None else platform
+    d = repo_dir(repo)
+    win = ([d / "installer" / "Output" / f"CoreOfLightSetup-{version}.exe",
+            d / "installer" / "Output" / f"CoreOfLightPortable-{version}.zip"]
+           if repo == HUB else [d / "installer" / "Output" / f"{repo}Setup-{version}.exe"])
+    linux = ([d / "installer" / "Output" / "CoreOfLight-linux-amd64.tar.gz"]
+             if repo == HUB else [d / "dist" / f"{repo}-linux-amd64.tar.gz"])
+    if plat == "all":
+        return win + linux
+    return linux if plat.startswith("linux") else win
 
 
 def release_title(repo, version):
