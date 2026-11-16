@@ -103,7 +103,7 @@ class LauncherUi {
   size_t backdrop_game_ = SIZE_MAX, backdrop_from_ = SIZE_MAX;
   double backdrop_since_ = 0;
   int figures_ = 0;
-  std::wstring error_;
+  std::string error_;
   double error_until_ = 0;
   // A game whose last achievement came with the game that just ended: its platinum trophy shown
   // over the cards for a while (Refresh).

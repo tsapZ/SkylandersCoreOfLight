@@ -15,6 +15,7 @@
 #include "game_files.h"
 #include "hub_log.h"
 #include "language_import.h"
+#include "platform.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -65,16 +66,7 @@ std::string MissingDiscFile(const fs::path& folder, std::string_view required) {
 constexpr uint64_t kSpareBytes = 256ull << 20;
 
 // Bytes free for this user on the drive `path` is on (its nearest existing folder), or nullopt.
-std::optional<uint64_t> FreeBytes(fs::path path) {
-  std::error_code ec;
-  while (!path.empty() && !fs::exists(path, ec)) {
-    if (path == path.parent_path()) break;
-    path = path.parent_path();
-  }
-  ULARGE_INTEGER free{};
-  if (!GetDiskFreeSpaceExW(path.c_str(), &free, nullptr, nullptr)) return std::nullopt;
-  return free.QuadPart;
-}
+std::optional<uint64_t> FreeBytes(fs::path path) { return FreeDiskBytes(path); }
 
 // The bytes of the files under `folder` (an older disc there is overwritten in place).
 uint64_t FolderBytes(const fs::path& folder) {

@@ -1,27 +1,22 @@
 #include "saves.h"
 
-#include <windows.h>
-
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
 
 #include "games.h"
+#include "platform.h"
 #include "profiles.h"
 
 namespace coreoflight {
 namespace fs = std::filesystem;
 namespace {
 
-constexpr wchar_t kProfileFolder[] = L"B13EBABEBABEBABE";  // the profile the games save as
+constexpr char kProfileFolder[] = "B13EBABEBABEBABE";  // the profile the games save as
 
-fs::path Utf8Path(const std::string& s) { return fs::path(std::u8string(s.begin(), s.end())); }
+fs::path Utf8Path(const std::string& s) { return PathFromUtf8(s); }
 
-uint64_t FileTime(const fs::path& path) {
-  WIN32_FILE_ATTRIBUTE_DATA data;
-  if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) return 0;
-  return uint64_t(data.ftLastWriteTime.dwHighDateTime) << 32 | data.ftLastWriteTime.dwLowDateTime;
-}
+uint64_t FileTime(const fs::path& path) { return PathFileTimeTicks(path); }
 
 // The newest file in a folder and below (copies keep their files' times).
 uint64_t NewestFile(const fs::path& dir) {
@@ -37,10 +32,10 @@ uint64_t NewestFile(const fs::path& dir) {
 fs::path UserData(const Profile& p, const fs::path& exe) { return p.root / GameFolderName(exe); }
 
 // The save folder and its header as the SDK's manifest names them, relative to the user data.
-std::wstring RelativeSave(const SaveSlot& slot) {
+std::string RelativeSave(const SaveSlot& slot) {
   const fs::path title = slot.folder.parent_path().parent_path();
-  return std::wstring(kProfileFolder) + L"\\" + title.filename().wstring() + L"\\00000001\\" +
-         slot.folder.filename().wstring();
+  return std::string(kProfileFolder) + "\\" + PathUtf8(title.filename()) + "\\00000001\\" +
+         PathUtf8(slot.folder.filename());
 }
 
 std::string g_error;  // why the last copy failed (LastSaveError)
@@ -72,11 +67,10 @@ bool CopyTree(const fs::path& from, const fs::path& to) {
 }
 
 std::string NowName() {
-  SYSTEMTIME t{};
-  GetLocalTime(&t);
+  const LocalDateTime t = NowLocalDateTime();
   char text[32];
-  std::snprintf(text, sizeof(text), "%04u-%02u-%02u %02u-%02u-%02u", t.wYear, t.wMonth, t.wDay, t.wHour,
-                t.wMinute, t.wSecond);
+  std::snprintf(text, sizeof(text), "%04d-%02d-%02d %02d-%02d-%02d", t.year, t.month, t.day, t.hour, t.minute,
+                t.second);
   return text;
 }
 
@@ -102,7 +96,7 @@ std::vector<SaveSlot> ListSaves(const Profile& p, const fs::path& exe) {
       s.folder = save->path();
       const std::u8string u8 = s.folder.filename().u8string();
       s.name.assign(u8.begin(), u8.end());
-      s.header = title->path() / "Headers" / "00000001" / (s.folder.filename().wstring() + L".header");
+      s.header = title->path() / "Headers" / "00000001" / WithPathSuffix(s.folder.filename(), ".header");
       s.written = NewestFile(s.folder);
       s.options = s.name.size() >= 7 && s.name.compare(s.name.size() - 7, 7, "OPTIONS") == 0;
       const size_t at = s.name.rfind('_');
@@ -125,9 +119,10 @@ std::vector<SaveCopy> ListCopies(const Profile& p, const Game& game, const fs::p
   std::vector<SaveCopy> copies;
   std::error_code ec;
   const fs::path title = slot.folder.parent_path().parent_path();
-  const fs::path previous = UserData(p, exe) / "save-backup" / "previous" /
-                            (std::wstring(kProfileFolder) + L"_" + title.filename().wstring() + L"_00000001_" +
-                             slot.folder.filename().wstring());
+  const fs::path previous =
+      UserData(p, exe) / "save-backup" / "previous" /
+      PathFromUtf8(std::string(kProfileFolder) + "_" + PathUtf8(title.filename()) + "_00000001_" +
+                   PathUtf8(slot.folder.filename()));
   if (fs::is_directory(previous / "package", ec)) {
     copies.push_back({previous, NewestFile(previous / "package"), true, false, false});
   }
@@ -150,13 +145,12 @@ bool BackupSave(const Profile& p, const Game& game, const SaveSlot& slot, const 
   if (!CopyTree(slot.folder, to / "package")) return false;
   if (fs::exists(slot.header, ec)) fs::copy_file(slot.header, to / "header", fs::copy_options::overwrite_existing, ec);
   // The SDK's manifest: the save folder and its header, relative to the user data.
-  const std::wstring save = RelativeSave(slot);
+  const std::string save = RelativeSave(slot);
   const fs::path title = slot.folder.parent_path().parent_path();
-  const std::wstring header = std::wstring(kProfileFolder) + L"\\" + title.filename().wstring() +
-                              L"\\Headers\\00000001\\" + slot.folder.filename().wstring() + L".header";
+  const std::string header = std::string(kProfileFolder) + "\\" + PathUtf8(title.filename()) +
+                             "\\Headers\\00000001\\" + PathUtf8(slot.folder.filename()) + ".header";
   std::ofstream manifest(to / "manifest.txt", std::ios::binary);
-  const std::u8string a = fs::path(save).u8string(), b = fs::path(header).u8string();
-  manifest << std::string(a.begin(), a.end()) << "\n" << std::string(b.begin(), b.end()) << "\n";
+  manifest << save << "\n" << header << "\n";
   if (mark) std::ofstream(to / mark, std::ios::binary) << "1\n";
   return manifest.good();
 }

@@ -1,10 +1,9 @@
 #include "updates.h"
 
 #include "games.h"  // VersionLess
+#include "platform.h"
 
 #include <windows.h>
-#include <bcrypt.h>
-#include <shlobj.h>
 #include <winhttp.h>
 
 #include <cctype>
@@ -278,20 +277,13 @@ bool HttpGet(const std::string& url, const wchar_t* headers, const std::function
 }
 
 fs::path LocalDataDir() {
-  PWSTR path = nullptr;
-  fs::path dir;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path))) dir = path;
-  CoTaskMemFree(path);
-  return dir / "CoreOfLight";
+  const fs::path base = LocalAppDataDir();
+  return base.empty() ? fs::path("CoreOfLight") : base / "CoreOfLight";
 }
 
 fs::path KnownReleasesFile() { return LocalDataDir() / "releases.txt"; }
 
-uint64_t Now() {
-  FILETIME t;
-  GetSystemTimeAsFileTime(&t);
-  return uint64_t(t.dwHighDateTime) << 32 | t.dwLowDateTime;
-}
+uint64_t Now() { return NowFileTimeTicks(); }
 
 }  // namespace
 
@@ -377,35 +369,7 @@ bool UpdateCheckDue() {
   return checked == 0 || Now() - checked > kInterval;
 }
 
-std::string FileSha256(const fs::path& file) {
-  std::ifstream in(file, std::ios::binary);
-  if (!in) return {};
-  BCRYPT_ALG_HANDLE alg = nullptr;
-  BCRYPT_HASH_HANDLE hash = nullptr;
-  if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return {};
-  std::string out;
-  if (BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) == 0) {
-    std::vector<char> buffer(1 << 20);
-    bool ok = true;
-    while (in) {
-      in.read(buffer.data(), std::streamsize(buffer.size()));
-      const auto n = in.gcount();
-      if (n > 0 && BCryptHashData(hash, reinterpret_cast<PUCHAR>(buffer.data()), ULONG(n), 0) != 0) {
-        ok = false;
-        break;
-      }
-    }
-    unsigned char digest[32];
-    if (ok && BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
-      char hex[65];
-      for (int i = 0; i < 32; ++i) std::snprintf(hex + 2 * i, 3, "%02x", digest[i]);
-      out.assign(hex, 64);
-    }
-    BCryptDestroyHash(hash);
-  }
-  BCryptCloseAlgorithmProvider(alg, 0);
-  return out;
-}
+std::string FileSha256(const fs::path& file) { return Sha256FileHex(file); }
 
 bool DownloadFile(const std::string& url, const fs::path& file, std::atomic<float>* progress,
                   const std::atomic<bool>* cancel, const std::string& sha256) {
@@ -442,11 +406,7 @@ bool DownloadFile(const std::string& url, const fs::path& file, std::atomic<floa
   return !ec;
 }
 
-fs::path DownloadsDir() {
-  wchar_t temp[MAX_PATH] = L"";
-  GetTempPathW(MAX_PATH, temp);
-  return fs::path(temp) / "CoreOfLight" / "downloads";
-}
+fs::path DownloadsDir() { return TempDir() / "CoreOfLight" / "downloads"; }
 
 namespace {
 bool g_offline = false;

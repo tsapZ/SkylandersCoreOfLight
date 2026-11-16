@@ -1,6 +1,6 @@
 #include "achievements.h"
 
-#include <windows.h>
+#include "platform.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -114,25 +114,23 @@ GameAchievements LoadAchievements(const Game& game, const Profile& profile) {
 
 std::string FileTimeDate(uint64_t filetime, bool german) {
   if (filetime <= 1) return {};
-  FILETIME utc{DWORD(filetime), DWORD(filetime >> 32)}, local{};
-  SYSTEMTIME st{};
-  if (!FileTimeToLocalFileTime(&utc, &local) || !FileTimeToSystemTime(&local, &st)) return {};
+  std::tm st{};
+  if (!FileTimeToLocalTm(filetime, st)) return {};
   char text[32];
   if (german) {
-    std::snprintf(text, sizeof(text), "%02u.%02u.%04u", unsigned(st.wDay), unsigned(st.wMonth), unsigned(st.wYear));
+    std::snprintf(text, sizeof(text), "%02d.%02d.%04d", st.tm_mday, st.tm_mon + 1, st.tm_year + 1900);
   } else {
-    std::snprintf(text, sizeof(text), "%04u-%02u-%02u", unsigned(st.wYear), unsigned(st.wMonth), unsigned(st.wDay));
+    std::snprintf(text, sizeof(text), "%04d-%02d-%02d", st.tm_year + 1900, st.tm_mon + 1, st.tm_mday);
   }
   return text;
 }
 
 std::string FileTimeClock(uint64_t filetime) {
   if (filetime <= 1) return {};
-  FILETIME utc{DWORD(filetime), DWORD(filetime >> 32)}, local{};
-  SYSTEMTIME st{};
-  if (!FileTimeToLocalFileTime(&utc, &local) || !FileTimeToSystemTime(&local, &st)) return {};
+  std::tm st{};
+  if (!FileTimeToLocalTm(filetime, st)) return {};
   char text[16];
-  std::snprintf(text, sizeof(text), "%02u:%02u", unsigned(st.wHour), unsigned(st.wMinute));
+  std::snprintf(text, sizeof(text), "%02d:%02d", st.tm_hour, st.tm_min);
   return text;
 }
 

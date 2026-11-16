@@ -1,6 +1,6 @@
 #include "hub_settings.h"
 
-#include <windows.h>
+#include "platform.h"
 
 #include <algorithm>
 #include <cctype>
@@ -83,7 +83,7 @@ HubSettings LoadHubSettings() {
 bool HubGerman(const HubSettings& s) {
   if (s.language == "german") return true;
   if (s.language == "english") return false;
-  return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_GERMAN;
+  return IsGermanOsLocale();
 }
 
 void GamesFolderLabels(std::string& en, std::string& de) {

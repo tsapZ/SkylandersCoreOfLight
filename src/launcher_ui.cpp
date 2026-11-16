@@ -2,31 +2,30 @@
 #include "hints.h"
 
 #include <windows.h>
-#include <shellapi.h>
-#include <shlobj.h>
 
 #include <algorithm>
 #include <atomic>
-#include <mutex>
-#include <thread>
-#include <string_view>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <mutex>
 #include <string>
+#include <string_view>
+#include <thread>
 #include <vector>
 
+#include "game_files.h"
+#include "handheld.h"
+#include "hub_log.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "nxe_art.h"
 #include "pad_state.h"
+#include "platform.h"
 #include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 #include "portal/figure_info.h"
-#include "game_files.h"
-#include "handheld.h"
-#include "hub_log.h"
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
@@ -46,23 +45,6 @@ const ImU32 kDim = Rgba(180, 190, 215);
 // Each game's colour on its card (a plain accent, no artwork).
 const ImU32 kAccents[] = {Rgba(80, 170, 70), Rgba(230, 130, 40), Rgba(150, 90, 220),
                           Rgba(40, 150, 220), Rgba(220, 60, 60), Rgba(240, 180, 40)};
-
-std::wstring Wide(const std::string& s) {
-  if (s.empty()) return {};
-  const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), nullptr, 0);
-  std::wstring w(size_t(n), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), w.data(), n);
-  return w;
-}
-
-std::string Utf8(const std::wstring& w) {
-  if (w.empty()) return {};
-  const int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), int(w.size()), nullptr, 0, nullptr, nullptr);
-  std::string out(size_t(n), '\0');
-  WideCharToMultiByte(CP_UTF8, 0, w.c_str(), int(w.size()), out.data(), n, nullptr, nullptr);
-  while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) out.pop_back();
-  return out;
-}
 
 void Text(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 col, const char* text,
           float wrap = 0.0f) {
@@ -523,16 +505,14 @@ void LauncherUi::UpdateImport() {
 // then asks for the disc ("Disc einlesen" on A). It copies about 100 MB, a few seconds.
 void LauncherUi::UpdateInstall() {
   if (!install_process_) return;
-  const DWORD wait = WaitForSingleObject(install_process_, 0);
-  if (wait != WAIT_OBJECT_0 && ImGui::GetTime() - install_since_ < 300.0) return;
-  DWORD code = 3;
-  if (wait == WAIT_OBJECT_0) {
-    GetExitCodeProcess(install_process_, &code);
+  int code = 3;
+  if (IsProcessRunning(install_process_, 0, &code)) {
+    if (ImGui::GetTime() - install_since_ < 300.0) return;
+    TerminateAndCloseProcess(install_process_);
+    code = 3;
   } else {
-    TerminateProcess(install_process_, 3);
+    CloseProcessHandle(install_process_);
   }
-  CloseHandle(install_process_);
-  install_process_ = nullptr;
   const size_t game = install_game_;
   Refresh();
   const std::string name = german_ ? AllGames()[game].name_de : AllGames()[game].name_en;
@@ -543,9 +523,9 @@ void LauncherUi::UpdateInstall() {
     HubLog("install: " + std::string(AllGames()[game].name_en) + (update ? " updated to " : " installed, ") +
            (version.empty() ? std::string("version unknown") : version));
     if (update) {
-      error_ = Wide(name + (german_ ? " wurde aktualisiert (" : " was updated (") + version + ")");
+      error_ = name + (german_ ? " wurde aktualisiert (" : " was updated (") + version + ")";
     } else {
-      error_ = Wide(name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc"));
+      error_ = name + (german_ ? " ist installiert. A: die Disc einlesen" : " is installed. A: add the disc");
     }
   } else {
     if (update_total_ && update) update_failed_.push_back(name);  // "Alle aktualisieren" sums it up
@@ -553,9 +533,9 @@ void LauncherUi::UpdateInstall() {
     HubWarn("install: " + std::string(AllGames()[game].name_en) + (update ? " update" : " install") +
             " stopped, code " + std::to_string(code) + (why.empty() ? std::string() : ": " + why));
     char text[256];
-    std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %lu)%s%s" : "%s: installation stopped (code %lu)%s%s",
+    std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %d)%s%s" : "%s: installation stopped (code %d)%s%s",
                   name.c_str(), code, why.empty() ? "" : ": ", why.c_str());
-    error_ = Wide(text);
+    error_ = text;
   }
   error_until_ = ImGui::GetTime() + 8.0;
 }
@@ -678,11 +658,10 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
     std::string error;
     const std::filesystem::path report = WriteProblemReport(found_, launcher_dir_, german_, error);
     if (report.empty()) {
-      error_ = Wide(error);
+      error_ = error;
     } else {
-      error_ = (german_ ? L"Auf dem Desktop: " : L"On the desktop: ") + report.filename().wstring();
-      const std::wstring select = L"/select,\"" + report.wstring() + L"\"";
-      ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+      error_ = (german_ ? "Auf dem Desktop: " : "On the desktop: ") + PathUtf8(report.filename());
+      OpenInFileManager(report, true);
     }
     error_until_ = ImGui::GetTime() + 8.0;
   } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
@@ -699,7 +678,7 @@ void LauncherUi::ToggleFullscreen() {
 
 void LauncherUi::GameEnded() {
   if (running_key_.empty()) return;
-  AddPlaySeconds(running_profile_, running_key_, (GetTickCount64() - running_since_) / 1000);
+  AddPlaySeconds(running_profile_, running_key_, (MonotonicMs() - running_since_) / 1000);
   // And the saves as the session left them.
   if (hub_.auto_backup && running_game_ < found_.size()) {
     AutoBackup(running_profile_, AllGames()[running_game_], found_[running_game_].exe);
@@ -710,7 +689,7 @@ void LauncherUi::GameEnded() {
 
 void LauncherUi::GameRunning() {
   if (running_key_.empty() || !hub_.auto_backup || running_game_ >= found_.size()) return;
-  const uint64_t now = GetTickCount64();
+  const uint64_t now = MonotonicMs();
   if (now - last_auto_backup_ < 60ull * 60 * 1000) return;
   last_auto_backup_ = now;
   AutoBackup(running_profile_, AllGames()[running_game_], found_[running_game_].exe);
@@ -735,7 +714,7 @@ void LauncherUi::Start(size_t index) {
   if (index >= found_.size()) return;
   // A does what the card needs: a game without its disc opens the disc browser, one that isn't
   // installed or has another disc version says so (nothing could run).
-  auto say = [&](const wchar_t* de, const wchar_t* en) {
+  auto say = [&](const char* de, const char* en) {
     error_ = german_ ? de : en;
     error_until_ = ImGui::GetTime() + 6.0;
   };
@@ -743,28 +722,28 @@ void LauncherUi::Start(size_t index) {
     // Not installed: its setup, silently, when the launcher has one (games.h StartGameInstall);
     // the disc comes after, with the launcher's own import.
     if (install_process_) {
-      say(L"Ein Spiel wird gerade installiert", L"A game is being installed");
+      say("Ein Spiel wird gerade installiert", "A game is being installed");
       return;
     }
     if (Downloading()) {
-      say(L"Ein Spiel wird gerade heruntergeladen", L"A game is being downloaded");
+      say("Ein Spiel wird gerade heruntergeladen", "A game is being downloaded");
       return;
     }
     if (index < setups_.size() && !setups_[index].empty()) {
-      if (!BeginInstall(index, false)) say(L"Der Installer lie\x00DF sich nicht starten", L"Could not start the installer");
+      if (!BeginInstall(index, false)) say("Der Installer lie\xC3\x9F sich nicht starten", "Could not start the installer");
       return;
     }
-    say(L"Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
-        L"This game isn't installed (its installer from its project)");
+    say("Dieses Spiel ist nicht installiert (sein Installer aus seinem Projekt)",
+        "This game isn't installed (its installer from its project)");
     return;
   }
   // Its update running or queued ("Alle aktualisieren"): not while its files are being replaced.
   if (BeingUpdated(index)) {
-    say(L"Dieses Spiel wird gerade aktualisiert", L"This game is being updated");
+    say("Dieses Spiel wird gerade aktualisiert", "This game is being updated");
     return;
   }
   if ((index == ImaginatorsIndex() || index == SuperChargersIndex()) && language_import_.running()) {
-    say(L"Eine Sprache wird gerade eingespielt", L"A language is being put in");
+    say("Eine Sprache wird gerade eingespielt", "A language is being put in");
     return;
   }
   // A newer setup than the installed game: ask first (once a launch; "Erst spielen" plays).
@@ -779,16 +758,16 @@ void LauncherUi::Start(size_t index) {
       if (!import_.running()) browser_.Open();
       return;
     case DiscState::kOther:
-      say(L"Diese Disc-Version unterst\x00FCtzt das Spiel nicht (X: eine andere Disc einlesen)",
-          L"The game doesn't support this disc version (X: set up another disc)");
+      say("Diese Disc-Version unterst\xC3\xBCtzt das Spiel nicht (X: eine andere Disc einlesen)",
+          "The game doesn't support this disc version (X: set up another disc)");
       return;
     default:
-      say(L"Die Disc wird noch gepr\x00FC" L"ft", L"The disc is still being checked");
+      say("Die Disc wird noch gepr\xC3\xBC" "ft", "The disc is still being checked");
       return;
   }
   music_.Stop();
   void* process = nullptr;
-  std::wstring error;
+  std::string error;
   // The saves as they are before the game touches them (unchanged ones aren't copied again).
   if (hub_.auto_backup) AutoBackup(ActiveProfile(), AllGames()[index], found_[index].exe);
   if (StartGame(found_[index], error, &process)) {
@@ -798,11 +777,11 @@ void LauncherUi::Start(size_t index) {
     starting_since_ = ImGui::GetTime();
     running_key_ = AllGames()[index].key;
     running_profile_ = ActiveProfile();
-    running_since_ = GetTickCount64();
+    running_since_ = MonotonicMs();
     running_game_ = index;
     last_auto_backup_ = running_since_;
   } else {
-    error_ = (german_ ? L"Konnte nicht starten: " : L"Could not start: ") + error;
+    error_ = (german_ ? "Konnte nicht starten: " : "Could not start: ") + error;
     error_until_ = ImGui::GetTime() + 6.0;
   }
 }
@@ -1640,8 +1619,7 @@ bool LauncherUi::Draw(float width, float height) {
   if (const std::string summary = data_transfer_.TakeSummary(); !summary.empty()) {
     ShowToast(summary, 16.0);
     if (const std::filesystem::path file = data_transfer_.TakeExported(); !file.empty()) {
-      const std::wstring select = L"/select,\"" + file.wstring() + L"\"";
-      ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+      OpenInFileManager(file, true);
     } else {
       hub_ = LoadHubSettings();
       ApplyHubSettings();
@@ -1704,11 +1682,12 @@ bool LauncherUi::Draw(float width, float height) {
 void LauncherUi::UpdatePictureExport() {
   if (pictures_tried_.size() != found_.size()) pictures_tried_.assign(found_.size(), false);
   if (pictures_process_) {
-    const DWORD wait = WaitForSingleObject(pictures_process_, 0);
-    if (wait != WAIT_OBJECT_0 && ImGui::GetTime() - pictures_since_ < 200.0) return;
-    if (wait != WAIT_OBJECT_0) TerminateProcess(pictures_process_, 3);
-    CloseHandle(pictures_process_);
-    pictures_process_ = nullptr;
+    if (IsProcessRunning(pictures_process_, 0)) {
+      if (ImGui::GetTime() - pictures_since_ < 200.0) return;
+      TerminateAndCloseProcess(pictures_process_);
+    } else {
+      CloseProcessHandle(pictures_process_);
+    }
     hero_checked_ = -100.0;  // the cards' hero pictures looked for again
     CountAchievements();
   }
@@ -1735,11 +1714,12 @@ void LauncherUi::UpdatePictureExport() {
 void LauncherUi::UpdateTitleMusicExport() {
   if (export_tried_.size() != found_.size()) export_tried_.assign(found_.size(), false);
   if (export_process_) {
-    const DWORD wait = WaitForSingleObject(export_process_, 0);
-    if (wait != WAIT_OBJECT_0 && ImGui::GetTime() - export_since_ < 30.0) return;
-    if (wait != WAIT_OBJECT_0) TerminateProcess(export_process_, 3);
-    CloseHandle(export_process_);
-    export_process_ = nullptr;
+    if (IsProcessRunning(export_process_, 0)) {
+      if (ImGui::GetTime() - export_since_ < 30.0) return;
+      TerminateAndCloseProcess(export_process_);
+    } else {
+      CloseProcessHandle(export_process_);
+    }
   }
   if (!hub_.title_music || selected_ >= found_.size() || export_tried_[selected_]) return;
   const Found& f = found_[selected_];
@@ -1972,7 +1952,7 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
     ask_update_ = -1;
     if (!BeginInstall(index, true)) {
-      error_ = german_ ? L"Der Installer lie\x00DF sich nicht starten" : L"Could not start the installer";
+      error_ = german_ ? "Der Installer lie\xC3\x9F sich nicht starten" : "Could not start the installer";
       error_until_ = ImGui::GetTime() + 6.0;
     }
   } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
@@ -2308,7 +2288,7 @@ void LauncherUi::UpdateQueue() {
     text = german_ ? "Nicht aktualisiert: " : "Not updated: ";
     for (size_t i = 0; i < update_failed_.size(); ++i) text += (i ? ", " : "") + update_failed_[i];
   }
-  error_ = Wide(text);
+  error_ = text;
   error_until_ = ImGui::GetTime() + 8.0;
   update_total_ = 0;
   update_failed_.clear();
@@ -2396,7 +2376,7 @@ void LauncherUi::ApplyGamesFolder(const std::filesystem::path& chosen) {
     hub_screen_.SetActionLabel("choose_games_dir", en, de);
     hub_screen_.ShowMessage(line);
   } else {
-    error_ = Wide(line);
+    error_ = line;
     error_until_ = ImGui::GetTime() + 8.0;
   }
 }
@@ -2408,7 +2388,7 @@ void LauncherUi::ApplyDataFolder(const std::filesystem::path& picked) {
   const std::filesystem::path from = SkylandersDir();
   std::error_code ec;
   std::string message;
-  const std::wstring inside = from.native() + L"\\";
+  const auto inside = from.native() + std::filesystem::path::preferred_separator;
   if (to == from || std::filesystem::equivalent(to, from, ec)) {
     message = german_ ? "Das ist schon der Spieldaten-Ordner" : "That is the data folder already";
   } else if (to.native().starts_with(inside)) {
@@ -2425,7 +2405,7 @@ void LauncherUi::ApplyDataFolder(const std::filesystem::path& picked) {
   if (hub_screen_.is_open()) {
     hub_screen_.ShowMessage(message);
   } else {
-    error_ = Wide(message);
+    error_ = message;
     error_until_ = ImGui::GetTime() + 8.0;
   }
 }
@@ -2468,7 +2448,7 @@ void LauncherUi::TogglePortableData() {
   if (hub_screen_.is_open()) {
     hub_screen_.ShowMessage(message);
   } else {
-    error_ = Wide(message);
+    error_ = message;
     error_until_ = ImGui::GetTime() + 8.0;
   }
 }
@@ -2545,7 +2525,7 @@ void LauncherUi::TakeDataMove() {
     hub_screen_.SetActionLabel("choose_games_dir", en, de);
     hub_screen_.ShowMessage(message);
   } else {
-    error_ = Wide(message);
+    error_ = message;
     error_until_ = ImGui::GetTime() + 8.0;
   }
 }
@@ -2694,7 +2674,7 @@ void LauncherUi::UpdateDownload() {
   if (state == 3 || !BeginInstall(game, work_->update)) {
     HubWarn("download: " + std::string(AllGames()[game].name_en) + (state == 3 ? ": the download failed" : ": its setup didn't start"));
     if (update_total_ && work_->update) update_failed_.push_back(name);
-    error_ = Wide(name + (german_ ? ": Der Download ist fehlgeschlagen" : ": the download failed"));
+    error_ = name + (german_ ? ": Der Download ist fehlgeschlagen" : ": the download failed");
     error_until_ = ImGui::GetTime() + 8.0;
   }
 }
@@ -2740,37 +2720,31 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
     if (state == 2 && portable_) {
       // The portable launcher swaps its own files (portable.h) and starts the new one.
       work_->download = 0;
-      wchar_t self[MAX_PATH] = {};
-      GetModuleFileNameW(nullptr, self, MAX_PATH);
-      const std::filesystem::path exe_name = std::filesystem::path(self).filename();
+      const std::filesystem::path exe_name = SelfExePath().filename();
       std::string why;
       if (ApplyPortableUpdate(work_->file, launcher_dir_, exe_name, german_, why)) {
         if (StartLauncher(launcher_dir_ / exe_name)) return false;  // the launcher quits; the new one runs
         why = german_ ? "Das neue Core of Light lie\xC3\x9F sich nicht starten; starte es bitte selbst." : "Couldn't start the new launcher; please start it yourself.";
       }
-      error_ = Wide(why);
+      error_ = why;
       error_until_ = ImGui::GetTime() + 8.0;
       hub_update_put_off_ = true;
     } else if (state == 2) {
       work_->download = 0;
-      STARTUPINFOW startup = {sizeof(startup)};
-      PROCESS_INFORMATION info = {};
       // Into the folder this launcher runs from: under Wine the setup took its default folder in the
       // prefix and started the new launcher there, while Steam's shortcut pointed at the old one (a
       // colleague's Bazzite, noted in #19).
-      std::wstring command = L"\"" + work_->file.wstring() + L"\" /SILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH=1 \"/DIR=" +
-                             launcher_dir_.wstring() + L"\"";
-      if (CreateProcessW(work_->file.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &info)) {
-        CloseHandle(info.hThread);
-        CloseHandle(info.hProcess);
+      if (void* child = SpawnProcess(work_->file, {"/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH=1",
+                                                   "/DIR=" + PathUtf8(launcher_dir_)})) {
+        CloseProcessHandle(child);
         return false;  // the launcher quits; the setup replaces it and starts the new one
       }
-      error_ = german_ ? L"Das Update lie\x00DF sich nicht starten" : L"Could not start the update";
+      error_ = german_ ? "Das Update lie\xC3\x9F sich nicht starten" : "Could not start the update";
       error_until_ = ImGui::GetTime() + 8.0;
       hub_update_put_off_ = true;
     } else if (state == 3) {
       work_->download = 0;
-      error_ = german_ ? L"Der Download des Updates ist fehlgeschlagen" : L"The update's download failed";
+      error_ = german_ ? "Der Download des Updates ist fehlgeschlagen" : "The update's download failed";
       error_until_ = ImGui::GetTime() + 8.0;
       hub_update_put_off_ = true;
     }
@@ -3009,11 +2983,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
       if (report.empty()) {
         hub_screen_.ShowMessage(error);
       } else {
-        const std::u8string file = report.filename().u8string();
-        hub_screen_.ShowMessage((german_ ? "Auf dem Desktop: " : "On the desktop: ") +
-                                std::string(file.begin(), file.end()));
-        const std::wstring select = L"/select,\"" + report.wstring() + L"\"";
-        ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+        hub_screen_.ShowMessage((german_ ? "Auf dem Desktop: " : "On the desktop: ") + PathUtf8(report.filename()));
+        OpenInFileManager(report, true);
       }
     }
     return true;
@@ -3372,8 +3343,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // A message (a game that didn't start, a disc that isn't set up): above the hints, where the
   // figure line is (the hints fill the row's width).
   if (!error_.empty() && ImGui::GetTime() < error_until_) {
-    const std::string text = Utf8(error_);
-    Text(dl, regular_, 20 * u, {48 * u, height - 124 * u}, Rgba(240, 110, 110), text.c_str(), width - 96 * u);
+    Text(dl, regular_, 20 * u, {48 * u, height - 124 * u}, Rgba(240, 110, 110), error_.c_str(), width - 96 * u);
   }
   // A new platinum trophy: a banner at the top, fading in and out.
   if (platinum_new_ >= 0 && size_t(platinum_new_) < AllGames().size() && ImGui::GetTime() < platinum_until_) {

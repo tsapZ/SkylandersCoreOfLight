@@ -1,16 +1,15 @@
 #include "saves_ui.h"
 #include "hints.h"
 
-#include <windows.h>
-#include <shellapi.h>
-
 #include <algorithm>
 #include <cstdio>
+#include <ctime>
 #include <string>
 
 #include "games.h"
 #include "imgui.h"
 #include "nxe_art.h"
+#include "platform.h"
 #include "profiles.h"
 
 namespace coreoflight {
@@ -44,33 +43,38 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
 }
 
 // A local date's day number, to tell today and yesterday.
-int64_t DayNumber(const SYSTEMTIME& t) {
-  SYSTEMTIME day = t;
-  day.wHour = day.wMinute = day.wSecond = day.wMilliseconds = 0;
-  FILETIME ft{};
-  SystemTimeToFileTime(&day, &ft);
-  return int64_t((uint64_t(ft.dwHighDateTime) << 32 | ft.dwLowDateTime) / 864000000000ULL);
+int64_t DayNumber(const std::tm& t) {
+  int64_t y = int64_t(t.tm_year) + 1900;
+  const unsigned m = unsigned(t.tm_mon + 1);
+  const unsigned d = unsigned(t.tm_mday);
+  y -= m <= 2;
+  const int64_t era = (y >= 0 ? y : y - 399) / 400;
+  const unsigned yoe = unsigned(y - era * 400);
+  const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + int64_t(doe) - 719468;
 }
 
 // A Windows file time as the player reads it: "heute, 22:32", "gestern, 08:15" or "23.10.2026, 12:30"
 // ("today, 22:32", "yesterday, ...", "2026-10-23, 12:30").
 std::string When(uint64_t file_time, bool german) {
-  FILETIME ft{DWORD(file_time & 0xFFFFFFFF), DWORD(file_time >> 32)};
-  SYSTEMTIME utc{}, local{}, now{};
-  if (!file_time || !FileTimeToSystemTime(&ft, &utc) || !SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local)) {
+  std::tm local{};
+  if (!file_time || !FileTimeToLocalTm(file_time, local)) {
     return "?";
   }
-  GetLocalTime(&now);
+  const std::tm now = ToLocalTm(std::time(nullptr));
   char clock[8];
-  std::snprintf(clock, sizeof(clock), "%02u:%02u", local.wHour, local.wMinute);
+  std::snprintf(clock, sizeof(clock), "%02d:%02d", local.tm_hour, local.tm_min);
   const int64_t days = DayNumber(now) - DayNumber(local);
   if (days == 0) return std::string(german ? "heute, " : "today, ") + clock;
   if (days == 1) return std::string(german ? "gestern, " : "yesterday, ") + clock;
   char text[40];
   if (german) {
-    std::snprintf(text, sizeof(text), "%02u.%02u.%04u, %s", local.wDay, local.wMonth, local.wYear, clock);
+    std::snprintf(text, sizeof(text), "%02d.%02d.%04d, %s", local.tm_mday, local.tm_mon + 1, local.tm_year + 1900,
+                  clock);
   } else {
-    std::snprintf(text, sizeof(text), "%04u-%02u-%02u, %s", local.wYear, local.wMonth, local.wDay, clock);
+    std::snprintf(text, sizeof(text), "%04d-%02d-%02d, %s", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+                  clock);
   }
   return text;
 }
@@ -95,11 +99,7 @@ std::string CopyKind(const SaveCopy& c, bool german) {
 }
 
 // When a copy was made: its folder's last write, as a Windows file time (0 if unknown).
-uint64_t FolderTime(const std::filesystem::path& folder) {
-  WIN32_FILE_ATTRIBUTE_DATA data{};
-  if (!GetFileAttributesExW(folder.c_str(), GetFileExInfoStandard, &data)) return 0;
-  return uint64_t(data.ftLastWriteTime.dwHighDateTime) << 32 | data.ftLastWriteTime.dwLowDateTime;
-}
+uint64_t FolderTime(const std::filesystem::path& folder) { return PathFileTimeTicks(folder); }
 
 std::string VersionCount(size_t n, bool german) {
   if (german) return n == 1 ? "1 \xC3\xA4ltere Version" : std::to_string(n) + " \xC3\xA4ltere Versionen";
@@ -212,7 +212,7 @@ void SavesScreen::Draw(float width, float height) {
       std::error_code ec;
       const std::filesystem::path dir = BackupsDir(ActiveProfile(), game);
       std::filesystem::create_directories(dir, ec);
-      ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+      OpenInFileManager(dir);
     }
     // B: from the versions back to the saves, from the saves out.
     if (back) {

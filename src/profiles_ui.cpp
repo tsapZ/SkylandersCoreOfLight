@@ -15,6 +15,7 @@
 #include "achievements_ui.h"  // DrawPlatinumTrophy
 #include "imgui.h"
 #include "imgui_internal.h"  // ImTextCharToUtf8
+#include "platform.h"
 #include "portal/figure_file.h"
 #include "textures.h"
 
@@ -77,7 +78,7 @@ std::vector<fs::path> FigureFiles(const Profile& p) {
     if (ec) break;
     const auto ext = it->path().extension();
     if (!it->is_regular_file(ec) || (ext != ".dump" && ext != ".sky" && ext != ".bin")) continue;
-    if (it->path().wstring().find(L"\\real\\") != std::wstring::npos) continue;
+    if (IsRealToySubpath(it->path())) continue;
     files.push_back(it->path());
   }
   return files;

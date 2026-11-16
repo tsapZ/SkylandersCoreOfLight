@@ -1,8 +1,5 @@
 #include "data_transfer.h"
 
-#include <windows.h>
-#include <shlobj.h>
-
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -15,6 +12,8 @@
 
 #include "crc32.h"
 #include "hub_log.h"
+#include "platform.h"
+#include "portal/data_folder.h"
 
 namespace coreoflight {
 namespace fs = std::filesystem;
@@ -178,16 +177,9 @@ bool SafeRelative(const std::string& name, fs::path& out) {
 }  // namespace
 
 fs::path ExportFolder() {
-  auto known = [](REFKNOWNFOLDERID id) {
-    PWSTR path = nullptr;
-    fs::path out;
-    if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &path))) out = path;
-    CoTaskMemFree(path);
-    return out;
-  };
   // --documents (a test on stand-in data): that folder, so a test never writes onto the desktop.
-  if (DocumentsDir() != known(FOLDERID_Documents)) return DocumentsDir();
-  return known(FOLDERID_Desktop);
+  if (DocumentsDir() != skylanders::DocumentsFolder()) return DocumentsDir();
+  return DesktopDir();
 }
 
 void DataTransfer::StartExport(const std::vector<Found>& games, bool german) {
