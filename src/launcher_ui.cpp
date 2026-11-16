@@ -189,94 +189,108 @@ void DrawCardFrame(ImDrawList* dl, ImVec2 a, ImVec2 b, float r, float s, bool se
   }
 }
 
-// The title's half width (the small SKYLANDERS or the stone plate under it, whichever is wider) and its
-// centre: the window's middle, or left of the profile and the controllers at the top right when
-// the window is narrow. `display` is the titles' font (Lilita One).
-float TitlePlateHalf(ImFont* display, float u) {
-  return std::max(TextWidth(display, 34 * u, "SKYLANDERS") * 0.5f + 8 * u,
-                  TextWidth(display, 62 * u, "CORE OF LIGHT") * 0.5f + 70 * u);
+// The title's half width (the logo, or the stone plate without it) and its centre: the window's middle, or
+// left of the profile and the controllers at the top right when the window is narrow.
+constexpr float kLogoHeight = 196;  // the logo's height, in u
+float TitlePlateHalf(ImFont* bold, float u) {
+  return std::max(kLogoHeight * u * 770.0f / 366.0f * 0.5f, TextWidth(bold, 54 * u, "CORE OF LIGHT") * 0.5f + 64 * u);
 }
 float TitlePlateCenter(ImFont* bold, float width, float badge_left, float u) {
   return std::max(TitlePlateHalf(bold, u) + 24 * u, std::min(width * 0.5f, badge_left - TitlePlateHalf(bold, u) - 24 * u));
 }
 
-// Text with an outline: drawn in the outline colour around it first.
-void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fill, ImU32 outline, float thick,
-                  const char* text) {
-  for (int k = 0; k < 16; ++k) {
-    const float a = float(k) * 0.3926991f;
-    Text(dl, font, size, {pos.x + std::cos(a) * thick, pos.y + std::sin(a) * thick}, outline, text);
+// A band between two edges (`top(t)` and `bottom(t)` give their y over t = -1 .. 1, x = cx + t * half): dark
+// blue, pointed at both ends, morpheus284's stone strip along both edges (#78, CC BY 4.0: border_top.png, a
+// piece of his frame's top edge cut between two of its notches so it repeats without a seam, 156x32). The
+// pieces are laid end to end at the strip's own shape, a whole number of them over the band, so the stones
+// stay sharp (the owner, 2026-11-16: stretched over the whole band they looked pixelated). `th`: the strip's
+// thickness; mostly outside the band, its shadow side inwards.
+template <typename Top, typename Bottom>
+void DrawStoneBand(ImDrawList* dl, float cx, float half, Top top, Bottom bottom, float th, float u) {
+  constexpr int kSteps = 64;
+  const ImU32 fill = Rgba(22, 46, 98, 252);
+  // The fill in pieces without anti-aliasing: with it, each piece's soft rim showed as a thin line between
+  // the pieces (the owner saw such lines, 2026-11-16); the stones cover the outer edges.
+  const ImDrawListFlags flags = dl->Flags;
+  dl->Flags &= ~ImDrawListFlags_AntiAliasedFill;
+  for (int i = 0; i < kSteps; ++i) {
+    const float t0 = -1.0f + 2.0f * i / kSteps, t1 = -1.0f + 2.0f * (i + 1) / kSteps;
+    dl->AddQuadFilled({cx + t0 * half, top(t0)}, {cx + t1 * half, top(t1)}, {cx + t1 * half, bottom(t1)},
+                      {cx + t0 * half, bottom(t0)}, fill);
   }
-  Text(dl, font, size, pos, fill, text);
+  dl->Flags = flags;
+  // The pointed ends, clockwise; their two sides in the stones' blue.
+  const float tip = (bottom(-1.0f) - top(-1.0f)) * 0.42f;
+  const ImVec2 lp{cx - half - tip, (top(-1.0f) + bottom(-1.0f)) * 0.5f}, lt{cx - half, top(-1.0f)},
+      lb{cx - half, bottom(-1.0f)};
+  const ImVec2 rp{cx + half + tip, (top(1.0f) + bottom(1.0f)) * 0.5f}, rt{cx + half, top(1.0f)},
+      rb{cx + half, bottom(1.0f)};
+  dl->AddTriangleFilled(lp, lt, lb, fill);
+  dl->AddTriangleFilled(rt, rp, rb, fill);
+  const ImU32 rim = Rgba(92, 150, 214);
+  const ImVec2 left[3] = {{lt.x + 1, lt.y - th * 0.15f}, lp, {lb.x + 1, lb.y + th * 0.15f}};
+  const ImVec2 right[3] = {{rt.x - 1, rt.y - th * 0.15f}, rp, {rb.x - 1, rb.y + th * 0.15f}};
+  dl->AddPolyline(left, 3, rim, 0, th * 0.45f);
+  dl->AddPolyline(right, 3, rim, 0, th * 0.45f);
+  const ImTextureID stone = LoadUiTexture(kUiStoneEdge);
+  if (!stone) {  // without the picture: light lines on the edges
+    std::vector<ImVec2> edge;
+    for (int side = 0; side < 2; ++side) {
+      edge.clear();
+      for (int i = 0; i <= kSteps; ++i) {
+        const float t = -1.0f + 2.0f * i / kSteps;
+        edge.push_back({cx + t * half, side ? bottom(t) : top(t)});
+      }
+      dl->AddPolyline(edge.data(), int(edge.size()), rim, 0, 3.5f * u);
+    }
+    return;
+  }
+  const float len = 2 * half;
+  const int tiles = std::max(1, int(std::lround(len / (th * 156.0f / 32.0f))));
+  const float tile = len / float(tiles);
+  constexpr int kPer = 10;  // pieces per tile, to follow a curve
+  for (int k = 0; k < tiles; ++k) {
+    for (int j = 0; j < kPer; ++j) {
+      const float x0 = -half + tile * float(k) + tile * float(j) / kPer, x1 = x0 + tile / kPer;
+      const float t0 = x0 / half, t1 = x1 / half;
+      const float u0 = float(j) / kPer, u1 = float(j + 1) / kPer;
+      dl->AddImageQuad(stone, {cx + x0, top(t0) - th * 0.6f}, {cx + x1, top(t1) - th * 0.6f},
+                       {cx + x1, top(t1) + th * 0.4f}, {cx + x0, top(t0) + th * 0.4f}, {u0, 0}, {u1, 0}, {u1, 1},
+                       {u0, 1});
+      dl->AddImageQuad(stone, {cx + x0, bottom(t0) + th * 0.6f}, {cx + x1, bottom(t1) + th * 0.6f},
+                       {cx + x1, bottom(t1) - th * 0.4f}, {cx + x0, bottom(t0) - th * 0.4f}, {u0, 0}, {u1, 0},
+                       {u1, 1}, {u0, 1});
+    }
+  }
 }
 
-// The title as in the concept (#78; the owner 2026-11-13: the Skylanders logo from the game): the logo
-// from the player's own Spyro's Adventure disc, whose dashboard background (nxebg.jpg, 1920x1080) has it
-// on plain dark blue (16, 40, 88) at 570,350 (770x366); that blue made clear at run time, so nothing of
-// it is in the repository. Its "SPYRO'S ADVENTURE" is covered by our CORE OF LIGHT banner, bent like the
-// subtitle (the owner, 2026-11-13: "so nen Bogen drum"); the elements' symbols stay under it. False without
-// the picture (no Spyro's Adventure set up, --no_game_art): then the lettering below is drawn instead.
-// Not drawn since 2026-11-16 (the owner: the disc logo with the banner looked ugly, and without a disc
-// there was none); kept for a later look.
-[[maybe_unused]] bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background,
-                                    float cx, float u) {
+// The title as in the concept (#78; the owner 2026-11-13 and again 2026-11-16: the Skylanders logo from the
+// game): the logo from the player's own Spyro's Adventure disc, whose dashboard background (nxebg.jpg,
+// 1920x1080) has it on plain dark blue (16, 40, 88) at 570,350 (770x366); that blue made clear at run time,
+// so nothing of it is in the repository. Its "SPYRO'S ADVENTURE" is covered by our CORE OF LIGHT band, bent
+// like the subtitle, with stone edges (the owner, 2026-11-16: no gold dashes, stone edges, sharp); the
+// elements' symbols stay under it. False without the picture (no Spyro's Adventure set up, --no_game_art):
+// then the plate below is drawn instead.
+bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background, float cx, float u) {
   const ImTextureID logo = LoadTextureKeyed(ssa_background, 570, 350, 770, 366, 0x102858, 10, 28);
   if (!logo) return false;
-  const float lh = 196 * u, lw = lh * 770.0f / 366.0f;
+  const float lh = kLogoHeight * u, lw = lh * 770.0f / 366.0f;
   const ImVec2 a{cx - lw * 0.5f, 12 * u};
   dl->AddImage(logo, a, {a.x + lw, a.y + lh});
-  // The banner follows the subtitle's arc (measured on a grid, 2026-11-13): its letters run from 14.5 % to
+  // The band follows the subtitle's arc (measured on a grid, 2026-11-13): its letters run from 14.5 % to
   // 86 % of the logo's width, 49-65 % of its height in the middle and 56-78 % at the ends, bigger there.
-  // So the band's edges are parabolas over t = -1 .. 1 (left to right), a little beyond the letters, with a
-  // point at each end; dark blue with a light rim, CORE OF LIGHT in gold along its middle.
+  // So the band's edges are parabolas over t = -1 .. 1 (left to right), a little beyond the letters.
   const float half = lw * 0.375f;
   auto top = [&](float t) { return a.y + lh * (0.455f + 0.09f * t * t); };
   auto bottom = [&](float t) { return a.y + lh * (0.672f + 0.125f * t * t); };
   auto middle = [&](float t) { return (top(t) + bottom(t)) * 0.5f; };
-  constexpr int kSteps = 48;
-  for (int i = 0; i < kSteps; ++i) {
-    const float t0 = -1.0f + 2.0f * i / kSteps, t1 = -1.0f + 2.0f * (i + 1) / kSteps;
-    const float xa = cx + t0 * half, xb = cx + t1 * half;
-    dl->AddQuadFilled({xa, top(t0)}, {xb, top(t1)}, {xb, bottom(t1)}, {xa, bottom(t0)}, Rgba(22, 46, 98, 252));
-  }
-  const float tip = lw * 0.03f;
-  const ImVec2 left{cx - half - tip, middle(-1)}, right{cx + half + tip, middle(1)};
-  dl->AddTriangleFilled({cx - half, top(-1)}, left, {cx - half, bottom(-1)}, Rgba(22, 46, 98, 252));
-  dl->AddTriangleFilled({cx + half, top(1)}, right, {cx + half, bottom(1)}, Rgba(22, 46, 98, 252));
-  // The rim: morpheus284's stone edge (#78, CC BY 4.0; the owner, 2026-11-13: "mehr mit diesem Stein-Muster")
-  // laid along the top and the bottom, its outer side outwards, the whole strip over the banner's length.
-  // Under it, and alone without that picture: a light line along the top, round the right point, back along
-  // the bottom, round the left one.
-  std::vector<ImVec2> rim;
-  rim.push_back(left);
-  for (int i = 0; i <= kSteps; ++i) {
-    const float t = -1.0f + 2.0f * i / kSteps;
-    rim.push_back({cx + t * half, top(t)});
-  }
-  rim.push_back(right);
-  for (int i = kSteps; i >= 0; --i) {
-    const float t = -1.0f + 2.0f * i / kSteps;
-    rim.push_back({cx + t * half, bottom(t)});
-  }
-  dl->AddPolyline(rim.data(), int(rim.size()), Rgba(150, 190, 240), ImDrawFlags_Closed, 3.5f * u);
-  if (const ImTextureID stone = LoadUiTexture(kUiStoneEdge)) {
-    const float th = lh * 0.065f;  // the strip's thickness
-    for (int i = 0; i < kSteps; ++i) {
-      const float t0 = -1.0f + 2.0f * i / kSteps, t1 = -1.0f + 2.0f * (i + 1) / kSteps;
-      const float u0 = float(i) / kSteps, u1 = float(i + 1) / kSteps;
-      const float xa = cx + t0 * half, xb = cx + t1 * half;
-      dl->AddImageQuad(stone, {xa, top(t0) - th * 0.6f}, {xb, top(t1) - th * 0.6f}, {xb, top(t1) + th * 0.4f},
-                       {xa, top(t0) + th * 0.4f}, {u0, 0}, {u1, 0}, {u1, 1}, {u0, 1});
-      dl->AddImageQuad(stone, {xa, bottom(t0) + th * 0.6f}, {xb, bottom(t1) + th * 0.6f}, {xb, bottom(t1) - th * 0.4f},
-                       {xa, bottom(t0) - th * 0.4f}, {u0, 0}, {u1, 0}, {u1, 1}, {u0, 1});
-    }
-  }
+  DrawStoneBand(dl, cx, half, top, bottom, lh * 0.105f, u);
   // CORE OF LIGHT letter by letter, each on the band's middle line where it stands (no turning: the arc is
-  // gentle where the name is), between two gold lines that follow the arc.
+  // gentle where the name is).
   const char* title = "CORE OF LIGHT";
   const float band = bottom(0) - top(0);
-  float size = band * 0.72f;
-  while (TextWidth(bold, size, title) > half * 1.25f && size > 8) size -= 1;
+  float size = band * 0.76f;
+  while (TextWidth(bold, size, title) > half * 1.5f && size > 8) size -= 1;
   const float tw = TextWidth(bold, size, title);
   float x = cx - tw * 0.5f;
   for (const char* p = title; *p; ++p) {
@@ -287,38 +301,19 @@ void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fi
     Text(dl, bold, size, {x, y}, kGold, letter);
     x += w;
   }
-  for (int side = -1; side <= 1; side += 2) {
-    std::vector<ImVec2> line;
-    const float from = (tw * 0.5f + band * 0.25f) / half, to = (tw * 0.5f + band * 1.05f) / half;
-    for (int i = 0; i <= 8; ++i) {
-      const float t = side * (from + (to - from) * i / 8.0f);
-      line.push_back({cx + t * half, middle(t)});
-    }
-    dl->AddPolyline(line.data(), int(line.size()), kGold, 0, 3 * u);
-  }
   return true;
 }
 
-void DrawBottomBar(ImDrawList* dl, ImVec2 a, ImVec2 b, float u);
-
-// The title at the top, centred on `cx` (the owner, 2026-11-16: no logo from a disc, which looked ugly and
-// was missing without one; stone edges round CORE OF LIGHT; a lettering like the games'): a small
-// SKYLANDERS over CORE OF LIGHT on a stone plate (morpheus284's bar, as at the bottom), both in Lilita One
-// (`display`, SIL OFL). Our own lettering, nobody's logo, the same with or without discs. Returns the
-// plate's bottom.
-float DrawTitlePlate(ImDrawList* dl, ImFont* display, float cx, float u) {
-  const char* over = "SKYLANDERS";
-  const float os = 34 * u, ow = TextWidth(display, os, over), oy = 14 * u;
-  OutlinedText(dl, display, os, {cx - ow * 0.5f, oy}, Rgba(225, 240, 255), Rgba(14, 40, 92), 3 * u, over);
+// Without the logo (no Spyro's Adventure set up, --no_game_art): CORE OF LIGHT in gold on a straight band with
+// the same stone edges, centred on `cx`. Our own lettering, nobody's logo. Returns the band's bottom.
+float DrawTitlePlate(ImDrawList* dl, ImFont* bold, float cx, float u) {
   const char* title = "CORE OF LIGHT";
-  const float size = 62 * u, tw = TextWidth(display, size, title);
-  const float top = oy + os + 4 * u, h = 96 * u, half = tw * 0.5f + 70 * u;
-  DrawBottomBar(dl, {cx - half, top}, {cx + half, top + h}, u);
-  const float ty = top + (h - size) * 0.5f - 2 * u;
-  // A soft shadow under the gold, then the gold with a dark brown rim.
-  OutlinedText(dl, display, size, {cx - tw * 0.5f, ty + 4 * u}, Rgba(20, 12, 0, 150), Rgba(20, 12, 0, 150), 3 * u,
-               title);
-  OutlinedText(dl, display, size, {cx - tw * 0.5f, ty}, kGold, Rgba(70, 38, 0), 3 * u, title);
+  const float size = 54 * u, tw = TextWidth(bold, size, title);
+  const float top = 28 * u, h = 80 * u, half = tw * 0.5f + 40 * u;
+  DrawStoneBand(dl, cx, half, [&](float) { return top; }, [&](float) { return top + h; }, 21 * u, u);
+  const float ty = top + (h - size) * 0.5f;
+  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 3 * u}, Rgba(60, 35, 0, 220), title);
+  Text(dl, bold, size, {cx - tw * 0.5f, ty}, kGold, title);
   return top + h;
 }
 
@@ -3074,10 +3069,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // with our banner, or the lettering drawn from shapes without it.
   const bool profile_clicked = DrawProfileBadge(width, u);
   DrawUpdateAll(width, u);  // "Alle aktualisieren", while there are updates
-  // Our own title, the same for everyone (the owner, 2026-11-16), in the titles' font.
-  ImFont* display = display_ ? display_ : bold_;
-  const float title_cx = TitlePlateCenter(display, width, badge_left_, u);
-  DrawTitlePlate(dl, display, title_cx, u);
+  const float title_cx = TitlePlateCenter(bold_, width, badge_left_, u);
+  if (!DrawTitleLogo(dl, bold_, background_art_.empty() ? std::filesystem::path() : background_art_[0], title_cx, u)) {
+    DrawTitlePlate(dl, bold_, title_cx, u);
+  }
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();

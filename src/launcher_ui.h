@@ -38,8 +38,6 @@ void SetStartBackdropFromGame(bool on);
 class LauncherUi {
  public:
   void Init(const std::filesystem::path& launcher_dir, ImFont* regular, ImFont* bold);
-  // The titles' font (Lilita One from the launcher's fonts folder); without it the bold one.
-  void SetDisplayFont(ImFont* display) { display_ = display; }
   // Draws a frame into the whole window. Returns false when the launcher should close.
   bool Draw(float width, float height);
   // A game was started: its process handle, which main.cpp waits for (the launcher hides
@@ -99,7 +97,6 @@ class LauncherUi {
   std::vector<Found> found_;
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;
-  ImFont* display_ = nullptr;  // SetDisplayFont
   bool german_ = false;
   size_t selected_ = 0;
   // DrawStartBackdrop: the game whose picture is shown, the one it fades over from, since when.

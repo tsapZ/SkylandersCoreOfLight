@@ -26,7 +26,7 @@ constexpr int kUiCardBase = 101;
 constexpr int kUiCardLight = 102;
 constexpr int kUiOptionBar = 103;
 constexpr int kUiBackground = 104;
-constexpr int kUiStoneEdge = 105;  // a frame's top edge, a straight stone strip
+constexpr int kUiStoneEdge = 105;  // a piece of a frame's top edge, notch to notch (repeats), 156x32
 ImTextureID LoadUiTexture(int resource_id);
 
 // A part of the picture in `path` (x, y, w, h in its pixels) with the colour `key_rgb` (0xRRGGBB) made clear:
