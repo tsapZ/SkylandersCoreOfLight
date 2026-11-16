@@ -59,10 +59,12 @@ const std::vector<Game> kGames = {
      "{9A774956-7256-4E2C-A3D6-418903FC71B6}"},
     {"superchargers", "SuperChargers", "SuperChargers", 2015, "superchargersrecompiled.exe",
      "SuperChargersRecomp", "SuperChargers Recompiled",
-     // The European English / German disc and the Spanish / Italian one (the same build).
+     // The European English / German, Spanish / Italian, and French / Dutch discs.
      "02ff6672d460c9aaa54e69d584af67a7138c6c93cde5e04b0da4284207be7c61,"
      "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc,"
-     "82450000:3140330d024070a570409f8ebb651593ffdf5e038495721f2ca3538dbecd4671", 3412, 16640,
+     "c6b1d7a32195ace94f31a49d750b06b01c817ed70ce3a41f3d977d3d80241f10,"
+     "82450000:3140330d024070a570409f8ebb651593ffdf5e038495721f2ca3538dbecd4671,"
+     "82450000:d379ae251fb9336a3ea4aadd46bfb6f0a51d5bef2cbc26b704e3c43c95234f7f", 3412, 16640,
      "{44F04CDA-C049-4558-AAA6-25A6E7932D71}"},
     {"imaginators", "Imaginators", "Imaginators", 2016, "imaginatorsrecompiled.exe",
      "ImaginatorsRecomp", "Imaginators Recompiled",
