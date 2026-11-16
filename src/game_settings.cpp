@@ -17,29 +17,50 @@ namespace {
 namespace fs = std::filesystem;
 
 // The little JSON the games write (settings_schema.h): objects, arrays, strings, true / false.
+struct JsonMember;
 struct Json {
   enum class Kind { kNull, kBool, kNumber, kString, kArray, kObject } kind = Kind::kNull;
   bool b = false;
   double number = 0;
   std::string text;
   std::vector<Json> items;
-  std::vector<std::pair<std::string, Json>> members;
+  std::vector<JsonMember> members;
 
-  const Json* Get(const std::string& key) const {
-    for (const auto& [k, v] : members) {
-      if (k == key) return &v;
-    }
-    return nullptr;
-  }
-  std::string Str(const std::string& key) const {
-    const Json* v = Get(key);
-    return v && v->kind == Kind::kString ? v->text : std::string();
-  }
-  bool Bool(const std::string& key) const {
-    const Json* v = Get(key);
-    return v && v->kind == Kind::kBool && v->b;
-  }
+  Json();
+  ~Json();
+  Json(const Json&);
+  Json(Json&&) noexcept;
+  Json& operator=(const Json&);
+  Json& operator=(Json&&) noexcept;
+
+  const Json* Get(const std::string& key) const;
+  std::string Str(const std::string& key) const;
+  bool Bool(const std::string& key) const;
 };
+struct JsonMember {
+  std::string first;
+  Json second;
+};
+Json::Json() = default;
+Json::~Json() = default;
+Json::Json(const Json&) = default;
+Json::Json(Json&&) noexcept = default;
+Json& Json::operator=(const Json&) = default;
+Json& Json::operator=(Json&&) noexcept = default;
+const Json* Json::Get(const std::string& key) const {
+  for (const auto& [k, v] : members) {
+    if (k == key) return &v;
+  }
+  return nullptr;
+}
+std::string Json::Str(const std::string& key) const {
+  const Json* v = Get(key);
+  return v && v->kind == Kind::kString ? v->text : std::string();
+}
+bool Json::Bool(const std::string& key) const {
+  const Json* v = Get(key);
+  return v && v->kind == Kind::kBool && v->b;
+}
 
 class Parser {
  public:
@@ -120,7 +141,7 @@ class Parser {
         if (!key || !Eat(':')) return std::nullopt;
         auto item = Value();
         if (!item) return std::nullopt;
-        v.members.emplace_back(std::move(*key), std::move(*item));
+        v.members.push_back({std::move(*key), std::move(*item)});
       } while (Eat(','));
       if (!Eat('}')) return std::nullopt;
     } else if (c == '[') {

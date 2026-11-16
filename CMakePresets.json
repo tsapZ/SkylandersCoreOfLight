@@ -7,7 +7,33 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "linux-amd64-release",
+      "displayName": "Linux x64 Release (Clang + Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/linux-amd64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "linux-amd64-debug",
+      "displayName": "Linux x64 Debug (Clang + Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/linux-amd64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
     }
   ],
-  "buildPresets": [{ "name": "release", "configurePreset": "release" }]
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" },
+    { "name": "linux-amd64-release", "configurePreset": "linux-amd64-release" },
+    { "name": "linux-amd64-debug", "configurePreset": "linux-amd64-debug" }
+  ]
 }

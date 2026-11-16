@@ -1,9 +1,16 @@
 #include "disc_import.h"
 
+#ifdef _WIN32
 #include <windows.h>
 #include <shobjidl.h>
+#else
+#include <SDL3/SDL.h>
+#include <atomic>
+#include <mutex>
+#endif
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -32,7 +39,27 @@ bool HasDiscPath(const fs::path& dir, const std::vector<std::string>& parts, siz
   if (i == parts.size()) return fs::exists(dir, ec);
   if (parts[i] != "*") {
     const std::u8string u8(reinterpret_cast<const char8_t*>(parts[i].data()), parts[i].size());
-    return HasDiscPath(dir / fs::path(u8), parts, i + 1);
+    const fs::path exact = dir / fs::path(u8);
+    if (fs::exists(exact, ec)) return HasDiscPath(exact, parts, i + 1);
+#ifdef _WIN32
+    return false;
+#else
+    auto eq_ci = [](std::string_view a, std::string_view b) {
+      if (a.size() != b.size()) return false;
+      for (size_t k = 0; k < a.size(); ++k) {
+        if (std::tolower(static_cast<unsigned char>(a[k])) != std::tolower(static_cast<unsigned char>(b[k]))) {
+          return false;
+        }
+      }
+      return true;
+    };
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+      const std::u8string fname = it->path().filename().u8string();
+      const std::string_view sv(reinterpret_cast<const char*>(fname.data()), fname.size());
+      if (eq_ci(sv, parts[i]) && HasDiscPath(it->path(), parts, i + 1)) return true;
+    }
+    return false;
+#endif
   }
   for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
     if (it->is_directory(ec) && HasDiscPath(it->path(), parts, i + 1)) return true;
@@ -66,7 +93,7 @@ std::string MissingDiscFile(const fs::path& folder, std::string_view required) {
 constexpr uint64_t kSpareBytes = 256ull << 20;
 
 // Bytes free for this user on the drive `path` is on (its nearest existing folder), or nullopt.
-std::optional<uint64_t> FreeBytes(fs::path path) { return FreeDiskBytes(path); }
+std::optional<uint64_t> FreeBytes(fs::path path) { return FreeDiskBytes(std::move(path)); }
 
 // The bytes of the files under `folder` (an older disc there is overwritten in place).
 uint64_t FolderBytes(const fs::path& folder) {
@@ -87,9 +114,38 @@ std::string Gigabytes(uint64_t bytes, bool german) {
   return out;
 }
 
+#ifndef _WIN32
+struct DialogResult {
+  std::mutex mutex;
+  std::atomic<bool> done{false};
+  fs::path path;
+};
+
+void SDLCALL OnDialogFinished(void* userdata, const char* const* filelist, int /*filter*/) {
+  auto* result = static_cast<DialogResult*>(userdata);
+  if (filelist && filelist[0] && filelist[0][0]) {
+    std::lock_guard lock(result->mutex);
+    result->path = PathFromUtf8(filelist[0]);
+  }
+  result->done.store(true);
+}
+
+bool WaitDialogResult(DialogResult& state, fs::path& out) {
+  while (!state.done.load()) {
+    SDL_PumpEvents();
+    SDL_Delay(16);
+  }
+  std::lock_guard lock(state.mutex);
+  if (state.path.empty()) return false;
+  out = state.path;
+  return true;
+}
+#endif
+
 }  // namespace
 
 bool DiscImport::PickIso(fs::path& iso, bool german) {
+#ifdef _WIN32
   const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
   bool picked = false;
   IFileOpenDialog* dialog = nullptr;
@@ -116,9 +172,20 @@ bool DiscImport::PickIso(fs::path& iso, bool german) {
   }
   if (SUCCEEDED(init)) CoUninitialize();
   return picked;
+#else
+  const SDL_DialogFileFilter filters[] = {
+      {german ? "Xbox-360-Disc (ISO)" : "Xbox 360 disc (ISO)", "iso"},
+      {german ? "Alle Dateien" : "All files", "*"},
+  };
+  DialogResult state;
+  HubLog("disc import: choosing a disc (SDL file dialog)");
+  SDL_ShowOpenFileDialog(OnDialogFinished, &state, SDL_GetKeyboardFocus(), filters, 2, nullptr, false);
+  return WaitDialogResult(state, iso);
+#endif
 }
 
 bool DiscImport::PickFolder(fs::path& folder, bool german) {
+#ifdef _WIN32
   const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
   bool picked = false;
   IFileOpenDialog* dialog = nullptr;
@@ -143,6 +210,13 @@ bool DiscImport::PickFolder(fs::path& folder, bool german) {
   }
   if (SUCCEEDED(init)) CoUninitialize();
   return picked;
+#else
+  (void)german;
+  DialogResult state;
+  HubLog("disc import: choosing a folder (SDL folder dialog)");
+  SDL_ShowOpenFolderDialog(OnDialogFinished, &state, SDL_GetKeyboardFocus(), nullptr, false);
+  return WaitDialogResult(state, folder);
+#endif
 }
 
 bool DiscImport::running() const {

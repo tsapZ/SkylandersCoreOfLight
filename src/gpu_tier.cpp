@@ -1,10 +1,17 @@
 #include "gpu_tier.h"
 
+#ifdef _WIN32
 #include <windows.h>
 #include <dxgi.h>
+#else
+#include <SDL3/SDL_opengl.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string_view>
 
 #include "hub_log.h"
@@ -13,6 +20,7 @@ namespace coreoflight {
 
 namespace {
 
+#ifdef _WIN32
 std::string Narrow(const wchar_t* text) {
   const int size = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
   if (size <= 1) return {};
@@ -20,6 +28,7 @@ std::string Narrow(const wchar_t* text) {
   WideCharToMultiByte(CP_UTF8, 0, text, -1, out.data(), size, nullptr, nullptr);
   return out;
 }
+#endif
 
 bool Has(const std::string& upper, std::string_view part) { return upper.find(part) != std::string::npos; }
 
@@ -74,6 +83,7 @@ namespace {
 
 GpuInfo Detect() {
   GpuInfo gpu;
+#ifdef _WIN32
   IDXGIFactory1* factory = nullptr;
   if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return gpu;
   IDXGIAdapter1* adapter = nullptr;
@@ -88,6 +98,48 @@ GpuInfo Detect() {
     break;
   }
   factory->Release();
+#else
+  namespace fs = std::filesystem;
+  if (const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER))) gpu.name = renderer;
+  const std::string gl_vendor = [] {
+    const auto* v = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+    return v ? std::string(v) : std::string();
+  }();
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator("/sys/class/drm", ec)) {
+    if (ec) break;
+    const std::string fname = entry.path().filename().string();
+    if (!fname.starts_with("card") || fname.find('-') != std::string::npos) continue;
+    const fs::path dev = entry.path() / "device";
+    std::ifstream vf(dev / "vendor");
+    std::string vs;
+    if (!std::getline(vf, vs)) continue;
+    const uint32_t vendor = uint32_t(std::strtoul(vs.c_str(), nullptr, 0));
+    uint64_t vram = 0;
+    if (std::ifstream mf(dev / "mem_info_vram_total"); mf >> vram) vram >>= 20;
+    if (gpu.vendor == 0 || vram > gpu.vram_mb) {
+      gpu.vendor = vendor;
+      if (vram > 0) gpu.vram_mb = vram;
+    }
+  }
+  if (gpu.vendor == 0) {
+    std::string up = gl_vendor + " " + gpu.name;
+    std::transform(up.begin(), up.end(), up.begin(), [](unsigned char c) { return char(std::toupper(c)); });
+    if (up.find("NVIDIA") != std::string::npos) gpu.vendor = 0x10DE;
+    else if (up.find("AMD") != std::string::npos || up.find("RADEON") != std::string::npos) gpu.vendor = 0x1002;
+    else if (up.find("INTEL") != std::string::npos) gpu.vendor = 0x8086;
+  }
+  if (gpu.vram_mb == 0 && gpu.vendor == 0x10DE) {
+    GLint kb = 0;
+    glGetIntegerv(0x9047 /* GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX */, &kb);
+    if (glGetError() == GL_NO_ERROR && kb > 0) gpu.vram_mb = uint64_t(kb) >> 10;
+  }
+  if (gpu.vram_mb == 0 && gpu.name.find("llvmpipe") != std::string::npos) {
+    gpu.vram_mb = 512;
+  } else if (gpu.vram_mb == 0) {
+    return {};  // unknown VRAM (leave existing resolution scale untouched)
+  }
+#endif
   if (gpu.name.empty()) return gpu;  // none found (Wine without a driver): leave the scale as it was
   gpu.reason = WeakGpuReason(gpu);
   gpu.weak = !gpu.reason.empty();

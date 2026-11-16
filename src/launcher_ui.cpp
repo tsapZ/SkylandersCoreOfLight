@@ -1,22 +1,17 @@
 #include "launcher_ui.h"
 #include "hints.h"
 
-#include <windows.h>
-
 #include <algorithm>
 #include <atomic>
+#include <mutex>
+#include <thread>
+#include <string_view>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
-#include <mutex>
 #include <string>
-#include <string_view>
-#include <thread>
 #include <vector>
 
-#include "game_files.h"
-#include "handheld.h"
-#include "hub_log.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "nxe_art.h"
@@ -26,6 +21,9 @@
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 #include "portal/figure_info.h"
+#include "game_files.h"
+#include "handheld.h"
+#include "hub_log.h"
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
@@ -1466,9 +1464,9 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) pad_clicked_ = true;
   };
   float px = left - 26 * u;
-  for (int pad = XUSER_MAX_COUNT - 1; pad >= 0; --pad) {
+  for (int pad = int(kMaxPads) - 1; pad >= 0; --pad) {
     if (!g_pad_connected[pad]) continue;
-    const int level = PadBattery(DWORD(pad));
+    const int level = PadBattery(uint32_t(pad));
     const float w = (level >= 0 ? 52 : 32) * u, h = 30 * u;
     const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
     pad_hover(a, b);
@@ -1485,8 +1483,7 @@ bool LauncherUi::DrawProfileBadge(float width, float u) {
     px = a.x - 8 * u;
   }
   // DirectInput pads (pad_state.h) have no XInput slot: a small pad shape for each.
-  for (const GenericPad& pad : g_generic_pads) {
-    if (!pad.connected || pad.skip) continue;
+  for (size_t extra = 0, extra_n = ExtraPadCount(); extra < extra_n; ++extra) {
     const float w = 40 * u, h = 30 * u;
     const ImVec2 a{px - w, c.y - h * 0.5f}, b{px, c.y + h * 0.5f};
     pad_hover(a, b);
@@ -1960,8 +1957,21 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
 
 namespace {
 
-// A release asset's file name as a path (the names are ASCII: <Repo>Setup-<version>.exe).
+// A release asset's file name as a path (the names are ASCII).
 std::filesystem::path AssetPath(const std::string& name) { return std::filesystem::path(std::u8string(name.begin(), name.end())); }
+
+// Versioned local filename for downloaded release archives when the upstream asset omits version.
+std::filesystem::path LocalAssetPath(const Release& r) {
+#ifndef _WIN32
+  constexpr std::string_view kTarExt = "-linux-amd64.tar.gz";
+  if (!r.version.empty() && r.asset == r.repo + std::string(kTarExt)) {
+    const std::string name =
+        (r.repo == "SkylandersCoreOfLight" ? std::string("CoreOfLight-") : r.repo + "-") + r.version + std::string(kTarExt);
+    return AssetPath(name);
+  }
+#endif
+  return AssetPath(r.asset);
+}
 
 }  // namespace
 
@@ -1998,9 +2008,14 @@ void LauncherUi::StartUpdateCheck(bool manual, const std::string& why) {
   struct Wanted {
     std::string repo, prefix, extension;
   };
+#ifdef _WIN32
   std::vector<Wanted> repos = {portable_ ? Wanted{"SkylandersCoreOfLight", kPortablePrefix, kPortableExtension}
                                          : Wanted{"SkylandersCoreOfLight", "CoreOfLightSetup", ".exe"}};
   for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo) + "Setup", ".exe"});
+#else
+  std::vector<Wanted> repos = {{"SkylandersCoreOfLight", kPortablePrefix, kPortableExtension}};
+  for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo), "-linux-amd64.tar.gz"});
+#endif
   std::thread([work = work_, repos] {
     std::vector<Release> found;
     for (const Wanted& w : repos) {
@@ -2202,19 +2217,22 @@ void LauncherUi::ApplyReleases() {
       if (r.repo != game.repo) continue;
       // The release's setup when it's newer than the one here, or there is none here.
       if (setups_[i].empty() || VersionLess(SetupVersion(game, setups_[i]), r.version)) {
-        setups_[i] = DownloadsDir() / AssetPath(r.asset);
+        setups_[i] = DownloadsDir() / LocalAssetPath(r);
         setup_urls_[i] = r.url;
         setup_sha256_[i] = r.sha256;
       }
     }
   }
   hub_update_.reset();
-  // Only a launcher its setup installed, or the portable one, updates itself (a developer's build is
-  // left alone), each from its own kind of asset (a release kept from before the switch may be the
-  // other one).
+  // Only an installed/portable launcher updates itself (a developer's build is left alone).
   std::error_code ec;
+#ifdef _WIN32
   if (!portable_ && !std::filesystem::exists(launcher_dir_ / "unins000.exe", ec)) return;
   const std::string extension = portable_ ? kPortableExtension : ".exe";
+#else
+  if (std::filesystem::exists(launcher_dir_ / "CMakeCache.txt", ec)) return;
+  const std::string extension = kPortableExtension;
+#endif
   for (const Release& r : releases_) {
     if (r.repo == "SkylandersCoreOfLight" && r.asset.ends_with(extension) && VersionLess(COREOFLIGHT_VERSION, r.version)) {
       hub_update_ = r;
@@ -2381,10 +2399,10 @@ void LauncherUi::ApplyDataFolder(const std::filesystem::path& picked) {
   const std::filesystem::path from = SkylandersDir();
   std::error_code ec;
   std::string message;
-  const auto inside = from.native() + std::filesystem::path::preferred_separator;
+  const std::string inside = GenericPathUtf8(from) + "/";
   if (to == from || std::filesystem::equivalent(to, from, ec)) {
     message = german_ ? "Das ist schon der Spieldaten-Ordner" : "That is the data folder already";
-  } else if (to.native().starts_with(inside)) {
+  } else if (GenericPathUtf8(to).starts_with(inside)) {
     message = german_ ? "Der neue Ordner kann nicht im alten liegen" : "The new folder can't be inside the old one";
   } else {
     std::string error;
@@ -2696,11 +2714,17 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
   std::snprintf(line, sizeof(line), german_ ? "Installiert: %s   \xC2\xB7   Download: %.1f MB" : "Installed: %s   \xC2\xB7   Download: %.1f MB",
                 COREOFLIGHT_VERSION, double(release.size) / (1024.0 * 1024.0));
   Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, line)) * 0.5f, a.y + 84 * u}, kWhite, line);
+#ifdef _WIN32
+  const bool archive_update = portable_;
+#else
+  const bool archive_update = true;
+#endif
   const char* keeps =
-      portable_ ? (german_ ? "Core of Light l\xC3\xA4" "dt sie, tauscht seine Dateien aus und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
-                           : "The launcher downloads it, swaps its files and starts again. Games and saves stay.")
-                : (german_ ? "Core of Light l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
-                           : "The launcher downloads it, installs it and starts again. Games and saves stay.");
+      archive_update
+          ? (german_ ? "Core of Light l\xC3\xA4" "dt sie, tauscht seine Dateien aus und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+                     : "The launcher downloads it, swaps its files and starts again. Games and saves stay.")
+          : (german_ ? "Core of Light l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
+                     : "The launcher downloads it, installs it and starts again. Games and saves stay.");
   Text(dl, regular_, 18 * u, {(width - TextWidth(regular_, 18 * u, keeps)) * 0.5f, a.y + 118 * u}, kDim, keeps);
   const bool downloading = Downloading() && work_->hub;
   const int state = work_->download.load();
@@ -2710,14 +2734,15 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
     dl->AddRectFilled(p, q, Rgba(30, 40, 90, 240), 13 * u);
     dl->AddRectFilled(p, {p.x + (q.x - p.x) * DownloadProgress(), q.y}, kGold, 13 * u);
     ImGui::End();
-    if (state == 2 && portable_) {
-      // The portable launcher swaps its own files (portable.h) and starts the new one.
+    if (state == 2 && archive_update) {
+      // Swaps its own files (portable.h) and starts the new launcher.
       work_->download = 0;
       const std::filesystem::path exe_name = SelfExePath().filename();
       std::string why;
       if (ApplyPortableUpdate(work_->file, launcher_dir_, exe_name, german_, why)) {
         if (StartLauncher(launcher_dir_ / exe_name)) return false;  // the launcher quits; the new one runs
-        why = german_ ? "Das neue Core of Light lie\xC3\x9F sich nicht starten; starte es bitte selbst." : "Couldn't start the new launcher; please start it yourself.";
+        why = german_ ? "Das neue Core of Light lie\xC3\x9F sich nicht starten; starte es bitte selbst."
+                      : "Couldn't start the new launcher; please start it yourself.";
       }
       error_ = why;
       error_until_ = ImGui::GetTime() + 8.0;
@@ -2727,9 +2752,11 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
       // Into the folder this launcher runs from: under Wine the setup took its default folder in the
       // prefix and started the new launcher there, while Steam's shortcut pointed at the old one (a
       // colleague's Bazzite, noted in #19).
-      if (void* child = SpawnProcess(work_->file, {"/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH=1",
-                                                   "/DIR=" + PathUtf8(launcher_dir_)})) {
-        CloseProcessHandle(child);
+      void* proc = SpawnProcess(
+          work_->file,
+          {"/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH=1", "/DIR=" + PathUtf8(launcher_dir_)}, {}, false);
+      if (proc) {
+        CloseProcessHandle(proc);
         return false;  // the launcher quits; the setup replaces it and starts the new one
       }
       error_ = german_ ? "Das Update lie\xC3\x9F sich nicht starten" : "Could not start the update";
@@ -2757,7 +2784,7 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
   ImGui::End();
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
     if (!Downloading() && !install_process_) {
-      StartDownload(release.url, DownloadsDir() / AssetPath(release.asset), 0, false, true, release.sha256);
+      StartDownload(release.url, DownloadsDir() / LocalAssetPath(release), 0, false, true, release.sha256);
     }
   } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     hub_update_put_off_ = true;
@@ -2911,7 +2938,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
     // A changed vibration strength buzzes that player's pad (XInput slot 1 / 2) at once (#35).
     for (int p = 0; p < 2; ++p) {
       const std::string v = hub_screen_.EditedValue(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
-      if (!rumble_seen_[p].empty() && v != rumble_seen_[p] && g_pad_connected[p]) PadBuzz(DWORD(p), std::atoi(v.c_str()));
+      if (!rumble_seen_[p].empty() && v != rumble_seen_[p] && g_pad_connected[p]) PadBuzz(uint32_t(p), std::atoi(v.c_str()));
       rumble_seen_[p] = v;
     }
     // Saved settings apply at once (the language with the next frame).
@@ -3098,8 +3125,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // Up from the (top row of) cards: the top bar, the controllers and the profile, so a pad reaches
   // them too (the owner, 2026-10-25: only the mouse could); left / right between the two, A opens,
   // B or down goes back to the cards.
-  bool any_pad = std::any_of(std::begin(g_pad_connected), std::end(g_pad_connected), [](const auto& c) { return bool(c); });
-  for (const GenericPad& pad : g_generic_pads) any_pad = any_pad || (pad.connected && !pad.skip);
+  const bool any_pad = AnyControllerConnected();
   const bool on_top = top_focus_ >= 0;
   if (on_top) {
     if (pressed(ImGuiKey_LeftArrow) || pressed(ImGuiKey_GamepadDpadLeft) || pressed(ImGuiKey_GamepadLStickLeft)) {

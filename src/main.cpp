@@ -1,20 +1,42 @@
-// Skylanders: Core of Light: the launcher window (Win32 + Direct3D 11 + Dear ImGui, as Dear
-// ImGui's own Win32 / DirectX 11 example sets them up). The screen itself is launcher_ui.cpp.
+// Skylanders: Core of Light: the launcher window (Win32 + D3D11 on Windows, SDL3 + OpenGL 3 on
+// Linux, with Dear ImGui). The screen itself is launcher_ui.cpp.
 
+#ifdef _WIN32
 #include <windows.h>
 #include <d3d11.h>
 #include <shellapi.h>
+#else
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_opengl.h>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <csignal>
+#include <cstring>
+#include <ctime>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
+#ifdef _WIN32
 #include <cwchar>
+#endif
 #include <exception>
 #include <filesystem>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "imgui.h"
+#ifdef _WIN32
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
+#else
+#include "imgui_impl_opengl3.h"
+#include "imgui_impl_sdl3.h"
+#endif
 #include "gpu_tier.h"
 #include "hints.h"
 #include "hub_log.h"
@@ -22,11 +44,170 @@
 #include "language_import.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
+#include "platform.h"
 #include "portable.h"
 #include "portal/data_folder.h"
 #include "textures.h"
 
+#ifdef _WIN32
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
+
+namespace {
+
+bool g_own_font = false;  // --own_font: the launcher's own font even where Segoe UI is (to see it)
+std::string g_fonts;      // the fonts LoadFont took, for the start line
+#ifdef _WIN32
+bool g_game_running = false;
+#endif
+coreoflight::LauncherUi* g_ui = nullptr;  // for a file dropped on the window
+
+std::filesystem::path LauncherDir() { return coreoflight::SelfExePath().parent_path(); }
+
+// The launcher ending by a crash says so in its log (it vanished without a word before): an
+// exception nobody caught, or a fault with its code and address.
+void LogTerminate() {
+  std::string what = "unknown";
+  if (const std::exception_ptr e = std::current_exception()) {
+    try {
+      std::rethrow_exception(e);
+    } catch (const std::exception& ex) {
+      what = ex.what();
+    } catch (...) {
+    }
+  }
+  coreoflight::HubError("launcher: ended by an uncaught exception: " + what);
+  std::abort();
+}
+
+struct LaunchOptions {
+  std::filesystem::path iso;
+  std::filesystem::path portable_update;
+  std::string sc_language;
+  std::string im_language;
+  bool fullscreen_arg = false;
+  bool test_crash = false;
+};
+
+void ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts) {
+  for (size_t i = 1; i < args.size(); ++i) {
+    const std::string& arg = args[i];
+    if (arg.starts_with("--documents=")) {
+      coreoflight::SetDocumentsDir(coreoflight::PathFromUtf8(arg.substr(12)));
+    } else if (arg.starts_with("--install_dir=")) {
+      // A library folder for games installed from the launcher (games.h StartGameInstall).
+      coreoflight::SetInstallDir(coreoflight::PathFromUtf8(arg.substr(14)));
+    } else if (arg == "--no_game_art") {
+      // Screenshots to show: none of the games' pictures (textures.h), and the hints stay the
+      // controller's while the screenshot script presses keys (hints.h).
+      coreoflight::SetNoGameArt(true);
+      coreoflight::KeepControllerHints();
+    } else if (arg == "--start_backdrop=game") {
+      coreoflight::SetStartBackdropFromGame(true);  // launcher_ui.h (#78: to compare the two)
+    } else if (arg == "--own_font") {
+      g_own_font = true;  // the fallback font (Noto Sans) as under Wine
+    } else if (arg == "--offline") {
+      // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
+      coreoflight::SetOffline(true);
+    } else if (arg == "--hint_pad=playstation" || arg == "--hint_pad=nintendo") {
+      // The hints as that controller's from the start, whatever pad is used (#29; to see them
+      // without such a pad).
+      coreoflight::ForceHintPad(arg.ends_with("playstation") ? coreoflight::HintPad::kPlayStation
+                                                           : coreoflight::HintPad::kNintendo);
+    } else if (arg.starts_with("--portable_update=")) {
+      // A test of the portable launcher's update without a release (portable.h): this archive's
+      // launcher in this one's place, then started, as the update dialog does after its download.
+      opts.portable_update = coreoflight::PathFromUtf8(arg.substr(18));
+    } else if (arg.starts_with("--sc_language=")) {
+      // A test of SuperChargers' language import without the window (language_import.h).
+      opts.sc_language = arg.substr(14);
+    } else if (arg.starts_with("--im_language=")) {
+      // The same for Imaginators' import from its PS3 disc.
+      opts.im_language = arg.substr(14);
+    } else if (arg == "--fullscreen") {
+      // Fullscreen for this start, whatever the setting says (Steam's launch options on a
+      // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
+      opts.fullscreen_arg = true;
+    } else if (arg == "--test_crash") {
+      opts.test_crash = true;
+    } else if (opts.iso.empty()) {
+      opts.iso = coreoflight::PathFromUtf8(arg);
+    }
+  }
+}
+
+int RunHeadlessTools(const LaunchOptions& opts) {
+  if (!opts.portable_update.empty()) {
+    const std::filesystem::path exe = coreoflight::SelfExePath();
+#ifdef _WIN32
+    std::string why = "not a portable launcher (no portable.txt next to it)";
+    const bool allowed = coreoflight::IsPortable(exe.parent_path());
+#else
+    std::string why;
+    const bool allowed = true;
+#endif
+    const bool done =
+        allowed &&
+        coreoflight::ApplyPortableUpdate(opts.portable_update, exe.parent_path(), exe.filename(), false, why) &&
+        coreoflight::StartLauncher(exe);
+    coreoflight::HubLog(done ? "portable update test: done, the new launcher started"
+                             : "portable update test: " + why);
+    return done ? 0 : 1;
+  }
+  if (!opts.sc_language.empty() || !opts.im_language.empty()) {
+    // "<code>|<source disc>|<rom folder>", or "restore|<rom folder>": the import (or its undoing) on
+    // its thread, waited for; its summary goes to the log.
+    const bool im = opts.sc_language.empty();
+    const std::string& spec = im ? opts.im_language : opts.sc_language;
+    const std::string tag = im ? "im language test: " : "sc language test: ";
+    std::vector<std::filesystem::path> parts;
+    for (size_t at = 0;;) {
+      const size_t bar = spec.find('|', at);
+      parts.push_back(coreoflight::PathFromUtf8(
+          std::string_view(spec).substr(at, bar == std::string::npos ? std::string::npos : bar - at)));
+      if (bar == std::string::npos) break;
+      at = bar + 1;
+    }
+    const std::string code = coreoflight::PathUtf8(parts[0]);
+    coreoflight::LanguageImport job;
+    if (parts.size() == 2 && code == "restore") {
+      job.StartRestore(parts[1], false, im ? "Imaginators" : "SuperChargers");
+    } else if (parts.size() == 3 && im) {
+      job.Start(parts[1], parts[2], code, false);
+    } else if (parts.size() == 3) {
+      job.StartSuperChargers(parts[1], parts[2], code, false);
+    } else {
+      coreoflight::HubLog(tag + (im ? "--im_language" : "--sc_language") +
+                          "=\"<code>|<source disc>|<rom folder>\" or \"restore|<rom folder>\"");
+      return 1;
+    }
+    while (job.running()) {
+#ifdef _WIN32
+      Sleep(200);
+#else
+      SDL_Delay(200);
+#endif
+    }
+    const std::string summary = job.TakeSummary();
+    coreoflight::HubLog(tag + summary);
+    return summary.empty() ? 1 : 0;
+  }
+  return -1;
+}
+
+void LogDataFolderKind() {
+  std::error_code ec;
+  coreoflight::HubLog(std::string("data folder: ") +
+                      (!skylanders::PortableFolder().empty() ? "portable, next to the launcher"
+                       : std::filesystem::equivalent(skylanders::DataFolder(), skylanders::DefaultDataFolder(), ec) ||
+                                 skylanders::DataFolder() == skylanders::DefaultDataFolder()
+                             ? "standard"
+                             : "moved"));
+}
+
+}  // namespace
+
+#ifdef _WIN32
 
 namespace {
 
@@ -35,7 +216,6 @@ ID3D11DeviceContext* g_context = nullptr;
 IDXGISwapChain* g_swap_chain = nullptr;
 ID3D11RenderTargetView* g_target = nullptr;
 UINT g_resize_width = 0, g_resize_height = 0;
-coreoflight::LauncherUi* g_ui = nullptr;  // for a file dropped on the window
 
 // Borderless fullscreen on the window's monitor, or back to the window it was.
 void SetFullscreen(HWND hwnd, bool on) {
@@ -170,7 +350,6 @@ void ReleaseDevice() {
 // While a game runs and for 30 s after it: the window's focus goes into the log then (a report from
 // a PC where the pad stopped after a game). Otherwise every switch to another program wrote two
 // lines and buried the rest (the owner, reading a report, 2026-10-31).
-bool g_game_running = false;
 ULONGLONG g_focus_log_until = 0;
 
 LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -217,18 +396,9 @@ LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
   return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-std::filesystem::path LauncherDir() {
-  wchar_t path[MAX_PATH * 4];
-  const DWORD n = GetModuleFileNameW(nullptr, path, DWORD(std::size(path)));
-  return std::filesystem::path(std::wstring(path, n)).parent_path();
-}
-
 // Windows' own font (Segoe UI), else the one in the launcher's fonts folder (Noto Sans, SIL OFL):
 // under Wine / Proton there is no Segoe UI, and Dear ImGui's built-in pixel font made the cards'
 // lines run into each other (a colleague's Bazzite, 2026-10-24).
-bool g_own_font = false;  // --own_font: the launcher's own font even where Segoe UI is (to see it)
-std::string g_fonts;      // the fonts LoadFont took, for the start line
-
 ImFont* LoadFont(ImGuiIO& io, const wchar_t* windows_file, const wchar_t* own_file) {
   wchar_t windows[MAX_PATH];
   GetWindowsDirectoryW(windows, MAX_PATH);
@@ -246,22 +416,6 @@ ImFont* LoadFont(ImGuiIO& io, const wchar_t* windows_file, const wchar_t* own_fi
   }
   g_fonts += g_fonts.empty() ? "none (Dear ImGui's own)" : " none";
   return nullptr;
-}
-
-// The launcher ending by a crash says so in its log (it vanished without a word before): an
-// exception nobody caught, or a fault with its code and address.
-void LogTerminate() {
-  std::string what = "unknown";
-  if (const std::exception_ptr e = std::current_exception()) {
-    try {
-      std::rethrow_exception(e);
-    } catch (const std::exception& ex) {
-      what = ex.what();
-    } catch (...) {
-    }
-  }
-  coreoflight::HubError("launcher: ended by an uncaught exception: " + what);
-  std::abort();
 }
 
 DWORD g_main_thread = 0;
@@ -342,117 +496,34 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   wc.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
                                              GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
   RegisterClassExW(&wc);
-  // --documents=<folder>: that folder in place of Documents (figures, pictures, profiles, the
-  // games' user data), to try the launcher on a copy. An ISO dragged onto coreoflight.exe (or
-  // named on its command line) is set up at once. Read before the window: --documents decides
-  // which settings file says whether it starts in fullscreen.
-  std::wstring iso;
-  std::wstring portable_update;
-  std::wstring sc_language, im_language;
-  bool fullscreen_arg = false;
+  LaunchOptions opts;
   int argc = 0;
   if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
-    for (int i = 1; i < argc; ++i) {
-      const std::wstring arg = argv[i];
-      if (arg.starts_with(L"--documents=")) {
-        coreoflight::SetDocumentsDir(arg.substr(12));
-      } else if (arg.starts_with(L"--install_dir=")) {
-        // A library folder for games installed from the launcher (games.h StartGameInstall).
-        coreoflight::SetInstallDir(arg.substr(14));
-      } else if (arg == L"--no_game_art") {
-        // Screenshots to show: none of the games' pictures (textures.h), and the hints stay the
-        // controller's while the screenshot script presses keys (hints.h).
-        coreoflight::SetNoGameArt(true);
-        coreoflight::KeepControllerHints();
-      } else if (arg == L"--start_backdrop=game") {
-        coreoflight::SetStartBackdropFromGame(true);  // launcher_ui.h (#78: to compare the two)
-      } else if (arg == L"--own_font") {
-        g_own_font = true;  // the fallback font (Noto Sans) as under Wine
-      } else if (arg == L"--offline") {
-        // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
-        coreoflight::SetOffline(true);
-      } else if (arg == L"--hint_pad=playstation" || arg == L"--hint_pad=nintendo") {
-        // The hints as that controller's from the start, whatever pad is used (#29; to see them
-        // without such a pad).
-        coreoflight::ForceHintPad(arg.ends_with(L"playstation") ? coreoflight::HintPad::kPlayStation
-                                                                : coreoflight::HintPad::kNintendo);
-      } else if (arg.starts_with(L"--portable_update=")) {
-        // A test of the portable launcher's update without a release (portable.h): this ZIP's
-        // launcher in this one's place, then started, as the update dialog does after its download.
-        portable_update = arg.substr(18);
-      } else if (arg.starts_with(L"--sc_language=")) {
-        // A test of SuperChargers' language import without the window (language_import.h).
-        sc_language = arg.substr(14);
-      } else if (arg.starts_with(L"--im_language=")) {
-        // The same for Imaginators' import from its PS3 disc.
-        im_language = arg.substr(14);
-      } else if (arg == L"--fullscreen") {
-        // Fullscreen for this start, whatever the setting says (Steam's launch options on a
-        // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
-        fullscreen_arg = true;
-      } else if (arg == L"--test_crash") {
-        // A fault inside ntdll.dll on purpose (a string at address 0x10), to see the crash lines
-        // LogFault writes: the module and offset, the thread, the calls back into the launcher.
-        using InitString = void(WINAPI*)(void*, const wchar_t*);
-        if (auto init = reinterpret_cast<InitString>(
-                GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlInitUnicodeString"))) {
-          alignas(16) unsigned char text[16] = {};
-          init(text, reinterpret_cast<const wchar_t*>(0x10));
-        }
-      } else if (iso.empty()) {
-        iso = arg;
-      }
-    }
+    std::vector<std::string> utf8_args;
+    std::vector<char*> argv_ptrs;
+    utf8_args.reserve(size_t(argc));
+    for (int i = 0; i < argc; ++i) utf8_args.push_back(coreoflight::PathUtf8(std::filesystem::path(argv[i])));
+    for (std::string& s : utf8_args) argv_ptrs.push_back(s.data());
     LocalFree(argv);
+    coreoflight::SetLaunchArgs(argc, argv_ptrs.data());
+    ParseArgs(utf8_args, opts);
   }
-  if (!portable_update.empty()) {
-    wchar_t self[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, self, MAX_PATH);
-    const std::filesystem::path exe(self);
-    std::string why = "not a portable launcher (no portable.txt next to it)";
-    const bool done = coreoflight::IsPortable(exe.parent_path()) &&
-                      coreoflight::ApplyPortableUpdate(portable_update, exe.parent_path(), exe.filename(), false, why) &&
-                      coreoflight::StartLauncher(exe);
-    coreoflight::HubLog(done ? "portable update test: done, the new launcher started" : "portable update test: " + why);
-    return done ? 0 : 1;
-  }
-  if (!sc_language.empty() || !im_language.empty()) {
-    // "<code>|<source disc>|<rom folder>", or "restore|<rom folder>": the import (or its undoing) on
-    // its thread, waited for; its summary goes to the log.
-    const bool im = sc_language.empty();
-    const std::wstring& spec = im ? im_language : sc_language;
-    const std::string tag = im ? "im language test: " : "sc language test: ";
-    std::vector<std::wstring> parts;
-    for (size_t at = 0;;) {
-      const size_t bar = spec.find(L'|', at);
-      parts.push_back(spec.substr(at, bar == std::wstring::npos ? std::wstring::npos : bar - at));
-      if (bar == std::wstring::npos) break;
-      at = bar + 1;
+  if (opts.test_crash) {
+    // A fault inside ntdll.dll on purpose (a string at address 0x10), to see the crash lines
+    // LogFault writes: the module and offset, the thread, the calls back into the launcher.
+    using InitString = void(WINAPI*)(void*, const wchar_t*);
+    if (auto init = reinterpret_cast<InitString>(
+            GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlInitUnicodeString"))) {
+      alignas(16) unsigned char text[16] = {};
+      init(text, reinterpret_cast<const wchar_t*>(0x10));
     }
-    std::string code;
-    for (wchar_t c : parts[0]) code += static_cast<char>(c);
-    coreoflight::LanguageImport job;
-    if (parts.size() == 2 && code == "restore") {
-      job.StartRestore(parts[1], false, im ? "Imaginators" : "SuperChargers");
-    } else if (parts.size() == 3 && im) {
-      job.Start(parts[1], parts[2], code, false);
-    } else if (parts.size() == 3) {
-      job.StartSuperChargers(parts[1], parts[2], code, false);
-    } else {
-      coreoflight::HubLog(tag + (im ? "--im_language" : "--sc_language") +
-                          "=\"<code>|<source disc>|<rom folder>\" or \"restore|<rom folder>\"");
-      return 1;
-    }
-    while (job.running()) Sleep(200);
-    const std::string summary = job.TakeSummary();
-    coreoflight::HubLog(tag + summary);
-    return summary.empty() ? 1 : 0;
   }
+  if (const int code = RunHeadlessTools(opts); code >= 0) return code;
   const float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
   HWND hwnd = CreateWindowW(wc.lpszClassName, L"Skylanders: Core of Light", WS_OVERLAPPEDWINDOW, 100, 100,
                             int(1280 * dpi), int(720 * dpi), nullptr, nullptr, instance, nullptr);
   // In fullscreen from the first frame (the setting, or --fullscreen), not a window that jumps.
-  const bool start_fullscreen = fullscreen_arg || coreoflight::LoadHubSettings().fullscreen;
+  const bool start_fullscreen = opts.fullscreen_arg || coreoflight::LoadHubSettings().fullscreen;
   if (start_fullscreen) SetFullscreen(hwnd, true);
   if (!CreateDevice(hwnd)) {
     ReleaseDevice();
@@ -488,20 +559,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                         (start_fullscreen ? ", fullscreen" : ", window") + ", time zone " + offset + ", fonts " + g_fonts);
     // The graphics card and whether new setups get 1x for it (gpu_tier.h), read once and logged.
     coreoflight::DetectGpu();
-    // Where the player's data is, by kind only: the log goes along with a problem report.
-    std::error_code ec;
-    coreoflight::HubLog(std::string("data folder: ") +
-                        (!skylanders::PortableFolder().empty() ? "portable, next to the launcher"
-                         : std::filesystem::equivalent(skylanders::DataFolder(), skylanders::DefaultDataFolder(), ec) ||
-                                   skylanders::DataFolder() == skylanders::DefaultDataFolder()
-                               ? "standard"
-                               : "moved"));
+    LogDataFolderKind();
   }
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
-  if (fullscreen_arg) ui.StartFullscreen();
+  if (opts.fullscreen_arg) ui.StartFullscreen();
   g_ui = &ui;
-  if (!iso.empty()) ui.AddDisc(iso);
+  if (!opts.iso.empty()) ui.AddDisc(opts.iso);
   DragAcceptFiles(hwnd, TRUE);
 
   bool running = true;
@@ -658,3 +722,378 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   UnregisterClassW(wc.lpszClassName, instance);
   return 0;
 }
+
+#else  // !_WIN32
+
+namespace {
+
+char g_crash_log_path[1024] = {};
+pthread_t g_main_pthread{};
+
+void AppendCrashBytes(int fd, const char* data, size_t len) {
+  while (len > 0) {
+    const ssize_t n = ::write(fd, data, len);
+    if (n <= 0) break;
+    data += n;
+    len -= size_t(n);
+  }
+}
+
+void AppendCrashStr(int fd, const char* s) {
+  if (s) AppendCrashBytes(fd, s, std::strlen(s));
+}
+
+void AppendCrashHex(int fd, uintptr_t v) {
+  char buf[2 + sizeof(uintptr_t) * 2 + 1];
+  buf[0] = '0';
+  buf[1] = 'x';
+  int digits = 0;
+  uintptr_t t = v;
+  do {
+    ++digits;
+    t >>= 4;
+  } while (t != 0);
+  for (int i = digits - 1; i >= 0; --i) {
+    const unsigned nib = unsigned(v & 0xFu);
+    buf[2 + i] = char(nib < 10 ? ('0' + nib) : ('A' + nib - 10));
+    v >>= 4;
+  }
+  buf[2 + digits] = '\0';
+  AppendCrashBytes(fd, buf, size_t(2 + digits));
+}
+
+void AppendCrashDec(int fd, unsigned long v) {
+  char buf[32];
+  int len = 0;
+  do {
+    buf[len++] = char('0' + (v % 10));
+    v /= 10;
+  } while (v != 0 && len < 31);
+  for (int i = 0; i < len / 2; ++i) std::swap(buf[i], buf[len - 1 - i]);
+  AppendCrashBytes(fd, buf, size_t(len));
+}
+
+void AppendCrashAddress(int fd, void* addr) {
+  Dl_info info{};
+  if (dladdr(addr, &info) && info.dli_fname && info.dli_fbase) {
+    const char* slash = std::strrchr(info.dli_fname, '/');
+    AppendCrashStr(fd, slash ? slash + 1 : info.dli_fname);
+    AppendCrashStr(fd, "+");
+    AppendCrashHex(fd, uintptr_t(addr) - uintptr_t(info.dli_fbase));
+  } else {
+    AppendCrashHex(fd, uintptr_t(addr));
+  }
+}
+
+void SignalCrashHandler(int sig, siginfo_t* si, void*) {
+  const int fd = g_crash_log_path[0] ? ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644) : STDERR_FILENO;
+  if (fd >= 0) {
+    AppendCrashStr(fd, "ERROR: launcher: crashed, signal ");
+    AppendCrashDec(fd, static_cast<unsigned long>(sig));
+    if (si && si->si_addr) {
+      AppendCrashStr(fd, " at ");
+      AppendCrashAddress(fd, si->si_addr);
+    }
+    AppendCrashStr(fd, pthread_equal(pthread_self(), g_main_pthread) ? ", main thread\n" : ", another thread\n");
+    void* frames[12]{};
+    const int nframes = ::backtrace(frames, 12);
+    if (nframes > 0) {
+      AppendCrashStr(fd, "ERROR: launcher: called from ");
+      for (int i = 0; i < nframes; ++i) {
+        if (i) AppendCrashStr(fd, ", ");
+        AppendCrashAddress(fd, frames[i]);
+      }
+      AppendCrashStr(fd, "\n");
+    }
+    if (fd != STDERR_FILENO) ::close(fd);
+  }
+  std::raise(sig);
+}
+
+void InstallCrashHandler() {
+  g_main_pthread = pthread_self();
+  const std::filesystem::path log_file = coreoflight::HubLogFile();
+  std::error_code ec;
+  if (!log_file.empty()) std::filesystem::create_directories(log_file.parent_path(), ec);
+  const std::string path = coreoflight::PathUtf8(log_file);
+  if (path.size() < sizeof(g_crash_log_path)) std::memcpy(g_crash_log_path, path.c_str(), path.size() + 1);
+  struct sigaction sa{};
+  sa.sa_sigaction = SignalCrashHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+  for (const int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS}) sigaction(sig, &sa, nullptr);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+void TriggerTestCrash() {
+  volatile uintptr_t* bad = reinterpret_cast<volatile uintptr_t*>(0x10);
+  *bad = 1;
+}
+
+ImFont* LoadLinuxFont(ImGuiIO& io, const char* own_file, bool bold) {
+  std::vector<std::filesystem::path> candidates = {LauncherDir() / "fonts" / own_file};
+  if (!g_own_font) {
+    if (bold) {
+      candidates.insert(candidates.end(),
+                        {"/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf", "/usr/share/fonts/noto/NotoSans-Bold.ttf",
+                         "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+                         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                         "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
+                         "/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf"});
+    } else {
+      candidates.insert(
+          candidates.end(),
+          {"/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+           "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+           "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+           "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"});
+    }
+  }
+  for (const std::filesystem::path& path : candidates) {
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) continue;
+    const std::string utf8 = coreoflight::PathUtf8(path);
+    if (ImFont* font = io.Fonts->AddFontFromFileTTF(utf8.c_str(), 32.0f)) {
+      g_fonts += (g_fonts.empty() ? "" : " ") + coreoflight::PathUtf8(path.filename());
+      return font;
+    }
+  }
+  g_fonts += g_fonts.empty() ? "none (Dear ImGui's own)" : " none";
+  return nullptr;
+}
+
+}  // namespace
+
+int main(int argc, char* argv[]) {
+  std::set_terminate(LogTerminate);
+  coreoflight::SetLaunchArgs(argc, argv);
+
+  std::vector<std::string> args;
+  args.reserve(size_t(argc));
+  for (int i = 0; i < argc; ++i) args.emplace_back(argv[i] ? argv[i] : "");
+  LaunchOptions opts;
+  ParseArgs(args, opts);
+
+  InstallCrashHandler();
+  if (opts.test_crash) TriggerTestCrash();
+
+  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "0");
+  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
+    coreoflight::HubError(std::string("launcher: SDL_Init failed: ") + SDL_GetError());
+    return 1;
+  }
+
+  if (const int code = RunHeadlessTools(opts); code >= 0) {
+    SDL_Quit();
+    return code;
+  }
+
+  // OpenGL 3.2 Core (#version 150) first, falling back to 3.0 (#version 130).
+  auto create_gl = [](SDL_Window** out_win, SDL_GLContext* out_ctx, const char*& out_glsl, bool core32,
+                      bool fullscreen) -> bool {
+    SDL_GL_ResetAttributes();
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    if (core32) {
+      out_glsl = "#version 150";
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    } else {
+      out_glsl = "#version 130";
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    }
+    const float scale = std::max(1.0f, SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay()));
+    SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
+    SDL_Window* win = SDL_CreateWindow("Skylanders: Core of Light", int(1280 * scale), int(720 * scale), flags);
+    if (!win) return false;
+    SDL_GLContext ctx = SDL_GL_CreateContext(win);
+    if (!ctx) {
+      SDL_DestroyWindow(win);
+      return false;
+    }
+    *out_win = win;
+    *out_ctx = ctx;
+    return true;
+  };
+
+  const bool start_fullscreen = opts.fullscreen_arg || coreoflight::LoadHubSettings().fullscreen;
+  SDL_Window* window = nullptr;
+  SDL_GLContext gl_context = nullptr;
+  const char* glsl_version = "#version 150";
+  if (!create_gl(&window, &gl_context, glsl_version, true, start_fullscreen) &&
+      !create_gl(&window, &gl_context, glsl_version, false, start_fullscreen)) {
+    coreoflight::HubError(std::string("launcher: OpenGL window setup failed: ") + SDL_GetError());
+    SDL_Quit();
+    return 1;
+  }
+
+  SDL_GL_MakeCurrent(window, gl_context);
+  SDL_GL_SetSwapInterval(1);
+  SDL_ShowWindow(window);
+
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.IniFilename = nullptr;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_NavEnableKeyboard;
+  ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
+  ImGui_ImplSDL3_SetGamepadMode(ImGui_ImplSDL3_GamepadMode_Manual, nullptr, 0);
+  ImGui_ImplOpenGL3_Init(glsl_version);
+
+  ImFont* regular = LoadLinuxFont(io, "NotoSans-Regular.ttf", false);
+  ImFont* bold = LoadLinuxFont(io, "NotoSans-Bold.ttf", true);
+  if (!regular) regular = io.Fonts->AddFontDefault();
+  if (!bold) bold = regular;
+
+  coreoflight::SetTextureDevice(gl_context);
+  {
+    const std::time_t now = std::time(nullptr);
+    std::tm tm{};
+    localtime_r(&now, &tm);
+    const long off_s = tm.tm_gmtoff;
+    const long abs_s = std::labs(off_s);
+    char offset[32];
+    std::snprintf(offset, sizeof(offset), "UTC%c%02ld:%02ld", off_s >= 0 ? '+' : '-', abs_s / 3600,
+                  (abs_s % 3600) / 60);
+    coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION ", " + coreoflight::OsVersionSummary() +
+                        (start_fullscreen ? ", fullscreen" : ", window") + ", time zone " + offset + ", fonts " +
+                        g_fonts);
+    coreoflight::DetectGpu();
+    LogDataFolderKind();
+  }
+
+  // Destroy before ImGui/OpenGL/SDL teardown: ~MusicPlayer destroys its SDL_AudioStream, which
+  // SDL_Quit would otherwise free first.
+  auto ui = std::make_unique<coreoflight::LauncherUi>();
+  ui->Init(LauncherDir(), regular, bold);
+  if (opts.fullscreen_arg) ui->StartFullscreen();
+  g_ui = ui.get();
+  if (!opts.iso.empty()) ui->AddDisc(opts.iso);
+
+  bool running = true;
+  bool is_fullscreen = start_fullscreen;
+  void* game = nullptr;
+  bool game_shown = false;
+  uint64_t game_wait_since = 0;
+  double last_mouse_use = 0.0;
+
+  while (running) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      ImGui_ImplSDL3_ProcessEvent(&event);
+      if (event.type == SDL_EVENT_QUIT) running = false;
+      if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window)) {
+        running = false;
+      }
+      if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+        if (event.key.scancode == SDL_SCANCODE_F11 ||
+            ((event.key.mod & SDL_KMOD_ALT) && event.key.scancode == SDL_SCANCODE_RETURN)) {
+          ui->ToggleFullscreen();
+        }
+      }
+      if (event.type == SDL_EVENT_DROP_FILE && event.drop.data && g_ui) {
+        g_ui->AddDisc(coreoflight::PathFromUtf8(event.drop.data));
+      }
+    }
+    if (!running) break;
+
+    if (game && !game_shown) {
+      if (!game_wait_since) game_wait_since = coreoflight::MonotonicMs();
+      if (!coreoflight::IsProcessRunning(game, 0) || coreoflight::MonotonicMs() - game_wait_since >= 1500) {
+        game_wait_since = 0;
+        game_shown = true;
+        coreoflight::HubLog("game: launcher hidden while game runs");
+        ui->GameWindowShown();
+        SDL_MinimizeWindow(window);
+        SDL_HideWindow(window);
+      }
+    }
+    if (game && game_shown) {
+      int code = 0;
+      if (coreoflight::IsProcessRunning(game, 100, &code)) {
+        ui->GameRunning();
+        continue;
+      }
+      char line[64];
+      std::snprintf(line, sizeof(line), "game: ended, exit code 0x%08X", unsigned(code));
+      coreoflight::HubLog(line);
+      coreoflight::CloseProcessHandle(game);
+      game_shown = false;
+      ui->GameEnded();
+      ui->GameExitCode(static_cast<unsigned long>(code));
+      ui->Refresh();
+      SDL_ShowWindow(window);
+      SDL_RestoreWindow(window);
+      SDL_RaiseWindow(window);
+      for (int i = 0; i < 120 && coreoflight::InputHeld(); ++i) {
+        SDL_PumpEvents();
+        SDL_Delay(25);
+      }
+      ImGui::GetIO().ClearEventsQueue();
+      ImGui::GetIO().ClearInputKeys();
+    }
+
+    if (SDL_GetWindowFlags(window) & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN)) {
+      SDL_Delay(50);
+      continue;
+    }
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    coreoflight::UpdatePads(io);
+    coreoflight::KeepClickedButton(io);
+    if (ui->fullscreen() != is_fullscreen) {
+      is_fullscreen = ui->fullscreen();
+      SDL_SetWindowFullscreen(window, is_fullscreen);
+    }
+    ImGui::NewFrame();
+    coreoflight::UpdateHintInput();
+    if (!ui->Draw(io.DisplaySize.x, io.DisplaySize.y)) running = false;
+
+    if (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f || io.MouseWheel != 0.0f || ImGui::IsAnyMouseDown()) {
+      last_mouse_use = ImGui::GetTime();
+    }
+    if (ImGui::GetTime() - last_mouse_use > 3.0 && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+    }
+
+    ImGui::Render();
+    int fb_w = 0, fb_h = 0;
+    SDL_GetWindowSizeInPixels(window, &fb_w, &fb_h);
+    glViewport(0, 0, fb_w, fb_h);
+    glClearColor(0.01f, 0.03f, 0.09f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(window);
+
+    if (void* started = ui->TakeStartedProcess()) {
+      game = started;
+      game_shown = false;
+      game_wait_since = 0;
+      coreoflight::HubLog("game: started, process " + std::to_string(coreoflight::ProcessHandleId(game)));
+    }
+  }
+
+  g_ui = nullptr;
+  ui.reset();
+  if (game) coreoflight::CloseProcessHandle(game);
+  coreoflight::ReleaseTextures();
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
+  coreoflight::ShutdownSdlPads();
+  SDL_GL_DestroyContext(gl_context);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+  return 0;
+}
+
+#endif  // _WIN32

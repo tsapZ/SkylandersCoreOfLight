@@ -110,7 +110,7 @@ class LauncherUi {
   int platinum_new_ = -1;
   double platinum_until_ = 0;
   void* started_ = nullptr;
-  // The running game: its key, the profile it was started with and when (GetTickCount64).
+  // The running game: its key, the profile it was started with and when (MonotonicMs).
   std::string running_key_;
   Profile running_profile_;
   uint64_t running_since_ = 0;
@@ -132,7 +132,7 @@ class LauncherUi {
   AchievementsScreen achievements_screen_;
   SavesScreen saves_screen_;  // RT / S
   size_t running_game_ = 0;          // AllGames index of the running game
-  uint64_t last_auto_backup_ = 0;    // GetTickCount64 of the last automatic copy
+  uint64_t last_auto_backup_ = 0;    // MonotonicMs of the last automatic copy
   SetupScreen setup_;  // the first-run setup
   std::vector<GameAchievements> achievements_;
   std::vector<uint64_t> last_saved_;  // per game, the active profile's (Windows file time)

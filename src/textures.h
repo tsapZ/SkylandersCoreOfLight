@@ -1,19 +1,24 @@
 #pragma once
 
-// Pictures from PNG files as Dear ImGui textures (textures.cpp): Windows' WIC decodes, Direct3D 11
-// holds them. UI thread only.
+// Pictures from PNG files as Dear ImGui textures (textures.cpp). UI thread only.
 
 #include <cstdint>
 #include <filesystem>
 
 #include "imgui.h"
 
+#ifdef _WIN32
 struct ID3D11Device;
+#endif
 
 namespace coreoflight {
 
-// The device the textures are made on (main.cpp), once at start.
+// The device / graphics context readiness the textures are made on (main.cpp), once at start.
+#ifdef _WIN32
 void SetTextureDevice(ID3D11Device* device);
+#else
+void SetTextureDevice(void* device);
+#endif
 
 // The picture in `path` (decoded once and kept), or ImTextureID{} if there is none or it can't be
 // read; a missing file is looked for again only after a while.

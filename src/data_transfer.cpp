@@ -43,8 +43,12 @@ uint32_t Crc32(const std::vector<char>& data) { return coreoflight::Crc32(data.d
 // A path past Windows' 260 characters with the prefix that lets it through (a data folder deep in
 // another folder: a test's import into one lost 108 of 337 figures).
 fs::path Long(const fs::path& p) {
+#ifdef _WIN32
   if (p.native().size() < 240 || !p.is_absolute() || p.native().starts_with(L"\\\\?\\")) return p;
   return fs::path(L"\\\\?\\" + p.lexically_normal().native());
+#else
+  return p;
+#endif
 }
 
 bool ReadAll(const fs::path& file, std::vector<char>& out) {
@@ -73,9 +77,7 @@ class ZipWriter {
   bool Add(const std::string& name, const std::vector<char>& data) {
     if (entries_.size() >= 0xFFFF || offset_ + data.size() > 0xF0000000u) return false;  // no ZIP64
     // The file time as DOS keeps it: now (the import doesn't use it).
-    const std::time_t now = std::time(nullptr);
-    std::tm t{};
-    localtime_s(&t, &now);
+    const std::tm t = ToLocalTm(std::time(nullptr));
     const uint32_t dos_time = uint32_t(t.tm_hour << 11 | t.tm_min << 5 | t.tm_sec / 2);
     const uint32_t dos_date = uint32_t((t.tm_year - 80) << 9 | (t.tm_mon + 1) << 5 | t.tm_mday);
     const uint32_t crc = Crc32(data), size = uint32_t(data.size());
@@ -177,8 +179,9 @@ bool SafeRelative(const std::string& name, fs::path& out) {
 }  // namespace
 
 fs::path ExportFolder() {
+  const fs::path docs = skylanders::DocumentsFolder();
   // --documents (a test on stand-in data): that folder, so a test never writes onto the desktop.
-  if (DocumentsDir() != skylanders::DocumentsFolder()) return DocumentsDir();
+  if (DocumentsDir() != docs) return DocumentsDir();
   return DesktopDir();
 }
 
@@ -198,9 +201,7 @@ void DataTransfer::StartExport(const std::vector<Found>& games, bool german) {
     std::string summary;
     fs::path written;
     char date[32];
-    const std::time_t now = std::time(nullptr);
-    std::tm t{};
-    localtime_s(&t, &now);
+    const std::tm t = ToLocalTm(std::time(nullptr));
     std::strftime(date, sizeof(date), "%Y-%m-%d %H-%M", &t);
     const fs::path desktop = ExportFolder();
     const fs::path file = desktop / (std::string("Skylanders data ") + date + ".zip");

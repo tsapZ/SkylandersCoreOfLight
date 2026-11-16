@@ -1,7 +1,9 @@
 #include "problem_report.h"
 
+#ifdef _WIN32
 #include <windows.h>
 #include <dxgi.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -9,9 +11,11 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <utility>
 
 #include "games.h"
+#include "gpu_tier.h"
 #include "hub_log.h"
 #include "hub_settings.h"
 #include "platform.h"
@@ -63,9 +67,10 @@ void ReplaceAll(std::string& text, const std::string& from, const std::string& t
   text = std::move(out);
 }
 
-// The user's profile folder (both slash directions), the user name and the computer's name.
+// The user's home/profile folder (both slash directions), the user name and the computer's name.
 std::vector<std::pair<std::string, std::string>> PrivateWords() {
   std::vector<std::pair<std::string, std::string>> words;
+#ifdef _WIN32
   if (std::string profile = EnvVarUtf8("USERPROFILE"); !profile.empty()) {
     words.emplace_back(profile, "%USERPROFILE%");
     std::replace(profile.begin(), profile.end(), '\\', '/');
@@ -77,6 +82,17 @@ std::vector<std::pair<std::string, std::string>> PrivateWords() {
   if (const std::string pc = CurrentComputerName(); pc.size() >= 3) {
     words.emplace_back(pc, "%COMPUTERNAME%");
   }
+#else
+  if (const std::string home = EnvVarUtf8("HOME"); !home.empty()) {
+    words.emplace_back(home, "$HOME");
+  }
+  if (const std::string user = CurrentUserName(); user.size() >= 3) {
+    words.emplace_back(user, "$USER");
+  }
+  if (const std::string pc = CurrentComputerName(); pc.size() >= 3) {
+    words.emplace_back(pc, "$HOSTNAME");
+  }
+#endif
   return words;
 }
 
@@ -102,6 +118,7 @@ std::string ProcessorName() {
 
 std::string GraphicsCards() {
   std::string out;
+#ifdef _WIN32
   IDXGIFactory1* factory = nullptr;
   if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return "?\n";
   IDXGIAdapter1* adapter = nullptr;
@@ -125,7 +142,57 @@ std::string GraphicsCards() {
     adapter->Release();
   }
   factory->Release();
+#else
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator("/sys/class/drm", ec)) {
+    const std::string card = entry.path().filename().string();
+    if (!card.starts_with("card") || card.find('-') != std::string::npos) continue;
+    std::ifstream vf(entry.path() / "device" / "vendor"), df(entry.path() / "device" / "device");
+    std::string vs, ds;
+    if (!(vf >> vs) || !(df >> ds)) continue;
+    uint64_t vram_mb = 0;
+    std::ifstream vram_f(entry.path() / "device" / "mem_info_vram_total");
+    uint64_t vram_bytes = 0;
+    if (vram_f >> vram_bytes) vram_mb = vram_bytes >> 20;
+    const unsigned long vendor = std::strtoul(vs.c_str(), nullptr, 0);
+    const unsigned long device = std::strtoul(ds.c_str(), nullptr, 0);
+    char text[128];
+    if (vram_mb) {
+      std::snprintf(text, sizeof(text), "  %s (vendor 0x%04lX, device 0x%04lX, %llu MB)\n", card.c_str(), vendor,
+                    device, static_cast<unsigned long long>(vram_mb));
+    } else {
+      std::snprintf(text, sizeof(text), "  %s (vendor 0x%04lX, device 0x%04lX)\n", card.c_str(), vendor, device);
+    }
+    out += text;
+  }
+  const GpuInfo gpu = DetectGpu();
+  if (!gpu.name.empty()) {
+    char text[256];
+    std::snprintf(text, sizeof(text), "  Active GL: %s (vendor 0x%04X, %llu MB)\n", gpu.name.c_str(), gpu.vendor,
+                  static_cast<unsigned long long>(gpu.vram_mb));
+    out += text;
+  }
+  if (out.empty()) out = "?\n";
+#endif
   return out;
+}
+
+uint64_t TotalPhysicalMemoryMb() {
+#ifdef _WIN32
+  MEMORYSTATUSEX memory{};
+  memory.dwLength = sizeof(memory);
+  if (GlobalMemoryStatusEx(&memory)) return memory.ullTotalPhys >> 20;
+  return 0;
+#else
+  std::ifstream in("/proc/meminfo");
+  std::string label;
+  uint64_t kb = 0;
+  while (in >> label >> kb) {
+    if (label == "MemTotal:") return kb >> 10;
+    in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
+  return 0;
+#endif
 }
 
 const char* DiscText(DiscState state) {
@@ -185,12 +252,13 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   std::snprintf(line, sizeof(line), "Core of Light " COREOFLIGHT_VERSION " problem report, %04d-%02d-%02d %02d:%02d\n\n",
                 t.year, t.month, t.day, t.hour, t.minute);
   info += line;
+#ifdef _WIN32
   info += "Windows " + WindowsVersion() + "\n";
+#else
+  info += OsVersionSummary() + "\n";
+#endif
   info += "Processor: " + ProcessorName() + "\n";
-  MEMORYSTATUSEX memory{};
-  memory.dwLength = sizeof(memory);
-  GlobalMemoryStatusEx(&memory);
-  std::snprintf(line, sizeof(line), "Memory: %llu MB\n", static_cast<unsigned long long>(memory.ullTotalPhys >> 20));
+  std::snprintf(line, sizeof(line), "Memory: %llu MB\n", static_cast<unsigned long long>(TotalPhysicalMemoryMb()));
   info += line;
   info += "Graphics cards:\n" + GraphicsCards();
   info += "Launcher: " + PathUtf8(SelfExePath()) + "\n";

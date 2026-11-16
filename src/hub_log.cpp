@@ -1,6 +1,8 @@
 #include "hub_log.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <cctype>
 #include <cstdio>
@@ -53,7 +55,11 @@ void ReplaceAll(std::string& text, std::string_view what, std::string_view with,
 }
 
 std::string RedactUserData(std::string text) {
+#ifdef _WIN32
   static const std::string profile = EnvVarUtf8("USERPROFILE");
+#else
+  static const std::string profile = EnvVarUtf8("HOME");
+#endif
   static const std::string user = CurrentUserName();
   static const std::string computer = CurrentComputerName();
   if (profile.size() >= 4) ReplaceAll(text, profile, "%USERPROFILE%", false);
@@ -86,7 +92,7 @@ void Write(const char* level, const std::string& line) {
   // Full: kept as coreoflight.old.log (it was emptied before, and with it what led up to a problem).
   if (fs::file_size(file, ec) > 256 * 1024 && !ec) {
     fs::path old = file;
-    old.replace_filename(L"coreoflight.old.log");
+    old.replace_filename("coreoflight.old.log");
     fs::rename(file, old, ec);
     if (ec) fs::remove(file, ec);
   }
@@ -106,6 +112,7 @@ void HubWarn(const std::string& line) { Write("warn", line); }
 void HubError(const std::string& line) { Write("error", line); }
 
 std::string WindowsVersion() {
+#ifdef _WIN32
   using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
   OSVERSIONINFOW v{};
   v.dwOSVersionInfoSize = sizeof(v);
@@ -115,13 +122,20 @@ std::string WindowsVersion() {
   char text[64];
   std::snprintf(text, sizeof(text), "%lu.%lu.%lu", v.dwMajorVersion, v.dwMinorVersion, v.dwBuildNumber);
   return text;
+#else
+  return OsVersionSummary();
+#endif
 }
 
 std::string WineVersion() {
+#ifdef _WIN32
   using GetVersion = const char*(__cdecl*)();
   const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
   const auto get = ntdll ? reinterpret_cast<GetVersion>(GetProcAddress(ntdll, "wine_get_version")) : nullptr;
   return get ? std::string(get()) : std::string();
+#else
+  return {};
+#endif
 }
 
 }  // namespace coreoflight

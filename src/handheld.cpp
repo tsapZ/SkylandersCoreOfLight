@@ -1,6 +1,8 @@
 #include "handheld.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -19,6 +21,7 @@ namespace {
 // 2: the panel's real pixels per inch from its EDID), loaded by hand so nothing more is linked;
 // 0 when Windows doesn't know it.
 float ScreenInches() {
+#ifdef _WIN32
   using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
   HMODULE shcore = LoadLibraryW(L"shcore.dll");
   if (!shcore) return 0;
@@ -40,6 +43,9 @@ float ScreenInches() {
   }
   FreeLibrary(shcore);
   return inches;
+#else
+  return 0.0f;
+#endif
 }
 
 std::string CpuName() { return CpuModelName(); }
