@@ -4,6 +4,7 @@
 
 #include "games.h"
 #include "hub_log.h"
+#include "platform.h"
 #include "portal/data_folder.h"
 #include "profiles.h"
 
@@ -119,7 +120,8 @@ std::string OldDataNames(const std::vector<OldData>& list, size_t max, const std
     if (!names.empty()) names += ", ";
     std::error_code ec;
     const fs::path rel = fs::relative(list[i].old_dir, docs, ec);
-    names += !ec && !rel.empty() && rel.native()[0] != L'.' ? documents + U8(rel) : U8(list[i].old_dir);
+    const std::string rel_u8 = PathUtf8(rel);
+    names += !ec && !rel_u8.empty() && rel_u8[0] != '.' ? documents + rel_u8 : PathUtf8(list[i].old_dir);
   }
   if (list.size() > max) names += ", ...";
   return names;
@@ -134,7 +136,8 @@ fs::path SetAsideCopiedFolder(const fs::path& dir) {
   if (!fs::exists(dir / skylanders::kMovedNote, ec)) return {};
   for (int i = 1; i < 100; ++i) {
     const fs::path aside =
-        dir.parent_path() / (dir.filename().wstring() + (i == 1 ? L" (old)" : L" (old " + std::to_wstring(i) + L")"));
+        dir.parent_path() /
+        PathFromUtf8(PathUtf8(dir.filename()) + (i == 1 ? " (old)" : " (old " + std::to_string(i) + ")"));
     if (fs::exists(aside, ec)) continue;
     fs::rename(dir, aside, ec);
     if (ec) {

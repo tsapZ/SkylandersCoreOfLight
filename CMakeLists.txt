@@ -34,6 +34,7 @@ add_subdirectory(${PORTAL_DIR} skylanders-portal EXCLUDE_FROM_ALL)
 
 add_executable(coreoflight WIN32
   src/main.cpp
+  src/platform.cpp
   src/games.cpp
   src/game_settings.cpp
   src/hub_settings.cpp

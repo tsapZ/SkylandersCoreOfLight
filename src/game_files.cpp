@@ -8,6 +8,7 @@
 
 #include "games.h"  // IdentifyXex
 #include "hub_log.h"
+#include "platform.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -31,7 +32,7 @@ bool ChangedByLanguageImport(const fs::path& rom, const std::string& path) {
   const fs::path name = FromGeneric(path).filename();
   std::error_code ec;
   for (const char* suffix : {".json", ".disc.json", ".platform.json"}) {
-    if (fs::exists(backup / (name.wstring() + fs::path(suffix).wstring()), ec)) return true;
+    if (fs::exists(backup / WithPathSuffix(name, suffix), ec)) return true;
   }
   return fs::exists(backup / "movies" / name, ec);
 }

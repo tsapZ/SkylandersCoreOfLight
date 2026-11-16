@@ -46,8 +46,6 @@ bool SaveProfile(const Profile& p);
 // The profile's folder into the recycle bin (saves and figures with it); never the main one.
 // `to_recycle_bin` false removes it for good: for a profile made a moment ago and given up.
 bool DeleteProfile(const Profile& p, bool to_recycle_bin = true);
-// A file or folder into the recycle bin, without Windows' own question (the caller asked first).
-bool MoveToRecycleBin(const std::filesystem::path& path);
 
 // The profile's figure folder and its games' picture folder (Skylanders\Pictures).
 std::filesystem::path ProfileFiguresDir(const Profile& p);
@@ -75,8 +73,8 @@ int CopyFigures(const Profile& from, const Profile& to, bool as_new);
 // emptied, which the game's own check takes. For "Start over" copies and Reset in the library (#75).
 skylanders::portal::FigureData StartedOver(const skylanders::portal::FigureData& data, bool new_serial);
 
-// The command line the launcher adds for the active profile when it starts a game's exe: nothing
+// Arguments the launcher adds for the active profile when it starts a game: nothing
 // for the main profile.
-std::wstring ProfileArguments(const std::filesystem::path& exe);
+std::vector<std::string> ProfileArgs(const std::filesystem::path& exe);
 
 }  // namespace coreoflight

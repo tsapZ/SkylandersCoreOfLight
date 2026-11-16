@@ -94,7 +94,7 @@ class LauncherUi {
   bool german_ = false;
   size_t selected_ = 0;
   int figures_ = 0;
-  std::wstring error_;
+  std::string error_;
   double error_until_ = 0;
   // A game whose last achievement came with the game that just ended: its platinum trophy shown
   // over the cards for a while (Refresh).

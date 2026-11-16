@@ -17,6 +17,7 @@
 #include "profiles.h"
 #include "imgui.h"
 #include "nxe_art.h"
+#include "platform.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
 #include "textures.h"
@@ -239,7 +240,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
   for (fs::recursive_directory_iterator it(figures_dir, ec), end; it != end; it.increment(ec)) {
     if (ec) break;
     if (!it->is_regular_file(ec)) continue;
-    if (it->path().string().find("\\real\\") != std::string::npos) {
+    if (IsRealToySubpath(it->path())) {
       if (const auto copy = sp::LoadFigureFile(it->path())) {
         real_toys.emplace(std::pair{sp::ReadFigureId(*copy), sp::ReadFigureVariant(*copy)}, it->path());
       }
@@ -1554,7 +1555,7 @@ void FiguresScreen::DrawManage(float width, float height, float u) {
     const bool reset = manage_choice_ == 1;
     const std::string name = f.name;
     const fs::path file = f.file;
-    const bool done = reset ? ResetFigureFile(file, figures_dir_) : MoveToRecycleBin(file);
+    const bool done = reset ? ResetFigureFile(file, figures_dir_) : MovePathToTrash(file);
     message_ = reset ? (done ? (german_ ? "Zur\xC3\xBC" "ckgesetzt: " : "Reset: ") + name +
                                    (german_ ? " (die alte Datei liegt in Backups\\Figures)"
                                             : " (the old file is in Backups\\Figures)")

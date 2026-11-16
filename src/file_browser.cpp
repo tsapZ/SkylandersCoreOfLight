@@ -2,7 +2,6 @@
 #include "hints.h"
 
 #include <windows.h>
-#include <shlobj.h>
 
 #include <algorithm>
 #include <cfloat>
@@ -14,6 +13,8 @@
 #include "games.h"
 #include "imgui.h"
 #include "nxe_art.h"
+#include "platform.h"
+#include "portal/data_folder.h"
 
 namespace coreoflight {
 namespace {
@@ -57,18 +58,7 @@ float Hint(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, const char* but
   return x + TextWidth(font, size, label) + size * 1.2f;
 }
 
-std::string Utf8(const fs::path& p) {
-  const std::u8string u8 = p.u8string();
-  return std::string(u8.begin(), u8.end());
-}
-
-fs::path Known(REFKNOWNFOLDERID id) {
-  PWSTR path = nullptr;
-  fs::path out;
-  if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &path))) out = path;
-  CoTaskMemFree(path);
-  return out;
-}
+std::string Utf8(const fs::path& p) { return PathUtf8(p); }
 
 bool IsFile(const fs::path& p) {
   std::error_code ec;
@@ -127,7 +117,7 @@ void FileBrowser::Open(const fs::path& folder) {
   searching_view_ = false;
   fs::path start = folder;
   if (start.empty()) start = last_folder_;
-  if (start.empty()) start = Known(folders_only_ ? FOLDERID_Documents : FOLDERID_Downloads);
+  if (start.empty()) start = folders_only_ ? skylanders::DocumentsFolder() : UserDownloadsDir();
   std::error_code ec;
   if (!start.empty() && !fs::is_directory(start, ec)) start = fs::path();  // gone: the drives and places
   List(start);
@@ -161,13 +151,12 @@ void FileBrowser::List(const fs::path& folder) {
                             fs::path(path)});
       }
     }
-    const std::pair<REFKNOWNFOLDERID, const char*> places[] = {
-        {FOLDERID_Downloads, german_ ? "Downloads" : "Downloads"},
-        {FOLDERID_Desktop, german_ ? "Desktop" : "Desktop"},
-        {FOLDERID_Documents, german_ ? "Dokumente" : "Documents"},
+    const std::pair<fs::path, const char*> places[] = {
+        {UserDownloadsDir(), german_ ? "Downloads" : "Downloads"},
+        {DesktopDir(), german_ ? "Desktop" : "Desktop"},
+        {skylanders::DocumentsFolder(), german_ ? "Dokumente" : "Documents"},
     };
-    for (const auto& [id, name] : places) {
-      const fs::path p = Known(id);
+    for (const auto& [p, name] : places) {
       if (!p.empty()) entries_.push_back({Entry::Kind::kPlace, name, p});
     }
     const DWORD drives = GetLogicalDrives();
