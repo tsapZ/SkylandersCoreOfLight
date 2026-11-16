@@ -189,12 +189,12 @@ void DrawCardFrame(ImDrawList* dl, ImVec2 a, ImVec2 b, float r, float s, bool se
   }
 }
 
-// The title's half width (the big SKYLANDERS or the banner under it, whichever is wider) and its
+// The title's half width (the small SKYLANDERS or the stone plate under it, whichever is wider) and its
 // centre: the window's middle, or left of the profile and the controllers at the top right when
-// the window is narrow.
-float TitlePlateHalf(ImFont* bold, float u) {
-  return std::max(TextWidth(bold, 80 * u, "SKYLANDERS") * 0.5f + 8 * u,
-                  TextWidth(bold, 40 * u, "CORE OF LIGHT") * 0.5f + 120 * u);
+// the window is narrow. `display` is the titles' font (Lilita One).
+float TitlePlateHalf(ImFont* display, float u) {
+  return std::max(TextWidth(display, 34 * u, "SKYLANDERS") * 0.5f + 8 * u,
+                  TextWidth(display, 62 * u, "CORE OF LIGHT") * 0.5f + 70 * u);
 }
 float TitlePlateCenter(ImFont* bold, float width, float badge_left, float u) {
   return std::max(TitlePlateHalf(bold, u) + 24 * u, std::min(width * 0.5f, badge_left - TitlePlateHalf(bold, u) - 24 * u));
@@ -216,7 +216,10 @@ void OutlinedText(ImDrawList* dl, ImFont* font, float size, ImVec2 pos, ImU32 fi
 // it is in the repository. Its "SPYRO'S ADVENTURE" is covered by our CORE OF LIGHT banner, bent like the
 // subtitle (the owner, 2026-11-13: "so nen Bogen drum"); the elements' symbols stay under it. False without
 // the picture (no Spyro's Adventure set up, --no_game_art): then the lettering below is drawn instead.
-bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background, float cx, float u) {
+// Not drawn since 2026-11-16 (the owner: the disc logo with the banner looked ugly, and without a disc
+// there was none); kept for a later look.
+[[maybe_unused]] bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ssa_background,
+                                    float cx, float u) {
   const ImTextureID logo = LoadTextureKeyed(ssa_background, 570, 350, 770, 366, 0x102858, 10, 28);
   if (!logo) return false;
   const float lh = 196 * u, lw = lh * 770.0f / 366.0f;
@@ -296,38 +299,26 @@ bool DrawTitleLogo(ImDrawList* dl, ImFont* bold, const std::filesystem::path& ss
   return true;
 }
 
-// The title at the top, centred on `cx`, as the concept's logo: a big SKYLANDERS, white with a dark
-// blue outline and a light blue lower half, and under it a banner with pointed ends, CORE OF LIGHT
-// in gold between two gold lines. Our own lettering, not the games' logo. Returns the banner's bottom.
-float DrawTitlePlate(ImDrawList* dl, ImFont* bold, float cx, float u) {
+void DrawBottomBar(ImDrawList* dl, ImVec2 a, ImVec2 b, float u);
+
+// The title at the top, centred on `cx` (the owner, 2026-11-16: no logo from a disc, which looked ugly and
+// was missing without one; stone edges round CORE OF LIGHT; a lettering like the games'): a small
+// SKYLANDERS over CORE OF LIGHT on a stone plate (morpheus284's bar, as at the bottom), both in Lilita One
+// (`display`, SIL OFL). Our own lettering, nobody's logo, the same with or without discs. Returns the
+// plate's bottom.
+float DrawTitlePlate(ImDrawList* dl, ImFont* display, float cx, float u) {
   const char* over = "SKYLANDERS";
-  const float os = 80 * u, ow = TextWidth(bold, os, over), oy = 22 * u;
-  OutlinedText(dl, bold, os, {cx - ow * 0.5f, oy + 5 * u}, Rgba(10, 30, 70, 200), Rgba(10, 30, 70, 200), 6 * u, over);
-  OutlinedText(dl, bold, os, {cx - ow * 0.5f, oy}, kWhite, Rgba(18, 52, 112), 5 * u, over);
-  // The lower half in light blue, as on the games' own lettering.
-  dl->PushClipRect({cx - ow, oy + os * 0.58f}, {cx + ow, oy + os}, true);
-  Text(dl, bold, os, {cx - ow * 0.5f, oy}, Rgba(170, 215, 250), over);
-  dl->PopClipRect();
+  const float os = 34 * u, ow = TextWidth(display, os, over), oy = 14 * u;
+  OutlinedText(dl, display, os, {cx - ow * 0.5f, oy}, Rgba(225, 240, 255), Rgba(14, 40, 92), 3 * u, over);
   const char* title = "CORE OF LIGHT";
-  const float size = 40 * u, tw = TextWidth(bold, size, title);
-  const float top = oy + os + 6 * u, h = 58 * u, half = tw * 0.5f + 110 * u;
-  // The banner: a long hexagon, dark blue with a light rim and a darker line inside it.
-  const ImVec2 pts[6] = {{cx - half, top + h * 0.5f}, {cx - half + h * 0.5f, top},        {cx + half - h * 0.5f, top},
-                         {cx + half, top + h * 0.5f}, {cx + half - h * 0.5f, top + h}, {cx - half + h * 0.5f, top + h}};
-  dl->AddConvexPolyFilled(pts, 6, Rgba(22, 46, 98, 245));
-  dl->AddPolyline(pts, 6, Rgba(150, 190, 240), ImDrawFlags_Closed, 4 * u);
-  ImVec2 inner[6];
-  for (int i = 0; i < 6; ++i) {
-    inner[i] = {cx + (pts[i].x - cx) * 0.96f, top + h * 0.5f + (pts[i].y - top - h * 0.5f) * 0.8f};
-  }
-  dl->AddPolyline(inner, 6, Rgba(10, 24, 56, 200), ImDrawFlags_Closed, 2 * u);
-  // Gold lines on both sides of the name, inside the banner.
-  const float ly = top + h * 0.5f;
-  dl->AddLine({cx - tw * 0.5f - 74 * u, ly}, {cx - tw * 0.5f - 16 * u, ly}, kGold, 3.5f * u);
-  dl->AddLine({cx + tw * 0.5f + 16 * u, ly}, {cx + tw * 0.5f + 74 * u, ly}, kGold, 3.5f * u);
-  const float ty = top + (h - size) * 0.5f;
-  Text(dl, bold, size, {cx - tw * 0.5f + 2 * u, ty + 3 * u}, Rgba(60, 35, 0, 220), title);
-  Text(dl, bold, size, {cx - tw * 0.5f, ty}, kGold, title);
+  const float size = 62 * u, tw = TextWidth(display, size, title);
+  const float top = oy + os + 4 * u, h = 96 * u, half = tw * 0.5f + 70 * u;
+  DrawBottomBar(dl, {cx - half, top}, {cx + half, top + h}, u);
+  const float ty = top + (h - size) * 0.5f - 2 * u;
+  // A soft shadow under the gold, then the gold with a dark brown rim.
+  OutlinedText(dl, display, size, {cx - tw * 0.5f, ty + 4 * u}, Rgba(20, 12, 0, 150), Rgba(20, 12, 0, 150), 3 * u,
+               title);
+  OutlinedText(dl, display, size, {cx - tw * 0.5f, ty}, kGold, Rgba(70, 38, 0), 3 * u, title);
   return top + h;
 }
 
@@ -901,18 +892,30 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     // drawn over it hides the edges.
     dl->AddRectFilled(win_a, win_b, tile ? Rgba(30, 50, 92) : installed ? kAccents[index % 6] : Rgba(70, 75, 100));
     if (tile) {
-      const float tw = win_b.x - win_a.x, th = tw * 320.0f / 420.0f;
-      const float ty = win_a.y + std::max(0.0f, (win_b.y - win_a.y - th) * 0.5f);
-      dl->AddImage(tile, {win_a.x, ty}, {win_b.x, std::min(ty + th, win_b.y)}, {0, 0},
-                   {1, std::min(1.0f, (win_b.y - ty) / th)});
-      const float ys = 15 * s, yw = TextWidth(bold_, ys, year);
-      dl->AddRectFilled({win_a.x + 6 * s, win_a.y + 6 * s}, {win_a.x + 18 * s + yw, win_a.y + 10 * s + ys},
-                        Rgba(10, 14, 40, 170), 8 * s);
-      Text(dl, bold_, ys, {win_a.x + 12 * s, win_a.y + 8 * s}, kWhite, year);
+      // The tile covers the whole window, its overhang cut off evenly (the owner, 2026-11-16: a strip of
+      // the game's colour showed above the picture when it was centred).
+      const float ww = win_b.x - win_a.x, wh = win_b.y - win_a.y;
+      const float tile_aspect = 420.0f / 320.0f, win_aspect = ww / std::max(1.0f, wh);
+      ImVec2 uv0{0, 0}, uv1{1, 1};
+      if (win_aspect > tile_aspect) {
+        uv0.y = (1 - tile_aspect / win_aspect) * 0.5f;  // a wider window: top and bottom cut
+        uv1.y = 1 - uv0.y;
+      } else {
+        uv0.x = (1 - win_aspect / tile_aspect) * 0.5f;  // a taller window: the sides cut
+        uv1.x = 1 - uv0.x;
+      }
+      dl->AddImage(tile, win_a, win_b, uv0, uv1);
     } else {
-      const float year_size = 40 * s;
-      Text(dl, bold_, year_size, {x + (w - TextWidth(bold_, year_size, year)) * 0.5f, win_a.y + 10 * s}, kWhite, year);
+      // No picture yet (the game isn't set up): its colour fading into the card instead of a big year (the
+      // owner, 2026-11-16: the big years looked ugly).
+      const ImU32 top_col = installed ? kAccents[index % 6] : Rgba(70, 75, 100);
+      dl->AddRectFilledMultiColor(win_a, win_b, top_col, top_col, Rgba(22, 30, 62), Rgba(22, 30, 62));
     }
+    // The year small in the window's corner, on every card alike.
+    const float ys = 15 * s, yw = TextWidth(bold_, ys, year);
+    dl->AddRectFilled({win_a.x + 6 * s, win_a.y + 6 * s}, {win_a.x + 18 * s + yw, win_a.y + 10 * s + ys},
+                      Rgba(10, 14, 40, 170), 8 * s);
+    Text(dl, bold_, ys, {win_a.x + 12 * s, win_a.y + 8 * s}, kWhite, year);
     const float mid_h = h - top_h - bottom_h;
     dl->AddImage(frame, {x, y}, {x + w, y + top_h}, {0, 0}, {1, kTopV});
     dl->AddImage(frame, {x, y + top_h}, {x + w, y + top_h + mid_h}, {0, kTopV}, {1, kBottomV});
@@ -3071,10 +3074,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
   // with our banner, or the lettering drawn from shapes without it.
   const bool profile_clicked = DrawProfileBadge(width, u);
   DrawUpdateAll(width, u);  // "Alle aktualisieren", while there are updates
-  const float title_cx = TitlePlateCenter(bold_, width, badge_left_, u);
-  if (!DrawTitleLogo(dl, bold_, background_art_.empty() ? std::filesystem::path() : background_art_[0], title_cx, u)) {
-    DrawTitlePlate(dl, bold_, title_cx, u);
-  }
+  // Our own title, the same for everyone (the owner, 2026-11-16), in the titles' font.
+  ImFont* display = display_ ? display_ : bold_;
+  const float title_cx = TitlePlateCenter(display, width, badge_left_, u);
+  DrawTitlePlate(dl, display, title_cx, u);
 
   // The cards: six in a row, or three in two rows on a narrow window.
   const size_t n = found_.size();

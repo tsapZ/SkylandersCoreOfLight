@@ -473,6 +473,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   ImFont* bold = LoadFont(io, L"segoeuib.ttf", L"NotoSans-Bold.ttf");
   if (!regular) regular = io.Fonts->AddFontDefault();
   if (!bold) bold = regular;
+  // The titles' font (#78): Lilita One (SIL OFL, fonts\OFL-LilitaOne.txt), chunky like the games' lettering
+  // but nobody's logo. Only from the launcher's fonts folder (Windows has no such font).
+  ImFont* display = LoadFont(io, L"LilitaOne-Regular.ttf", L"LilitaOne-Regular.ttf");
 
   coreoflight::SetTextureDevice(g_device);
   {
@@ -499,6 +502,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   }
   coreoflight::LauncherUi ui;
   ui.Init(LauncherDir(), regular, bold);
+  ui.SetDisplayFont(display);
   if (fullscreen_arg) ui.StartFullscreen();
   g_ui = &ui;
   if (!iso.empty()) ui.AddDisc(iso);
