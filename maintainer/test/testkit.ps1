@@ -166,7 +166,7 @@ public static class TestkitWindow {
 # -Build: the build folder's name after win-amd64- (release, or devkit for the developer kit's build).
 function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]$Run, [string]$Shots,
                      [string]$Extra = "", [int]$QuitTimeout = 180, [string]$Build = "release",
-                     [switch]$ShotsFromLog) {
+                     [switch]$ShotsFromLog, [string]$RenderDocCapture = "") {
   # The game of a run just before can still be closing (saving, its threads ending): up to 60 s for it
   # to go before calling it another run (2026-11-12: three runs of a chain were lost to this).
   for ($i = 0; $i -lt 120 -and (Get-Process *recompiled* -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
@@ -190,7 +190,11 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   # -ShotsFromLog: no timeline; each picture is taken a second after the game logs the route's
   # "log shot <name>" line, so a waitfor before it (any length) can't put it off (2026-11-12).
   $timeline = if ($ShotsFromLog) { "" } else { $Shots }
-  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $timeline -Config $Build -KeepRunning 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
+  # -RenderDocCapture <path\prefix>: the game started through RenderDoc (the runner's own option), so the dev kit's
+  # "renderdoc <frames>" line can take a capture (the SDK only talks to a RenderDoc that is already loaded).
+  $more = @{}
+  if ($RenderDocCapture) { $more.RenderDocCapture = $RenderDocCapture }
+  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $timeline -Config $Build -KeepRunning @more 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
   finally { Pop-Location }
   $exe = $script:Games[$Repo].Exe
   $limit = 2 * $QuitTimeout
