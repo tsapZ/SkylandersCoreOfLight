@@ -220,6 +220,17 @@ pictures here leave it out. The banner at the top is our own drawing.
 
 <br>
 
+## How you can help
+
+- **Another disc:** if your Xbox 360 disc is another pressing (other languages or another region), open an issue with
+  a list of its folders and files with their sizes and the SHA-256 of its `default.xex` (no game files themselves).
+  That tells me whether it works or what is missing. Wanted most: Imaginators with English or German, and the
+  title updates a console downloaded (SuperChargers 1.06, Imaginators 1.1.0).
+- **A Traptanium portal:** how its speaker and trap light behave in Trap Team (I don't have one to test with).
+- **Problems:** a report from *Report a problem* in an issue, as above. Ideas are welcome there too.
+
+<br>
+
 ## Planned
 
 | Part | Issues |
