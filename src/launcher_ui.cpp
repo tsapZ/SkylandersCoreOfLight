@@ -1246,6 +1246,15 @@ void LauncherUi::AskWiiu(bool superchargers) {
               10.0);
     return;
   }
+  // Not while something else changes the game's files: the language import patches the same archives (it may run
+  // before the Wii U figures go in, as they keep what it made; LanguageAllowed keeps it from running after), a disc
+  // being set up, an update.
+  const size_t index = superchargers ? SuperChargersIndex() : ImaginatorsIndex();
+  if (language_import_.running() || import_.running() || BeingUpdated(index)) {
+    ShowToast(german_ ? "Warte, bis das Einspielen oder Aktualisieren fertig ist." : "Wait until the import or update is done.",
+              8.0);
+    return;
+  }
   if (WiiuFigures::Installed(found_[superchargers ? SuperChargersIndex() : ImaginatorsIndex()].rom)) {
     wiiu_remove_ = superchargers ? 1 : 2;
     return;
@@ -1292,8 +1301,10 @@ bool LauncherUi::DrawWiiuRemove(float width, float height) {
   const bool no = button(b.x - 320 * u, "B", Rgba(200, 60, 60), german_ ? "Behalten" : "Keep");
   ImGui::End();
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
-    wiiu_figures_.StartRestore(sc ? WiiuFigures::Game::kSuperChargers : WiiuFigures::Game::kImaginators,
-                               found_[index].exe.parent_path(), german_);
+    if (!wiiu_figures_.running() && !language_import_.running()) {
+      wiiu_figures_.StartRestore(sc ? WiiuFigures::Game::kSuperChargers : WiiuFigures::Game::kImaginators,
+                                 found_[index].rom, found_[index].exe.parent_path(), german_);
+    }
     wiiu_remove_ = 0;
   } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     wiiu_remove_ = 0;
@@ -1301,8 +1312,23 @@ bool LauncherUi::DrawWiiuRemove(float width, float height) {
   return true;
 }
 
+// The language import patches the archives the Wii U figures replaced or added: while they are in (or going in), a
+// language change would be undone wrongly by taking them out, so it waits until they are out (a toast says so).
+bool LauncherUi::WiiuBlocksLanguage(bool superchargers) {
+  const size_t index = superchargers ? SuperChargersIndex() : ImaginatorsIndex();
+  if (!wiiu_figures_.running() &&
+      (index >= found_.size() || found_[index].rom.empty() || !WiiuFigures::Installed(found_[index].rom))) {
+    return false;
+  }
+  ShowToast(german_ ? "Nimm erst die Wii-U-Figuren heraus (Einstellungen), dann l\xC3\xA4sst sich die Sprache \xC3\xA4ndern."
+                    : "Take the Wii U figures out first (settings), then the language can change.",
+            10.0);
+  return true;
+}
+
 void LauncherUi::AskLanguage(const std::filesystem::path& source, bool superchargers) {
   if (language_import_.running()) return;  // its note shows how far it is
+  if (WiiuBlocksLanguage(superchargers)) return;
   if (superchargers) {
     if (!SuperChargersReady()) {
       ShowToast(german_ ? "SuperChargers braucht zuerst seine Xbox-360-Disc, dann die Disc mit der Sprache."
@@ -1335,6 +1361,7 @@ void LauncherUi::AskLanguage(const std::filesystem::path& source, bool superchar
 void LauncherUi::TakeLanguageDisc(const std::filesystem::path& chosen) {
   const bool for_language = std::exchange(browse_for_language_, false);
   browser_.SetForLanguage(false);
+  if (WiiuBlocksLanguage(for_language && language_for_sc_)) return;
   if (for_language && language_for_sc_) {
     std::vector<std::string> has;
     if (!IsSuperChargersDisc(chosen, &has)) {
@@ -2937,9 +2964,11 @@ bool LauncherUi::DrawScreens(float width, float height) {
           ShowToast(german_ ? "Dort ist kein entpacktes Wii-U-Spiel (kein Ordner archives)."
                             : "That isn't an extracted Wii U game (no archives folder).",
                     10.0);
-        } else if (sc ? SuperChargersReady() : ImaginatorsReady()) {
-          wiiu_figures_.Start(sc ? WiiuFigures::Game::kSuperChargers : WiiuFigures::Game::kImaginators, chosen,
-                              found_[sc ? SuperChargersIndex() : ImaginatorsIndex()].exe.parent_path(), german_);
+        } else if ((sc ? SuperChargersReady() : ImaginatorsReady()) && !wiiu_figures_.running() &&
+                   !language_import_.running()) {
+          const Found& f = found_[sc ? SuperChargersIndex() : ImaginatorsIndex()];
+          wiiu_figures_.Start(sc ? WiiuFigures::Game::kSuperChargers : WiiuFigures::Game::kImaginators, chosen, f.rom,
+                              f.exe.parent_path(), german_);
         }
       } else if (folder_browser_.for_figures()) {
         // The Imaginators exe checks the files (figure_import.h); the toast says what came in.

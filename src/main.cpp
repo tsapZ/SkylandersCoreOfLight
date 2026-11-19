@@ -213,9 +213,9 @@ int RunHeadlessTools(const LaunchOptions& opts) {
                                     : coreoflight::WiiuFigures::Game::kImaginators;
     coreoflight::WiiuFigures job;
     if (source == "restore") {
-      job.StartRestore(which, game_dir, false);
+      job.StartRestore(which, game_dir / "rom", game_dir, false);
     } else {
-      job.Start(which, coreoflight::PathFromUtf8(source), game_dir, false);
+      job.Start(which, coreoflight::PathFromUtf8(source), game_dir / "rom", game_dir, false);
     }
     while (job.running()) {
 #ifdef _WIN32

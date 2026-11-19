@@ -33,10 +33,12 @@ class WiiuFigures {
   // Whether the Wii U figures are in the game whose disc folder is `rom` (its wiiu_figures.txt is there).
   static bool Installed(const std::filesystem::path& rom);
 
-  // `wiiu` the player's extracted Wii U game, `game_dir` the Core of Light game folder (its exe, its .toml and rom).
-  void Start(Game game, const std::filesystem::path& wiiu, const std::filesystem::path& game_dir, bool german);
+  // `wiiu` the player's extracted Wii U game, `rom` the game's disc folder (as the launcher found it; the tools take
+  // its parent as the Core of Light folder), `exe_dir` the folder with the game's exe and .toml.
+  void Start(Game game, const std::filesystem::path& wiiu, const std::filesystem::path& rom,
+             const std::filesystem::path& exe_dir, bool german);
   // Puts the game back as it was before Start.
-  void StartRestore(Game game, const std::filesystem::path& game_dir, bool german);
+  void StartRestore(Game game, const std::filesystem::path& rom, const std::filesystem::path& exe_dir, bool german);
 
   bool running() const { return shared_ && !shared_->done; }
   float progress() const { return shared_ ? shared_->progress.load() : 0.0f; }

@@ -286,6 +286,7 @@ class LauncherUi {
   WiiuFigures wiiu_figures_;
   int wiiu_remove_ = 0;
   void AskWiiu(bool superchargers);
+  bool WiiuBlocksLanguage(bool superchargers);
   bool WiiuLabel();
   bool DrawWiiuRemove(float width, float height);
   DataFolderMove data_move_;
