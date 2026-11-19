@@ -1206,6 +1206,10 @@ bool LauncherUi::LanguageLabel() {
       for (const std::string& code : SuperChargersInstallLanguages(rom)) names += (names.empty() ? "" : ", ") + own_name(code);
       sc_en = "The disc's own (" + names + ")";
       sc_de = "Wie die Disc (" + names + ")";
+    } else if (now == "?") {
+      // An import without a note (tools/german_text.py's, or one that didn't finish): as Imaginators says it.
+      sc_en = "Changed (by a tool)";
+      sc_de = "Ge\xC3\xA4ndert (mit einem Werkzeug)";
     } else {
       sc_en = own_name(now) + " (as " + own_name(place) + ")";
       sc_de = own_name(now) + " (als " + own_name(place) + ")";
