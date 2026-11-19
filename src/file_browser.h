@@ -32,6 +32,13 @@ class FileBrowser {
   void SetForData(bool data) {
     for_data_ = data;
     for_figures_ = false;
+    for_3ds_ = false;
+  }
+  // In folders-only mode: the folder with the 3DS cartridge dumps (ds3_ui.h). Set before Open.
+  void SetFor3ds(bool on) {
+    for_3ds_ = on;
+    for_data_ = false;
+    for_figures_ = false;
   }
   // In folders-only mode: a folder of Imaginators figure files to import (figure_import.h, #34).
   // Set before Open; SetForData(false) or (true) ends it.
@@ -70,6 +77,7 @@ class FileBrowser {
   bool folders_only_ = false;  // choosing a folder (the games folder), not a disc
   bool for_data_ = false;      // the folder is the data folder's place (SetForData)
   bool for_figures_ = false;   // the folder has figure files to import (SetForFigures)
+  bool for_3ds_ = false;       // the folder has the 3DS dumps (SetFor3ds)
   bool for_language_ = false;  // the disc is Imaginators' PS3 disc (SetForLanguage)
   bool for_sc_language_ = false;  // ... or another Xbox 360 disc of SuperChargers with the language (#77)
   bool for_backup_ = false;    // the file is a data export to import (SetForBackup)

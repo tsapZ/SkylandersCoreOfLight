@@ -66,6 +66,17 @@ void Ds3Screen::Init(ImFont* regular, ImFont* bold, bool german) {
   regular_ = regular;
   bold_ = bold;
   german_ = german;
+  browser_.Init(regular, bold, german, true);
+  browser_.SetFor3ds(true);
+}
+
+void Ds3Screen::TakeFolder(const std::filesystem::path& folder) {
+  folder_ = folder;
+  WriteGameSetting(HubSettingsFile(), "Hub", "ds3_folder", "string", PathUtf8(folder_));
+  Scan();
+  char line[96];
+  std::snprintf(line, sizeof(line), german_ ? "%d Spiel(e) gefunden." : "%d game(s) found.", int(dumps_.size()));
+  Say(line, dumps_.empty());
 }
 
 void Ds3Screen::Open() {
@@ -110,6 +121,12 @@ void Ds3Screen::StartSelected() {
 }
 
 void Ds3Screen::Draw(float width, float height) {
+  // X: the launcher's folder browser on top (pad and keyboard); what it chose becomes the folder.
+  if (browser_.is_open()) {
+    browser_.Draw(width, height);
+    if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) TakeFolder(chosen);
+    return;
+  }
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({width, height});
   ImGui::Begin("ds3", nullptr,
@@ -164,16 +181,11 @@ void Ds3Screen::Draw(float width, float height) {
   }
   if (n > 0 && (once(ImGuiKey_Enter) || once(ImGuiKey_GamepadFaceDown))) StartSelected();
   if (!install_.running() && (once(ImGuiKey_Y) || once(ImGuiKey_GamepadFaceUp))) install_.Start(german_);
-  if (once(ImGuiKey_X) || once(ImGuiKey_GamepadFaceLeft)) {
+  if (once(ImGuiKey_X) || once(ImGuiKey_GamepadFaceLeft)) browser_.Open(folder_);
+  // O: the Windows dialog for the folder, as on the start screen.
+  if (once(ImGuiKey_O)) {
     std::filesystem::path picked = folder_;
-    if (DiscImport::PickFolder(picked, german_) && !picked.empty()) {
-      folder_ = picked;
-      WriteGameSetting(HubSettingsFile(), "Hub", "ds3_folder", "string", PathUtf8(folder_));
-      Scan();
-      char line[96];
-      std::snprintf(line, sizeof(line), german_ ? "%d Spiel(e) gefunden." : "%d game(s) found.", int(dumps_.size()));
-      Say(line, dumps_.empty());
-    }
+    if (DiscImport::PickFolder(picked, german_) && !picked.empty()) TakeFolder(picked);
   }
 
   // The cards: one per dump, its own icon, the game, the region, whether it can run.

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ds3_games.h"
+#include "file_browser.h"
 
 struct ImFont;
 
@@ -29,6 +30,7 @@ class Ds3Screen {
   void Scan();
   void Say(const std::string& text, bool bad);
   void StartSelected();
+  void TakeFolder(const std::filesystem::path& folder);
 
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;
@@ -39,6 +41,7 @@ class Ds3Screen {
   int selected_ = 0;
   std::string installed_;  // the Azahar version there, "" if none
   AzaharInstall install_;
+  FileBrowser browser_;  // X: the folder, with the pad
   void* started_ = nullptr;
   std::string message_;
   bool message_bad_ = false;
