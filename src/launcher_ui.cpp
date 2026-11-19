@@ -700,6 +700,8 @@ void* LauncherUi::TakeStartedProcess() {
 
 void LauncherUi::Start(size_t index) {
   if (index >= found_.size()) return;
+  // An Azahar from the 3DS screen is starting (its window not up yet) or running: one at a time.
+  if (ds3_process_) return;
   // A does what the card needs: a game without its disc opens the disc browser, one that isn't
   // installed or has another disc version says so (nothing could run).
   auto say = [&](const char* de, const char* en) {
@@ -1644,7 +1646,8 @@ bool LauncherUi::Draw(float width, float height) {
     std::filesystem::path wanted;
     // None while a game starts or runs: Start's music_.Stop() was undone by the launch screen's next
     // frame, and the music went on behind the game (a colleague's Bazzite, #20).
-    if (hub_.title_music && running_key_.empty() && selected_ < found_.size() && !found_[selected_].exe.empty()) {
+    if (hub_.title_music && running_key_.empty() && !ds3_process_ && selected_ < found_.size() &&
+        !found_[selected_].exe.empty()) {
       wanted = TitleMusicFile(selected_);
     }
     // The volume as the launcher's settings show it while they are open, before it is saved (#24).
@@ -2939,11 +2942,13 @@ bool LauncherUi::DrawScreens(float width, float height) {
     return true;
   }
   if (ds3_screen_.is_open()) {
+    ds3_screen_.set_busy(ds3_process_);
     ds3_screen_.Draw(width, height);
     // Azahar with a dump: main.cpp waits for it as for a game (the launcher hides meanwhile).
     if (void* p = ds3_screen_.TakeStartedProcess()) {
       started_ = p;
       ds3_process_ = true;
+      music_.Stop();  // the chosen card's title music would go on behind Azahar
     }
     return true;
   }

@@ -8,6 +8,7 @@
 
 #include "games.h"
 #include "hub_log.h"
+#include "hub_settings.h"
 #include "platform.h"
 #include "portable.h"
 #include "updates.h"
@@ -22,15 +23,12 @@ constexpr char kAzaharRepo[] = "azahar";
 constexpr char kAzaharTagPrefix[] = "skylanders-";  // its tags: skylanders-0.1.0-beta.1
 #ifdef _WIN32
 constexpr char kAzaharAsset[] = "azahar-skylanders-windows";  // -<version>.zip
-#else
-constexpr char kAzaharAsset[] = "azahar-skylanders-linux";    // none yet: the screen says so
-#endif
-constexpr char kAzaharFolderName[] = "Azahar for Skylanders";
-#ifdef _WIN32
 constexpr char kAzaharExe[] = "azahar.exe";
 #else
+constexpr char kAzaharAsset[] = "azahar-skylanders-linux";    // none yet: the install says so
 constexpr char kAzaharExe[] = "azahar";
 #endif
+constexpr char kAzaharFolderName[] = "Azahar for Skylanders";
 
 uint32_t Le32(const unsigned char* p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24; }
 
@@ -67,25 +65,32 @@ std::string LowerAscii(std::string s) {
   return s;
 }
 
-// --azahar_zip=<zip>: a local Azahar for Skylanders to install (scripted tests, also --offline).
-fs::path AzaharZipArg() {
+std::string ArgValue(const char* prefix) {
   for (const std::string& a : LaunchArgs()) {
-    if (a.starts_with("--azahar_zip=")) return PathFromUtf8(a.substr(13));
+    if (a.starts_with(prefix)) return a.substr(std::strlen(prefix));
   }
   return {};
 }
 
 // The version in an asset's name: azahar-skylanders-windows-0.1.0-beta.1.zip -> 0.1.0-beta.1.
 std::string VersionOfZip(const fs::path& zip) {
-  std::string name = PathUtf8(zip.filename());
+  const std::string name = PathUtf8(zip.filename());
   const std::string prefix = std::string(kAzaharAsset) + "-";
   if (!name.starts_with(prefix) || !name.ends_with(".zip")) return {};
   return name.substr(prefix.size(), name.size() - prefix.size() - 4);
 }
 
-std::mutex g_newest_mutex;
-std::string g_newest;
-bool g_newest_asked = false;
+// The newest version on GitHub, kept on the heap and never freed: the detached thread that asks
+// may still run while the launcher ends.
+struct Newest {
+  std::mutex mutex;
+  std::string version;
+  bool asking = false, known = false;
+};
+Newest& TheNewest() {
+  static Newest* newest = new Newest;
+  return *newest;
+}
 
 }  // namespace
 
@@ -105,7 +110,7 @@ const char* Ds3RegionName(char region, bool german) {
     case 'P': return german ? "Europa" : "Europe";
     case 'E': return "USA";
     case 'J': return "Japan";
-    case 'K': return german ? "Korea" : "Korea";
+    case 'K': return "Korea";
     case 'U': return german ? "Australien" : "Australia";
     default: return "";
   }
@@ -157,22 +162,30 @@ std::vector<Ds3Dump> FindDs3Dumps(const fs::path& folder) {
   std::vector<Ds3Dump> found;
   std::error_code ec;
   if (folder.empty() || !fs::is_directory(folder, ec)) return found;
-  for (fs::recursive_directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec), end;
-       !ec && it != end; it.increment(ec)) {
+  fs::recursive_directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec);
+  const fs::recursive_directory_iterator end;
+  while (!ec && it != end) {
     if (it.depth() >= 2) it.disable_recursion_pending();
     std::error_code type_ec;
-    if (!it->is_regular_file(type_ec)) continue;
     const std::string ext = LowerAscii(PathUtf8(it->path().extension()));
-    if (ext != ".cci" && ext != ".3ds") continue;
-    std::optional<Ds3Dump> dump = ReadDs3Dump(it->path());
-    if (!dump) continue;
-    // One per game and region: a decrypted one wins over an encrypted one.
-    auto same = std::find_if(found.begin(), found.end(),
-                             [&](const Ds3Dump& d) { return d.game == dump->game && d.region == dump->region; });
-    if (same == found.end()) {
-      found.push_back(std::move(*dump));
-    } else if (same->encrypted && !dump->encrypted) {
-      *same = std::move(*dump);
+    if ((ext == ".cci" || ext == ".3ds") && it->is_regular_file(type_ec)) {
+      if (std::optional<Ds3Dump> dump = ReadDs3Dump(it->path())) {
+        // One per game and region: a decrypted one wins over an encrypted one.
+        auto same = std::find_if(found.begin(), found.end(),
+                                 [&](const Ds3Dump& d) { return d.game == dump->game && d.region == dump->region; });
+        if (same == found.end()) {
+          found.push_back(std::move(*dump));
+        } else if (same->encrypted && !dump->encrypted) {
+          *same = std::move(*dump);
+        }
+      }
+    }
+    it.increment(ec);
+    // A folder that can't be read (a broken link, a cloud placeholder, one deleted meanwhile): leave
+    // it and go on with the next one instead of ending the whole search.
+    for (int tries = 0; ec && it != end && tries < 64; ++tries) {
+      ec.clear();
+      it.pop(ec);
     }
   }
   std::sort(found.begin(), found.end(), [](const Ds3Dump& a, const Ds3Dump& b) {
@@ -181,12 +194,21 @@ std::vector<Ds3Dump> FindDs3Dumps(const fs::path& folder) {
   return found;
 }
 
-fs::path AzaharFolder() { return GamesFolder() / kAzaharFolderName; }
+fs::path AzaharFolder() {
+  // Where it was installed, as long as it is still there (a new games folder doesn't strand its saves).
+  if (const std::string stored = LoadHubSettings().ds3_azahar; !stored.empty()) {
+    const fs::path dir = FolderFromStored(stored);
+    std::error_code ec;
+    if (fs::is_regular_file(dir / kAzaharExe, ec)) return dir;
+  }
+  return GamesFolder() / kAzaharFolderName;
+}
 
 std::string InstalledAzaharVersion() {
+  const fs::path dir = AzaharFolder();
   std::error_code ec;
-  if (!fs::is_regular_file(AzaharFolder() / kAzaharExe, ec)) return {};
-  std::ifstream in(AzaharFolder() / "version.txt");
+  if (!fs::is_regular_file(dir / kAzaharExe, ec)) return {};
+  std::ifstream in(dir / "version.txt");
   std::string line;
   std::getline(in, line);
   while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
@@ -210,9 +232,11 @@ void AzaharInstall::Start(bool german) {
       HubWarn("3DS: Azahar for Skylanders not installed: " + why);
       s->done = true;
     };
-    fs::path zip = AzaharZipArg();
+    // --azahar_zip only with a scratch --install_dir: a test never writes the player's own install.
+    fs::path zip = PathFromUtf8(ArgValue("--azahar_zip="));
     std::string version;
     if (!zip.empty()) {
+      if (ArgValue("--install_dir=").empty()) return fail("--azahar_zip needs --install_dir=<a scratch folder>");
       version = VersionOfZip(zip);
     } else if (Offline()) {
       return fail(german ? "Offline: nichts heruntergeladen." : "Offline: nothing downloaded.");
@@ -238,69 +262,130 @@ void AzaharInstall::Start(bool german) {
     std::vector<ZipFile> files;
     std::string error;
     if (!ReadZipFiles(zip, files, german, error)) return fail(error);
-    // The files below the ZIP's one top folder (azahar-skylanders-<version>\) into AzaharFolder(),
-    // over the old ones; its "user" folder (settings and saves) is never replaced.
-    const fs::path dest = AzaharFolder();
-    std::error_code ec;
-    fs::create_directories(dest / "user", ec);
-    size_t written = 0;
+    const std::string damaged = german ? "Das Paket ist anders aufgebaut als erwartet." : "The package isn't laid out as expected.";
+    // One top folder (azahar-skylanders-<version>\) with everything in it, azahar.exe among it.
+    if (files.empty()) return fail(damaged);
+    const fs::path top = *files.front().path.begin();
+    bool has_exe = false;
     for (const ZipFile& f : files) {
       auto part = f.path.begin();
-      if (part == f.path.end()) continue;
+      if (part == f.path.end() || *part != top || std::distance(f.path.begin(), f.path.end()) < 2) return fail(damaged);
+      if (f.path == top / kAzaharExe) has_exe = true;
+    }
+    if (!has_exe) return fail(damaged);
+
+    const fs::path dest = AzaharFolder();
+    const fs::path staging = WithPathSuffix(dest, ".new"), old = WithPathSuffix(dest, ".old");
+    std::error_code ec;
+    fs::remove_all(staging, ec);
+    fs::create_directories(staging, ec);
+    auto give_up = [&](const std::string& why) {
+      std::error_code ignore;
+      fs::remove_all(staging, ignore);
+      fail(why);
+    };
+    size_t written = 0;
+    for (const ZipFile& f : files) {
       fs::path rel;
-      for (++part; part != f.path.end(); ++part) rel /= *part;
-      if (rel.empty() || *rel.begin() == "user") continue;
-      const fs::path out = dest / rel;
+      for (auto part = std::next(f.path.begin()); part != f.path.end(); ++part) rel /= *part;
+      if (*rel.begin() == "user") continue;  // the player's own settings and saves come from the old folder
+      const fs::path out = staging / rel;
       fs::create_directories(out.parent_path(), ec);
       std::ofstream o(out, std::ios::binary | std::ios::trunc);
       o.write(f.data.data(), std::streamsize(f.data.size()));
-      if (!o) return fail((german ? "Konnte nicht schreiben: " : "Couldn't write: ") + PathUtf8(out));
+      o.close();
+      if (!o) return give_up((german ? "Konnte nicht schreiben: " : "Couldn't write: ") + PathUtf8(out));
       ++written;
     }
-    if (!fs::is_regular_file(dest / kAzaharExe, ec)) {
-      return fail(german ? "Im Paket fehlt azahar.exe." : "The package has no azahar.exe.");
+    {
+      std::ofstream v(staging / "version.txt", std::ios::trunc);
+      v << (version.empty() ? "?" : version) << "\n";
+      v.close();
+      if (!v) return give_up((german ? "Konnte nicht schreiben: " : "Couldn't write: ") + PathUtf8(staging / "version.txt"));
     }
-    std::ofstream(dest / "version.txt", std::ios::trunc) << (version.empty() ? "?" : version) << "\n";
+#ifndef _WIN32
+    MakeExecutable(staging / kAzaharExe);
+#endif
+    // The swap: the old folder's user (settings, saves) into the new one, the old folder aside, the
+    // new one in its place, the old one deleted. A running Azahar keeps its files open, so the old
+    // folder can't move then: everything goes back as it was.
+    const bool had_old = fs::exists(dest, ec);
+    if (had_old) {
+      fs::remove_all(old, ec);
+      const bool had_user = fs::is_directory(dest / "user", ec);
+      if (had_user) {
+        fs::rename(dest / "user", staging / "user", ec);
+        if (ec) return give_up(german ? "Die Spielst\xC3\xA4nde lie\xC3\x9F" "en sich nicht verschieben (l\xC3\xA4uft Azahar noch?)."
+                                      : "The saves couldn't be moved (is Azahar still running?).");
+      }
+      fs::rename(dest, old, ec);
+      if (ec) {
+        std::error_code back;
+        if (had_user) fs::rename(staging / "user", dest / "user", back);
+        return give_up(german ? "Der alte Ordner lie\xC3\x9F sich nicht ersetzen (l\xC3\xA4uft Azahar noch?)."
+                              : "The old folder couldn't be replaced (is Azahar still running?).");
+      }
+    } else {
+      fs::create_directories(dest.parent_path(), ec);
+    }
+    fs::create_directories(staging / "user", ec);
+    fs::rename(staging, dest, ec);
+    if (ec) {
+      std::error_code back;
+      if (had_old) {
+        fs::rename(old, dest, back);
+        fs::rename(staging / "user", dest / "user", back);
+      }
+      return give_up(german ? "Der neue Ordner lie\xC3\x9F sich nicht an seinen Platz bringen."
+                            : "The new folder couldn't be put in place.");
+    }
+    if (had_old) fs::remove_all(old, ec);
     HubLog("3DS: Azahar for Skylanders " + version + " installed into " + PathUtf8(dest) + " (" +
            std::to_string(written) + " files)");
     s->ok = true;
-    s->message = (german ? "Azahar for Skylanders " : "Azahar for Skylanders ") + version +
-                 (german ? " ist installiert." : " is installed.");
+    s->folder = dest;
+    s->message = "Azahar for Skylanders " + version + (german ? " ist installiert." : " is installed.");
     s->progress = 1.0f;
     s->done = true;
   });
 }
 
-bool AzaharInstall::TakeResult(std::string& message, bool& ok) {
+bool AzaharInstall::TakeResult(std::string& message, bool& ok, std::filesystem::path& folder) {
   if (!state_ || !state_->done.load()) return false;
   if (thread_.joinable()) thread_.join();
   message = state_->message;
   ok = state_->ok;
+  folder = state_->folder;
   state_.reset();
   return true;
 }
 
 void Ds3LookForAzaharUpdate() {
+  Newest& n = TheNewest();
   {
-    std::lock_guard<std::mutex> lock(g_newest_mutex);
-    if (g_newest_asked || Offline()) return;
-    g_newest_asked = true;
+    std::lock_guard<std::mutex> lock(n.mutex);
+    if (n.asking || n.known || Offline()) return;
+    n.asking = true;
   }
-  std::thread([] {
+  std::thread([&n] {
     const std::optional<Release> release = FetchLatestRelease(kAzaharRepo, kAzaharAsset, ".zip", kAzaharTagPrefix);
+    std::lock_guard<std::mutex> lock(n.mutex);
+    n.asking = false;
+    // A failed try (no network, GitHub slow) is asked again at the next opening of the screen.
     if (!release) return;
-    std::lock_guard<std::mutex> lock(g_newest_mutex);
-    g_newest = release->version;
+    n.version = release->version;
+    n.known = true;
   }).detach();
 }
 
 std::string Ds3NewestAzahar() {
-  std::lock_guard<std::mutex> lock(g_newest_mutex);
-  return g_newest;
+  Newest& n = TheNewest();
+  std::lock_guard<std::mutex> lock(n.mutex);
+  return n.version;
 }
 
 void* StartDs3Dump(const Ds3Dump& dump, bool german, std::string& error) {
-  const fs::path exe = AzaharFolder() / kAzaharExe;
+  const fs::path dir = AzaharFolder(), exe = dir / kAzaharExe;
   std::error_code ec;
   if (!fs::is_regular_file(exe, ec)) {
     error = german ? "Azahar for Skylanders ist noch nicht installiert." : "Azahar for Skylanders isn't installed yet.";
@@ -311,7 +396,7 @@ void* StartDs3Dump(const Ds3Dump& dump, bool german, std::string& error) {
                    : "This dump is encrypted: Azahar needs it decrypted.";
     return nullptr;
   }
-  void* process = SpawnProcess(exe, {PathUtf8(dump.file)}, AzaharFolder());
+  void* process = SpawnProcess(exe, {PathUtf8(dump.file)}, dir);
   if (!process) {
     error = german ? "Azahar lie\xC3\x9F sich nicht starten." : "Azahar couldn't be started.";
     return nullptr;

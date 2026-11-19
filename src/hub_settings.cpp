@@ -20,6 +20,20 @@ std::string Unquoted(const std::string& v) {
   return v.size() >= 2 && v.front() == '"' && v.back() == '"' ? v.substr(1, v.size() - 2) : v;
 }
 
+// A folder as WriteGameSetting wrote it ("string": \ and " escaped; ReadIni's Trim already took the
+// quotes off): \\ and \" back to \ and ". The folders were read with doubled backslashes, harmless
+// on Windows for C:\..., but a folder read and written again doubled them each time, and a network
+// folder (\\server\share) didn't work (2026-11-19). Any other backslash stays (a hand-written C:\Games).
+std::string Unescaped(const std::string& v) {
+  std::string out;
+  out.reserve(v.size());
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (v[i] == '\\' && i + 1 < v.size() && (v[i + 1] == '\\' || v[i + 1] == '"')) ++i;
+    out += v[i];
+  }
+  return out;
+}
+
 bool IsOn(const std::string& v, bool fallback) {
   if (v == "true" || v == "1") return true;
   if (v == "false" || v == "0") return false;
@@ -69,9 +83,10 @@ HubSettings LoadHubSettings() {
   s.auto_update_games = IsOn(get("auto_update_games"), s.auto_update_games);
   if (const std::string handheld = get("handheld"); handheld == "on" || handheld == "off") s.handheld = handheld;
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
-  s.games_dir = get("games_dir");
+  s.games_dir = Unescaped(get("games_dir"));
   s.old_data_kept = IsOn(get("old_data_kept"), s.old_data_kept);
-  s.ds3_folder = get("ds3_folder");
+  s.ds3_folder = Unescaped(get("ds3_folder"));
+  s.ds3_azahar = Unescaped(get("ds3_azahar"));
   for (int p = 0; p < 2; ++p) {
     const std::string v = get(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
     if (!v.empty() && v.size() < 4 && std::all_of(v.begin(), v.end(), ::isdigit)) {

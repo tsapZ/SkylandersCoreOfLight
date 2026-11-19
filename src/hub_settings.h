@@ -29,6 +29,7 @@ struct HubSettings {
   std::string games_dir;          // where the games are and new ones go (the setup or "Spiele-Ordner"); empty: %LOCALAPPDATA%\Programs
   bool old_data_kept = false;     // the old per-game folders were kept when asked (data_move.h): not asked again
   std::string ds3_folder;         // where the 3DS screen looks for the cartridge dumps (ds3_ui.h); empty: Downloads
+  std::string ds3_azahar;         // where Azahar for Skylanders was installed (ds3_games.h AzaharFolder)
   // How strongly player 1's and 2's controllers vibrate, 0-100 % (#35): the games' pad_rumble_p1/2
   // (their F4 > Controller), written into every game's settings file when changed here; -1 while
   // not set here (the launcher then shows a game's value).

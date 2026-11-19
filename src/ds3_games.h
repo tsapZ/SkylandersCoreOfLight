@@ -37,27 +37,34 @@ const char* Ds3RegionName(char region, bool german);
 // A .cci / .3ds file read in place (its headers and icon only): one of the five games, or nullopt.
 std::optional<Ds3Dump> ReadDs3Dump(const std::filesystem::path& file);
 // The dumps of the five games in `folder` and two folders below it, one per game and region (a
-// decrypted one before an encrypted one), by year.
+// decrypted one before an encrypted one), by year. A folder that can't be read is skipped, the
+// rest still counts. Blocks while it reads the folders: call it from a background thread.
 std::vector<Ds3Dump> FindDs3Dumps(const std::filesystem::path& folder);
 
-// Where Azahar for Skylanders goes: <games folder>\Azahar for Skylanders (games.h GamesFolder),
-// portable there (its settings and saves in its "user" folder).
+// Where Azahar for Skylanders is: the folder it was installed into (hub setting ds3_azahar), while
+// azahar.exe is still there, else <games folder>\Azahar for Skylanders (games.h GamesFolder) for a
+// new install. Portable there: its settings and saves in its "user" folder.
 std::filesystem::path AzaharFolder();
-// The version installed there (its version.txt, written after the install), "" if none.
+// The version installed there (its version.txt, written by the install), "" if none, "?" if the
+// file is missing.
 std::string InstalledAzaharVersion();
 
 // Installs or updates Azahar for Skylanders in the background: the newest release of tsapZ/azahar
-// (its azahar-skylanders-windows-<version>.zip, the hash GitHub gives checked), unpacked into
-// AzaharFolder() over the old files (its "user" folder stays). --azahar_zip=<zip> takes a local
-// one instead, also with --offline (scripted tests); otherwise --offline installs nothing.
+// (its azahar-skylanders-windows-<version>.zip, the hash GitHub gives checked). The ZIP (one top
+// folder with azahar.exe in it) is unpacked into <folder>.new first; then the old folder's "user"
+// (settings, saves) moves into it and it takes the old folder's place, so a failure on the way
+// leaves the old install as it was. --azahar_zip=<zip> takes a local one instead (scripted tests,
+// also --offline), only together with --install_dir=<scratch folder>; otherwise --offline installs
+// nothing.
 class AzaharInstall {
  public:
   ~AzaharInstall();
   void Start(bool german);
   bool running() const { return state_ && !state_->done.load(); }
   float progress() const { return state_ ? state_->progress.load() : 0.0f; }
-  // Once it's done: true and its message (ok tells whether it worked); false while it runs or none ran.
-  bool TakeResult(std::string& message, bool& ok);
+  // Once it's done: true, its message, whether it worked and the folder it went into; false while it
+  // runs or when none ran.
+  bool TakeResult(std::string& message, bool& ok, std::filesystem::path& folder);
 
  private:
   struct State {
@@ -66,13 +73,15 @@ class AzaharInstall {
     std::atomic<bool> cancel{false};
     bool ok = false;
     std::string message;
+    std::filesystem::path folder;
   };
   std::shared_ptr<State> state_;
   std::thread thread_;
 };
 
-// The newest Azahar for Skylanders on GitHub (its version, e.g. "0.1.0-beta.1"), asked once in the
-// background after Ds3LookForAzaharUpdate(); "" until known, without network or with --offline.
+// The newest Azahar for Skylanders on GitHub (its version, e.g. "0.1.0-beta.1"), asked in the
+// background by Ds3LookForAzaharUpdate() (once a run; again after a failed try); "" until known,
+// without network or with --offline.
 void Ds3LookForAzaharUpdate();
 std::string Ds3NewestAzahar();
 
