@@ -133,8 +133,9 @@ function Get-ScriptLength([string]$Script) {
   $t
 }
 
-# A window picture of the running game (as run_scripted.ps1's "shot": 640 wide, overlays included).
-function Save-GameWindow([System.Diagnostics.Process]$Process, [string]$Path) {
+# A window picture of the running game (as run_scripted.ps1's "shot": 640 wide, overlays included). -Full keeps the
+# window's own size (a route's "log shot <name> full"): picture faults (halos, blur, a grey block) need every pixel.
+function Save-GameWindow([System.Diagnostics.Process]$Process, [string]$Path, [switch]$Full) {
   if (-not ("TestkitWindow" -as [type])) {
     Add-Type -AssemblyName System.Drawing
     Add-Type @"
@@ -156,6 +157,11 @@ public static class TestkitWindow {
   $hdc = $g.GetHdc()
   [TestkitWindow]::PrintWindow($hwnd, $hdc, 3) | Out-Null
   $g.ReleaseHdc($hdc); $g.Dispose()
+  if ($Full) {
+    $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    return
+  }
   $small = New-Object System.Drawing.Bitmap $bmp, 640, ([int](640 * $bmp.Height / $bmp.Width))
   $small.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
   $small.Dispose(); $bmp.Dispose()
@@ -212,10 +218,11 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
         $reader = New-Object IO.StreamReader($stream)
       }
       while ($null -ne ($line = $reader.ReadLine())) {
-        if ($line -match 'Input script: shot (\S+)') {
+        if ($line -match 'Input script: shot (\S+)( full)?') {
+          $name = $Matches[1]; $full = [bool]$Matches[2]
           Start-Sleep -Milliseconds 1000
           $game = Get-Process $exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($game) { Save-GameWindow $game (Join-Path $Run "$($Matches[1]).png") }
+          if ($game) { Save-GameWindow $game (Join-Path $Run "$name.png") -Full:$full }
         }
       }
     }
