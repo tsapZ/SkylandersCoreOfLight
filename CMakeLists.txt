@@ -61,6 +61,8 @@ set(COREOFLIGHT_SOURCES
   src/profiles_ui.cpp
   src/achievements.cpp
   src/achievements_ui.cpp
+  src/ds3_games.cpp
+  src/ds3_ui.cpp
   src/problem_report.cpp
   src/saves.cpp
   src/saves_ui.cpp

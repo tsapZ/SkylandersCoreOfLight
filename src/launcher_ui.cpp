@@ -384,6 +384,7 @@ void LauncherUi::ApplyHubSettings() {
   figures_screen_.Init(regular_, bold_, german_);
   profiles_screen_.Init(regular_, bold_, german_);
   achievements_screen_.Init(regular_, bold_, german_);
+  ds3_screen_.Init(regular_, bold_, german_);
   saves_screen_.Init(regular_, bold_, german_);
   setup_.Init(regular_, bold_, german_);
 }
@@ -564,6 +565,14 @@ std::string GameErrorMessage(const Found& found) {
 
 void LauncherUi::GameExitCode(unsigned long code) {
   starting_ = false;
+  // Azahar (the 3DS screen): closed its own way, often not with 0; no crash report for an Xbox 360 game.
+  if (ds3_process_) {
+    ds3_process_ = false;
+    char line[64];
+    std::snprintf(line, sizeof(line), "3DS: Azahar ended, exit code 0x%08lX", code);
+    HubLog(line);
+    return;
+  }
   if (code == 0) return;
   size_t game = AllGames().size();
   for (size_t i = 0; i < AllGames().size(); ++i) {
@@ -751,6 +760,7 @@ void LauncherUi::Start(size_t index) {
   if (hub_.auto_backup) AutoBackup(ActiveProfile(), AllGames()[index], found_[index].exe);
   if (StartGame(found_[index], error, &process)) {
     started_ = process;
+    ds3_process_ = false;
     starting_ = true;
     starting_game_ = index;
     starting_since_ = ImGui::GetTime();
@@ -1566,6 +1576,7 @@ bool LauncherUi::Draw(float width, float height) {
                        : profiles_screen_.is_open()     ? "profiles"
                        : saves_screen_.is_open()        ? "saves"
                        : achievements_screen_.is_open() ? "achievements"
+                       : ds3_screen_.is_open()          ? "3ds"
                        : figures_screen_.is_open()      ? "figures"
                        : hub_screen_.is_open() || settings_.is_open() ? "settings"
                                                                       : "launcher";
@@ -2927,6 +2938,15 @@ bool LauncherUi::DrawScreens(float width, float height) {
     achievements_screen_.Draw(width, height);
     return true;
   }
+  if (ds3_screen_.is_open()) {
+    ds3_screen_.Draw(width, height);
+    // Azahar with a dump: main.cpp waits for it as for a game (the launcher hides meanwhile).
+    if (void* p = ds3_screen_.TakeStartedProcess()) {
+      started_ = p;
+      ds3_process_ = true;
+    }
+    return true;
+  }
   if (figures_screen_.is_open()) {
     figures_screen_.set_game_running(!running_key_.empty());
     figures_screen_.Draw(width, height);
@@ -3203,6 +3223,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
   } else if (pad_clicked_) {
     OpenHubSettings(kHubControllerPage);
   }
+  // R3 / 3: the 3DS games (ds3_ui.h).
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadR3, false) || ImGui::IsKeyPressed(ImGuiKey_3, false)) {
+    ds3_screen_.Open();
+  }
   // RB / E: the chosen game's achievements (achievements_ui.h).
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_E, false)) {
     achievements_screen_.Open(selected_);
@@ -3333,6 +3357,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   hx = Hint(dl, bold_, hs, {hx, hy}, "RB", Rgba(80, 90, 140), german_ ? "Erfolge" : "Achievements");
   hx = Hint(dl, bold_, hs, {hx, hy}, "RT", Rgba(80, 90, 140), german_ ? "Spielst\xC3\xA4nde" : "Saves");
   hx = Hint(dl, bold_, hs, {hx, hy}, "Back", Rgba(80, 90, 140), german_ ? "Profile" : "Profiles", "P");
+  hx = Hint(dl, bold_, hs, {hx, hy}, "R3", Rgba(80, 90, 140), "3DS", "3");
   hx = Hint(dl, bold_, hs, {hx, hy}, "LB", Rgba(80, 90, 140), "Launcher");
   hx = Hint(dl, bold_, hs, {hx, hy}, "B", Rgba(200, 60, 60),
             import_.running() ? (german_ ? "Einlesen abbrechen" : "Stop") : (german_ ? "Beenden" : "Quit"));

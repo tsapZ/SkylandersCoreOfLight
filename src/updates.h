@@ -28,10 +28,11 @@ struct Release {
 
 // The newest release of tsapZ/<repo> (pre-releases too, drafts not) with an asset named
 // <asset_prefix>-<version><extension> (a setup's .exe, the portable launcher's .zip); nullopt
-// without network, release or such an asset. Blocks (a few hundred milliseconds): call it from a
-// background thread.
+// without network, release or such an asset. The version is the tag without `tag_prefix` ("v";
+// tsapZ/azahar's tags are skylanders-<version>). Blocks (a few hundred milliseconds): call it from
+// a background thread.
 std::optional<Release> FetchLatestRelease(const std::string& repo, const std::string& asset_prefix,
-                                          const std::string& extension = ".exe");
+                                          const std::string& extension = ".exe", const std::string& tag_prefix = "v");
 
 // The releases kept from the last check, and when it was (Windows file time; 0: never).
 std::vector<Release> LoadKnownReleases(uint64_t* checked = nullptr);
