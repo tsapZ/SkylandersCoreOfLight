@@ -94,6 +94,7 @@ class LauncherUi {
 
   std::filesystem::path launcher_dir_;
   bool portable_ = false;  // the portable launcher (portable.h): updates from its ZIP, not the setup
+  bool appimage_ = false;  // started from an AppImage (Linux): its mount is read-only, no in-place update
   std::vector<Found> found_;
   ImFont* regular_ = nullptr;
   ImFont* bold_ = nullptr;

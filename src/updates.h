@@ -39,6 +39,9 @@ void SaveKnownReleases(const std::vector<Release>& releases);
 // Whether the last check is older than six hours.
 bool UpdateCheckDue();
 
+// The release's page on GitHub: an AppImage can't swap its own files, so it points there.
+std::string ReleasePageUrl(const Release& release);
+
 // Downloads `url` into `file` (written as <file>.part, renamed when complete): progress 0..1 into
 // `progress` while it runs, stops early when `cancel` becomes true. False on failure or cancel.
 // SHA-256 of a file (Windows' CNG), lower-case hex; empty if it can't be read.

@@ -8,6 +8,7 @@
 #include <string_view>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -346,6 +347,11 @@ void LauncherUi::Init(const std::filesystem::path& launcher_dir, ImFont* regular
   // The portable launcher (portable.h): what its last update left goes first.
   portable_ = IsPortable(launcher_dir);
   if (portable_) RemoveUpdateLeftovers(launcher_dir);
+  // An AppImage runs from a read-only mount: it can't swap its own files (DrawHubUpdate).
+#ifndef _WIN32
+  appimage_ = std::getenv("APPIMAGE") != nullptr;
+  if (appimage_) HubLog("launcher: AppImage, a new version comes as a new file from the release page");
+#endif
   regular_ = regular;
   bold_ = bold;
   // What is still in the old per-game folders goes into the one data folder first (data_move.h), so
@@ -2726,8 +2732,13 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
   const std::string title = "Core of Light " + release.version;
   Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
   char line[200];
-  std::snprintf(line, sizeof(line), german_ ? "Installiert: %s   \xC2\xB7   Download: %.1f MB" : "Installed: %s   \xC2\xB7   Download: %.1f MB",
-                COREOFLIGHT_VERSION, double(release.size) / (1024.0 * 1024.0));
+  if (appimage_) {
+    std::snprintf(line, sizeof(line), german_ ? "Installiert: %s   \xC2\xB7   Neu: %s" : "Installed: %s   \xC2\xB7   New: %s",
+                  COREOFLIGHT_VERSION, release.version.c_str());
+  } else {
+    std::snprintf(line, sizeof(line), german_ ? "Installiert: %s   \xC2\xB7   Download: %.1f MB" : "Installed: %s   \xC2\xB7   Download: %.1f MB",
+                  COREOFLIGHT_VERSION, double(release.size) / (1024.0 * 1024.0));
+  }
   Text(dl, regular_, 21 * u, {(width - TextWidth(regular_, 21 * u, line)) * 0.5f, a.y + 84 * u}, kWhite, line);
 #ifdef _WIN32
   const bool archive_update = portable_;
@@ -2735,7 +2746,10 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
   const bool archive_update = true;
 #endif
   const char* keeps =
-      archive_update
+      appimage_
+          ? (german_ ? "Diese AppImage aktualisiert sich nicht selbst: lade die neue Datei von der Release-Seite."
+                     : "This AppImage doesn't update itself: download the new file from the release page.")
+          : archive_update
           ? (german_ ? "Core of Light l\xC3\xA4" "dt sie, tauscht seine Dateien aus und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
                      : "The launcher downloads it, swaps its files and starts again. Games and saves stay.")
           : (german_ ? "Core of Light l\xC3\xA4" "dt sie, installiert sie und startet neu. Spiele und Spielst\xC3\xA4nde bleiben."
@@ -2794,11 +2808,17 @@ bool LauncherUi::DrawHubUpdate(float width, float height) {
     ButtonHint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
     return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
   };
-  const bool yes = button(a.x + 60 * u, "A", Rgba(70, 170, 70), german_ ? "Jetzt aktualisieren" : "Update now");
+  const bool yes = button(a.x + 60 * u, "A", Rgba(70, 170, 70),
+                          appimage_ ? (german_ ? "Release-Seite" : "Release page")
+                                    : (german_ ? "Jetzt aktualisieren" : "Update now"));
   const bool no = button(b.x - 320 * u, "B", Rgba(200, 60, 60), german_ ? "Sp\xC3\xA4ter" : "Later");
   ImGui::End();
   if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
-    if (!Downloading() && !install_process_) {
+    if (appimage_) {
+      // The mount is read-only: open the release page, the player downloads the new AppImage there.
+      OpenInFileManager(std::filesystem::path(ReleasePageUrl(release)));
+      hub_update_put_off_ = true;
+    } else if (!Downloading() && !install_process_) {
       StartDownload(release.url, DownloadsDir() / LocalAssetPath(release), 0, false, true, release.sha256);
     }
   } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
