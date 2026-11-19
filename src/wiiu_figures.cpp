@@ -44,16 +44,17 @@ constexpr char kListFile[] = "wiiu_figures.txt";  // in rom\archives\wiiu_backup
 
 struct Tool {
   const char* script;  // below the package
-  const char* exe;     // the game's exe, whose stem names its .toml
+  const char* exe;     // the game's exe (superpatcher patched it on builds before the ["Mods"] slot sizes)
+  const char* toml;    // the game's settings file next to it
   const char* name_en;
   const char* name_de;
 };
 
 const Tool& ToolFor(WiiuFigures::Game game) {
-  static const Tool kSuperChargers{"superpatcher/superpatcher.py", "superchargersrecompiled.exe", "SuperChargers",
-                                   "SuperChargers"};
-  static const Tool kImaginators{"imagipatcher/imagipatcher.py", "imaginatorsrecompiled.exe", "Imaginators",
-                                 "Imaginators"};
+  static const Tool kSuperChargers{"superpatcher/superpatcher.py", "superchargersrecompiled.exe",
+                                   "superchargersrecomp.toml", "SuperChargers", "SuperChargers"};
+  static const Tool kImaginators{"imagipatcher/imagipatcher.py", "imaginatorsrecompiled.exe", "imaginatorsrecomp.toml",
+                                 "Imaginators", "Imaginators"};
   return game == WiiuFigures::Game::kSuperChargers ? kSuperChargers : kImaginators;
 }
 
@@ -126,13 +127,15 @@ bool EnsurePackage(WiiuFigures::Shared& s, bool german, std::string& error) {
     return false;
   }
   fs::remove_all(dir, ec);
-  fs::rename(unpack / kPackageName, dir, ec);
+  std::error_code moved;
+  fs::rename(unpack / kPackageName, dir, moved);
   fs::remove_all(unpack, ec);
-  fs::remove(zip, ec);
-  if (ec) {
+  if (moved) {
+    HubWarn("wiiu figures: moving the unpacked converter failed: " + moved.message());
     error = german ? "Der Wii-U-Konverter lie\xC3\x9F sich nicht ablegen." : "Couldn't put the Wii U converter in place.";
     return false;
   }
+  fs::remove(zip, ec);
   s.progress = 0.3f;
   return true;
 }
@@ -207,6 +210,16 @@ int RunPython(const std::vector<std::wstring>& args, const std::function<void(co
     CloseHandle(read);
     return -1;
   }
+  // The tool (and the ffmpeg it starts) ends with the launcher: a job that kills its processes when its last handle
+  // closes, which this process holds until it exits.
+  static HANDLE job = [] {
+    HANDLE j = CreateJobObjectW(nullptr, nullptr);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (j) SetInformationJobObject(j, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+    return j;
+  }();
+  if (job) AssignProcessToJobObject(job, pi.hProcess);
   char buffer[4096];
   DWORD got = 0;
   std::string pending;
@@ -315,6 +328,35 @@ bool InstallArchives(const fs::path& converted, const fs::path& rom, std::string
   return bool(list.flush());
 }
 
+// Everything Start changed, back: the archives, the .igx files imagipatcher's --apply-config rewrote (their .orig
+// copies; the disc's own data, which an update of the game doesn't replace), and the settings it turned on. Not the
+// exe: superpatcher patched it only on builds before the ["Mods"] slot sizes, and an update may have replaced it
+// since, so its .orig could be an older exe. Not the .toml's .orig either (newer settings of the player's own).
+bool RestoreAll(WiiuFigures::Game game, const fs::path& game_dir) {
+  const Tool& tool = ToolFor(game);
+  const fs::path rom = RomOf(game_dir);
+  bool ok = RestoreArchives(rom);
+  std::error_code ec;
+  for (const fs::path& changed : {rom / "MemoryPoolConfigs.igx", rom / "VramBudget.igx"}) {
+    const fs::path orig = WithPathSuffix(changed, ".orig");
+    if (!fs::exists(orig, ec)) continue;
+    fs::copy_file(orig, changed, fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+      HubWarn("wiiu figures: couldn't put back " + PathUtf8(changed.filename()) + ": " + ec.message());
+      ok = false;
+    } else {
+      fs::remove(orig, ec);
+    }
+  }
+  const fs::path toml = game_dir / tool.toml;
+  WriteGameSetting(toml, "Portal", "portal_menu_nintendo", "bool", "false");
+  if (game == WiiuFigures::Game::kSuperChargers) {
+    WriteGameSetting(toml, "Mods", "hero_data_slot_size", "int", "0");
+    WriteGameSetting(toml, "Mods", "vehicle_slot_size", "int", "0");
+  }
+  return ok;
+}
+
 }  // namespace
 
 bool WiiuFigures::LooksLikeWiiuGame(const fs::path& folder) {
@@ -353,8 +395,8 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& game_di
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
     const fs::path rom = RomOf(game_dir);
-    // A second run starts from the game's own files.
-    if (Installed(rom) && !RestoreArchives(rom)) {
+    // A second run starts from the game's own files (else the tool's .orig copies would become the patched ones).
+    if (Installed(rom) && !RestoreAll(game, game_dir)) {
       return Finish(*s, german ? "Die Dateien vom letzten Mal lie\xC3\x9F" "en sich nicht zur\xC3\xBC" "cklegen."
                                : "Couldn't put back the files from last time.");
     }
@@ -398,8 +440,7 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& game_di
     ToolOutput config{*s, 0.9f, 0.98f, {}};
     const wchar_t* config_flag = game == Game::kSuperChargers ? L"--patch-exe" : L"--apply-config";
     const int config_code = RunPython({(pkg / tool.script).wstring(), config_flag, game_dir.wstring()}, std::ref(config));
-    const fs::path toml = game_dir / fs::path(tool.exe).replace_extension(".toml");
-    WriteGameSetting(toml, "Portal", "portal_menu_nintendo", "bool", "true");
+    WriteGameSetting(game_dir / tool.toml, "Portal", "portal_menu_nintendo", "bool", "true");
     fs::remove_all(work, ec);
     if (config_code != 0) {
       const std::string why = config.last.empty() ? std::string() : config.last.back();
@@ -418,23 +459,7 @@ void WiiuFigures::StartRestore(Game game, const fs::path& game_dir, bool german)
   std::thread([s = shared_, game, game_dir, german] {
     const Tool& tool = ToolFor(game);
     SetStep(*s, german ? "Lege die Originaldateien zur\xC3\xBC" "ck" : "Putting the original files back");
-    const fs::path rom = RomOf(game_dir);
-    const bool ok = RestoreArchives(rom);
-    std::error_code ec;
-    // The tools' .orig copies (imagipatcher's .igx files; superpatcher's exe on builds before the slot settings).
-    for (const fs::path& changed : {rom / "MemoryPoolConfigs.igx", rom / "VramBudget.igx", game_dir / tool.exe}) {
-      const fs::path orig = WithPathSuffix(changed, ".orig");
-      if (fs::exists(orig, ec)) {
-        fs::copy_file(orig, changed, fs::copy_options::overwrite_existing, ec);
-        if (!ec) fs::remove(orig, ec);
-      }
-    }
-    const fs::path toml = game_dir / fs::path(tool.exe).replace_extension(".toml");
-    WriteGameSetting(toml, "Portal", "portal_menu_nintendo", "bool", "false");
-    if (game == Game::kSuperChargers) {
-      WriteGameSetting(toml, "Mods", "hero_data_slot_size", "int", "0");
-      WriteGameSetting(toml, "Mods", "vehicle_slot_size", "int", "0");
-    }
+    const bool ok = RestoreAll(game, game_dir);
     Finish(*s, ok ? (german ? std::string(tool.name_de) + " ist wieder wie vorher." : std::string(tool.name_en) + " is back as it was.")
                   : (german ? "Nicht alles lie\xC3\x9F sich zur\xC3\xBC" "cklegen; siehe coreoflight.log."
                             : "Not everything could be put back; see coreoflight.log."));
