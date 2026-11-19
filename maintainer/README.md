@@ -3,7 +3,7 @@
 For working on all seven repositories at once: releases and test runs. They expect the developer
 layout, one folder per repository holding its checkout (`<Tools>\SSARecomp\SSARecomp`, ...,
 `<Tools>\SkylandersCoreOfLight\SkylandersCoreOfLight`), and write their logs and runs to
-`%LOCALAPPDATA%\SkylandersDev` (`SKYLANDERS_WORK` changes that). The rules every repository follows
+`%LOCALAPPDATA%\SkylandersDev` (`~/SkylandersDev` on Linux; `SKYLANDERS_WORK` changes that). The rules every repository follows
 are in [RULES.md](RULES.md).
 
 ## release.py
@@ -13,7 +13,7 @@ are in [RULES.md](RULES.md).
 | `status` | per repository: branch, clean or not, ahead/behind origin, the version, the latest release, and the submodule commits (a `*` marks one that isn't the shared branch's tip) |
 | `bump --sdk <sha> --lib <sha> -m <msg file> [--status "<line>"] [--push]` | moves the shared submodules to those commits in every repository that has them, with a STATUS entry, commits (and pushes) |
 | `version <x.y.z-beta.N> [--repos ...] [--status "<line>"] [--push]` | sets the release version (a game's `installer/<Repo>.iss`, the launcher's `CMakeLists.txt`), commits (and pushes) |
-| `build [--recipe package-installer] [--test]` | builds in the Visual Studio environment: the games with `just`, the launcher with CMake and `tools/package_installer.ps1`; a log per repository |
+| `build [--recipe package-installer\|package-linux] [--test]` | builds: the games with `just`, the launcher with CMake and `tools/package_installer.ps1` (Windows) or `tools/package_linux.sh` and `tools/package_appimage.sh` (Linux); a log per repository. On Linux it checks clang 19 and the development packages before the first build |
 | `check [--history]` | what would stop a release: uncommitted changes, game data or figure files in git, the Windows user name in tracked files (or, with `--history`, in any commit), a private e-mail in a commit, a build machine path in a staged exe or DLL, the developer kit in a staged exe, or a private repository (the developer kit, GiantsDecomp) built into the release build folder |
 | `publish --notes <folder> [--dry-run]` | the GitHub releases, each with its setup (the launcher: setup and portable ZIP). The notes come from `<folder>\<Repo>.md` and `common.md`; the install, problem and disclaimer paragraphs are added. Refuses what fails `check`, isn't pushed or is already released |
 
@@ -29,6 +29,30 @@ are in [RULES.md](RULES.md).
 Test after the packaging build, not before it: every `build` runs the CMake configure again, which
 writes the SDK's `rex/version.h` with a new time, so the game relinks and the tested exe isn't the
 one that ships.
+
+## Linux
+
+The same commands run on Linux; `SKYLANDERS_WORK` then defaults to `~/SkylandersDev`. The launcher
+links SDL3 dynamically (the release tarball and AppImage carry it next to the binary), and Ubuntu
+24.04 and Debian 12 have no SDL3 package, so build SDL 3.4.20 first and pass its prefix
+(`-DCMAKE_PREFIX_PATH=/path/to/sdl3`) if it isn't installed system-wide. The games need clang 19 or
+newer: Ubuntu 24.04's clang 18 with libstdc++ 13 hides the `std::expected` the SDK's
+`src/system/map_parser` uses. Both need X11-xcb and the usual development packages. On Ubuntu 24.04:
+
+    sudo apt install clang-19 libx11-xcb-dev libusb-1.0-0-dev libcurl4-openssl-dev libssl-dev \
+        libarchive-dev libgl1-mesa-dev libudev-dev pkg-config cmake ninja-build
+    cmake --preset linux-amd64-release -DCMAKE_C_COMPILER=clang-19 -DCMAKE_CXX_COMPILER=clang++-19
+
+Build the release on the oldest distribution you support (Ubuntu 24.04 here): the binaries and the
+bundled SDL3 link its glibc, and older systems then run them.
+
+`build --recipe package-linux` writes the games' `dist/<Repo>-linux-amd64.tar.gz`, the launcher's
+`installer/Output/CoreOfLight-linux-amd64.tar.gz` (with `libSDL3.so.0` beside `coreoflight`), and
+`installer/Output/CoreOfLight-<version>-x86_64.AppImage`. appimagetool and its runtime are
+downloaded once into `$SKYLANDERS_WORK/tools` and reused; `APPIMAGETOOL` and `APPIMAGE_RUNTIME`
+point at copies of your own. An AppImage runs from a read-only mount and doesn't update itself: it
+opens the release page instead. `publish` uploads both files on Linux, and the release notes then
+describe the tarball and the AppImage.
 
 ## tools/
 
