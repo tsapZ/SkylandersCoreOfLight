@@ -4,18 +4,27 @@
 // loaded by hand like Dear ImGui's Win32 backend does), or Enter, Space or Esc on the keyboard.
 // For the moment a game ends and the launcher comes back (main.cpp).
 
+#ifdef _WIN32
 #include <windows.h>
 #include <mmsystem.h>
 #include <setupapi.h>
 #include <xinput.h>
 #pragma comment(lib, "setupapi.lib")
+#else
+#include <SDL3/SDL.h>
+#include <libusb.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#ifdef _WIN32
 #include <cwchar>
 #include <cwctype>
+#endif
 #include <mutex>
 #include <set>
 #include <string>
@@ -26,8 +35,17 @@
 #include "hints.h"
 #include "hub_log.h"
 #include "imgui.h"
+#include "platform.h"
 
 namespace coreoflight {
+
+inline constexpr size_t kMaxPads = 4;
+
+// A physical Portal of Power plugged into USB (VID 0x1430: PID 0x0150 PS3/Wii/Wii U/PC, PID 0x1F17 Xbox 360).
+enum class UsbPortalKind { kNone, kPs3WiiU, kXbox360 };
+inline std::atomic<UsbPortalKind> g_usb_portal{UsbPortalKind::kNone};
+
+#ifdef _WIN32
 
 // Which XInput slots have a pad, as the pad watch (StartPadWatch) saw them last, every two seconds.
 inline std::atomic<bool> g_pad_connected[XUSER_MAX_COUNT] = {};
@@ -98,9 +116,6 @@ inline std::set<std::pair<unsigned long, unsigned long>> XInputVidPids() {
 // Xbox 360 portal (1430:1F17). The ids skylanders-portal's UsbPortal opens (kKnownPortals). Only
 // looked at in the HID list and, for a portal on the WinUSB driver (Zadig, for Dolphin or Cemu, #58),
 // in the USB device list; never opened: a game may be using it.
-enum class UsbPortalKind { kNone, kPs3WiiU, kXbox360 };
-inline std::atomic<UsbPortalKind> g_usb_portal{UsbPortalKind::kNone};
-
 inline UsbPortalKind FindUsbPortal() {
   UINT count = 0;
   if (GetRawInputDeviceList(nullptr, &count, sizeof(RAWINPUTDEVICELIST)) != 0 || !count) return UsbPortalKind::kNone;
@@ -285,7 +300,7 @@ inline bool ReadGenericPad(UINT id, const GenericPad& pad, XINPUT_GAMEPAD& out) 
 // A connected pad's battery for the start screen: 0 empty .. 3 full, or -1 for a wired pad (or
 // one that doesn't say). Asked at most every ten seconds per pad, on a thread of its own (a wireless
 // pad can take a moment to answer, a hitch on the frame).
-inline int PadBattery(DWORD pad) {
+inline int PadBattery(uint32_t pad) {
   using GetBattery = DWORD(WINAPI*)(DWORD, BYTE, XINPUT_BATTERY_INFORMATION*);
   static GetBattery get_battery = [] {
     for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll"}) {
@@ -304,7 +319,7 @@ inline int PadBattery(DWORD pad) {
     std::thread([pad] {
       XINPUT_BATTERY_INFORMATION info = {};
       int value = -1;
-      if (get_battery(pad, BATTERY_DEVTYPE_GAMEPAD, &info) == ERROR_SUCCESS &&
+      if (get_battery(DWORD(pad), BATTERY_DEVTYPE_GAMEPAD, &info) == ERROR_SUCCESS &&
           (info.BatteryType == BATTERY_TYPE_ALKALINE || info.BatteryType == BATTERY_TYPE_NIMH)) {
         value = info.BatteryLevel;  // BATTERY_LEVEL_EMPTY .. BATTERY_LEVEL_FULL, 0 .. 3
       }
@@ -319,7 +334,7 @@ inline int PadBattery(DWORD pad) {
 // stops it after a quarter second.
 inline ULONGLONG g_buzz_until[XUSER_MAX_COUNT] = {};
 
-inline bool SetPadVibration(DWORD pad, WORD speed) {
+inline bool SetPadVibration(uint32_t pad, WORD speed) {
   using SetState = DWORD(WINAPI*)(DWORD, XINPUT_VIBRATION*);
   static SetState set_state = [] {
     for (const wchar_t* dll : {L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll"}) {
@@ -330,10 +345,10 @@ inline bool SetPadVibration(DWORD pad, WORD speed) {
     return SetState(nullptr);
   }();
   XINPUT_VIBRATION v = {speed, speed};
-  return set_state && set_state(pad, &v) == ERROR_SUCCESS;
+  return set_state && set_state(DWORD(pad), &v) == ERROR_SUCCESS;
 }
 
-inline void PadBuzz(DWORD pad, int percent) {
+inline void PadBuzz(uint32_t pad, int percent) {
   if (pad >= XUSER_MAX_COUNT) return;
   const WORD speed = WORD(65535u * unsigned(std::clamp(percent, 0, 100)) / 100u);
   if (SetPadVibration(pad, speed)) g_buzz_until[pad] = speed ? GetTickCount64() + 250 : 0;
@@ -447,6 +462,288 @@ inline bool InputHeld(bool keys = true) {
     if (keys && (GetAsyncKeyState(key) & 0x8000)) return true;
   }
   return false;
+}
+
+inline size_t ExtraPadCount() {
+  GenericPad generic[16];
+  GenericPadsNow(generic);
+  size_t count = 0;
+  for (const GenericPad& pad : generic) {
+    if (pad.connected && !pad.skip) ++count;
+  }
+  return count;
+}
+
+#else
+
+inline std::atomic<bool> g_pad_connected[kMaxPads] = {};
+
+struct SdlPadSlot {
+  SDL_JoystickID id = 0;
+  SDL_Gamepad* handle = nullptr;
+};
+inline SdlPadSlot g_sdl_pads[kMaxPads] = {};
+inline std::mutex g_sdl_pad_mutex;
+inline uint64_t g_buzz_until[kMaxPads] = {};
+
+// Passively enumerates USB device descriptors via libusb without opening or claiming interfaces.
+inline UsbPortalKind FindUsbPortal() {
+  libusb_context* ctx = nullptr;
+  if (libusb_init(&ctx) != 0) return UsbPortalKind::kNone;
+  libusb_device** list = nullptr;
+  const ssize_t count = libusb_get_device_list(ctx, &list);
+  UsbPortalKind result = UsbPortalKind::kNone;
+  for (ssize_t i = 0; i < count; ++i) {
+    libusb_device_descriptor desc{};
+    if (libusb_get_device_descriptor(list[i], &desc) != 0 || desc.idVendor != 0x1430) continue;
+    if (desc.idProduct == 0x0150) {
+      result = UsbPortalKind::kPs3WiiU;
+      break;
+    }
+    if (desc.idProduct == 0x1F17) {
+      result = UsbPortalKind::kXbox360;
+      break;
+    }
+  }
+  if (list) libusb_free_device_list(list, 1);
+  libusb_exit(ctx);
+  return result;
+}
+
+inline void StartPadWatch() {
+  static const bool started = [] {
+    std::thread([] {
+      for (;;) {
+        const UsbPortalKind portal = FindUsbPortal();
+        if (g_usb_portal.exchange(portal) != portal) {
+          HubLog(std::string("usb: Portal of Power ") +
+                 (portal == UsbPortalKind::kXbox360 ? "Xbox 360"
+                  : portal == UsbPortalKind::kPs3WiiU ? "PS3/Wii/PC"
+                                                      : "gone"));
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+      }
+    }).detach();
+    return true;
+  }();
+  (void)started;
+}
+
+inline void SyncSdlPads() {
+  int count = 0;
+  SDL_JoystickID* ids = SDL_GetGamepads(&count);
+  std::lock_guard lock(g_sdl_pad_mutex);
+  for (size_t s = 0; s < kMaxPads; ++s) {
+    if (!g_sdl_pads[s].handle) continue;
+    bool still_here = false;
+    for (int i = 0; i < count && ids; ++i) {
+      if (ids[i] == g_sdl_pads[s].id) {
+        still_here = true;
+        break;
+      }
+    }
+    if (!still_here) {
+      HubLog("pad " + std::to_string(s + 1) + ": gone");
+      SDL_CloseGamepad(g_sdl_pads[s].handle);
+      g_sdl_pads[s] = {};
+      g_buzz_until[s] = 0;
+    }
+  }
+  for (int i = 0; i < count && ids; ++i) {
+    bool tracked = false;
+    for (size_t s = 0; s < kMaxPads; ++s) {
+      if (g_sdl_pads[s].handle && g_sdl_pads[s].id == ids[i]) {
+        tracked = true;
+        break;
+      }
+    }
+    if (tracked) continue;
+    for (size_t s = 0; s < kMaxPads; ++s) {
+      if (g_sdl_pads[s].handle) continue;
+      if (SDL_Gamepad* gp = SDL_OpenGamepad(ids[i])) {
+        g_sdl_pads[s] = {ids[i], gp};
+        const char* name = SDL_GetGamepadName(gp);
+        HubLog("pad " + std::to_string(s + 1) + ": " + (name ? name : "controller"));
+      }
+      break;
+    }
+  }
+  SDL_free(ids);
+  for (size_t s = 0; s < kMaxPads; ++s) g_pad_connected[s].store(g_sdl_pads[s].handle != nullptr);
+}
+
+inline int PadBattery(uint32_t pad) {
+  std::lock_guard lock(g_sdl_pad_mutex);
+  if (pad >= kMaxPads || !g_sdl_pads[pad].handle) return -1;
+  int pct = -1;
+  const SDL_PowerState st = SDL_GetGamepadPowerInfo(g_sdl_pads[pad].handle, &pct);
+  if ((st == SDL_POWERSTATE_ON_BATTERY || st == SDL_POWERSTATE_CHARGING || st == SDL_POWERSTATE_CHARGED) &&
+      pct >= 0) {
+    if (pct >= 75) return 3;
+    if (pct >= 45) return 2;
+    if (pct >= 15) return 1;
+    return 0;
+  }
+  return -1;
+}
+
+inline void PadBuzz(uint32_t pad, int percent) {
+  std::lock_guard lock(g_sdl_pad_mutex);
+  if (pad >= kMaxPads || !g_sdl_pads[pad].handle) return;
+  const uint16_t speed = uint16_t(65535u * unsigned(std::clamp(percent, 0, 100)) / 100u);
+  SDL_RumbleGamepad(g_sdl_pads[pad].handle, speed, speed, 250);
+  g_buzz_until[pad] = speed ? MonotonicMs() + 250 : 0;
+}
+
+inline void PadBuzzUpdate() {
+  const uint64_t now = MonotonicMs();
+  std::lock_guard lock(g_sdl_pad_mutex);
+  for (size_t pad = 0; pad < kMaxPads; ++pad) {
+    if (g_buzz_until[pad] && now >= g_buzz_until[pad]) {
+      g_buzz_until[pad] = 0;
+      if (g_sdl_pads[pad].handle) SDL_RumbleGamepad(g_sdl_pads[pad].handle, 0, 0, 0);
+    }
+  }
+}
+
+inline HintPad HintPadForSdlType(SDL_GamepadType type) {
+  switch (type) {
+    case SDL_GAMEPAD_TYPE_PS3:
+    case SDL_GAMEPAD_TYPE_PS4:
+    case SDL_GAMEPAD_TYPE_PS5:
+      return HintPad::kPlayStation;
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+      return HintPad::kNintendo;
+    default:
+      return HintPad::kXbox;
+  }
+}
+
+inline void UpdatePads(ImGuiIO& io) {
+  StartPadWatch();
+  SyncSdlPads();
+  PadBuzzUpdate();
+
+  bool any = false;
+  bool buttons[SDL_GAMEPAD_BUTTON_COUNT] = {};
+  int16_t lx = 0, ly = 0, rx = 0, ry = 0, lt = 0, rt = 0;
+  auto pick = [](int16_t& dst, int16_t src) {
+    if (std::abs(int(src)) > std::abs(int(dst))) dst = src;
+  };
+
+  {
+    std::lock_guard lock(g_sdl_pad_mutex);
+    for (size_t s = 0; s < kMaxPads; ++s) {
+      SDL_Gamepad* gp = g_sdl_pads[s].handle;
+      if (!gp) continue;
+      any = true;
+      bool pressed_here = false;
+      for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
+        if (SDL_GetGamepadButton(gp, SDL_GamepadButton(b))) {
+          buttons[b] = true;
+          pressed_here = true;
+        }
+      }
+      const int16_t glt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+      const int16_t grt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+      if (glt > lt) lt = glt;
+      if (grt > rt) rt = grt;
+      pick(lx, SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX));
+      pick(ly, SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY));
+      pick(rx, SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX));
+      pick(ry, SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY));
+      if (pressed_here || glt > 3800 || grt > 3800) {
+        SetHintPad(HintPadForSdlType(SDL_GetGamepadType(gp)));
+      }
+    }
+  }
+
+  io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
+  if (!any) return;
+  io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+
+  auto analog = [&](ImGuiKey key, float value, float v0, float v1) {
+    const float v = std::clamp((value - v0) / (v1 - v0), 0.0f, 1.0f);
+    io.AddKeyAnalogEvent(key, v > 0.10f, v);
+  };
+  io.AddKeyEvent(ImGuiKey_GamepadStart, buttons[SDL_GAMEPAD_BUTTON_START]);
+  io.AddKeyEvent(ImGuiKey_GamepadBack, buttons[SDL_GAMEPAD_BUTTON_BACK]);
+  io.AddKeyEvent(ImGuiKey_GamepadFaceLeft, buttons[SDL_GAMEPAD_BUTTON_WEST]);
+  io.AddKeyEvent(ImGuiKey_GamepadFaceRight, buttons[SDL_GAMEPAD_BUTTON_EAST]);
+  io.AddKeyEvent(ImGuiKey_GamepadFaceUp, buttons[SDL_GAMEPAD_BUTTON_NORTH]);
+  io.AddKeyEvent(ImGuiKey_GamepadFaceDown, buttons[SDL_GAMEPAD_BUTTON_SOUTH]);
+  io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, buttons[SDL_GAMEPAD_BUTTON_DPAD_LEFT]);
+  io.AddKeyEvent(ImGuiKey_GamepadDpadRight, buttons[SDL_GAMEPAD_BUTTON_DPAD_RIGHT]);
+  io.AddKeyEvent(ImGuiKey_GamepadDpadUp, buttons[SDL_GAMEPAD_BUTTON_DPAD_UP]);
+  io.AddKeyEvent(ImGuiKey_GamepadDpadDown, buttons[SDL_GAMEPAD_BUTTON_DPAD_DOWN]);
+  io.AddKeyEvent(ImGuiKey_GamepadL1, buttons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER]);
+  io.AddKeyEvent(ImGuiKey_GamepadR1, buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER]);
+  io.AddKeyEvent(ImGuiKey_GamepadL3, buttons[SDL_GAMEPAD_BUTTON_LEFT_STICK]);
+  io.AddKeyEvent(ImGuiKey_GamepadR3, buttons[SDL_GAMEPAD_BUTTON_RIGHT_STICK]);
+  analog(ImGuiKey_GamepadL2, float(lt), 3800.0f, 32767.0f);
+  analog(ImGuiKey_GamepadR2, float(rt), 3800.0f, 32767.0f);
+  constexpr float kDead = 7849.0f;
+  analog(ImGuiKey_GamepadLStickLeft, float(lx), -kDead, -32768.0f);
+  analog(ImGuiKey_GamepadLStickRight, float(lx), +kDead, +32767.0f);
+  // SDL Y axes are negative up and positive down.
+  analog(ImGuiKey_GamepadLStickUp, float(ly), -kDead, -32768.0f);
+  analog(ImGuiKey_GamepadLStickDown, float(ly), +kDead, +32767.0f);
+  analog(ImGuiKey_GamepadRStickLeft, float(rx), -kDead, -32768.0f);
+  analog(ImGuiKey_GamepadRStickRight, float(rx), +kDead, +32767.0f);
+  analog(ImGuiKey_GamepadRStickUp, float(ry), -kDead, -32768.0f);
+  analog(ImGuiKey_GamepadRStickDown, float(ry), +kDead, +32767.0f);
+}
+
+inline bool InputHeld(bool keys = true) {
+  {
+    std::lock_guard lock(g_sdl_pad_mutex);
+    for (size_t s = 0; s < kMaxPads; ++s) {
+      SDL_Gamepad* gp = g_sdl_pads[s].handle;
+      if (!gp) continue;
+      for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
+        if (SDL_GetGamepadButton(gp, SDL_GamepadButton(b))) return true;
+      }
+      if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 3800 ||
+          SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 3800) {
+        return true;
+      }
+    }
+  }
+  if (keys) {
+    int count = 0;
+    const bool* state = SDL_GetKeyboardState(&count);
+    for (const SDL_Scancode sc : {SDL_SCANCODE_RETURN, SDL_SCANCODE_SPACE, SDL_SCANCODE_ESCAPE}) {
+      if (sc < count && state && state[sc]) return true;
+    }
+  }
+  return false;
+}
+
+inline size_t ExtraPadCount() { return 0; }
+
+// Closes SDL gamepad handles before SDL_Quit so teardown does not leave open devices.
+inline void ShutdownSdlPads() {
+  std::lock_guard lock(g_sdl_pad_mutex);
+  for (size_t s = 0; s < kMaxPads; ++s) {
+    if (g_sdl_pads[s].handle) {
+      SDL_CloseGamepad(g_sdl_pads[s].handle);
+      g_sdl_pads[s] = {};
+    }
+    g_buzz_until[s] = 0;
+    g_pad_connected[s].store(false);
+  }
+}
+
+#endif  // _WIN32
+
+inline bool AnyControllerConnected() {
+  for (const auto& c : g_pad_connected) {
+    if (c.load()) return true;
+  }
+  return ExtraPadCount() > 0;
 }
 
 }  // namespace coreoflight

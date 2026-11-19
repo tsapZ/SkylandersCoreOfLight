@@ -3,8 +3,15 @@
 #include "games.h"  // VersionLess
 #include "platform.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#include <bcrypt.h>
+#include <shlobj.h>
 #include <winhttp.h>
+#else
+#include <curl/curl.h>
+#include <mutex>
+#endif
 
 #include <cctype>
 #include <cstdio>
@@ -22,25 +29,45 @@ constexpr const char* kOwner = "tsapZ";
 
 // --- A small JSON reader, for the GitHub API's answers -------------------------------------------
 
+struct JsonField;
 struct Json {
   enum class Kind { kNull, kBool, kNumber, kString, kArray, kObject };
   Kind kind = Kind::kNull;
   std::string text;  // a string's value, or a number as written
   bool flag = false;
   std::vector<Json> items;
-  std::vector<std::pair<std::string, Json>> fields;
+  std::vector<JsonField> fields;
 
-  const Json* Get(std::string_view key) const {
-    for (const auto& [k, v] : fields) {
-      if (k == key) return &v;
-    }
-    return nullptr;
-  }
-  std::string String(std::string_view key) const {
-    const Json* v = Get(key);
-    return v && v->kind == Kind::kString ? v->text : std::string();
-  }
+  Json();
+  ~Json();
+  Json(const Json&);
+  Json(Json&&) noexcept;
+  Json& operator=(const Json&);
+  Json& operator=(Json&&) noexcept;
+
+  const Json* Get(std::string_view key) const;
+  std::string String(std::string_view key) const;
 };
+struct JsonField {
+  std::string first;
+  Json second;
+};
+Json::Json() = default;
+Json::~Json() = default;
+Json::Json(const Json&) = default;
+Json::Json(Json&&) noexcept = default;
+Json& Json::operator=(const Json&) = default;
+Json& Json::operator=(Json&&) noexcept = default;
+const Json* Json::Get(std::string_view key) const {
+  for (const auto& [k, v] : fields) {
+    if (k == key) return &v;
+  }
+  return nullptr;
+}
+std::string Json::String(std::string_view key) const {
+  const Json* v = Get(key);
+  return v && v->kind == Kind::kString ? v->text : std::string();
+}
 
 class JsonParser {
  public:
@@ -158,7 +185,7 @@ class JsonParser {
           ok_ = false;
           return v;
         }
-        v.fields.emplace_back(std::move(key), Value(depth + 1));
+        v.fields.push_back({std::move(key), Value(depth + 1)});
       } while (ok_ && Take(','));
       if (!Take('}')) ok_ = false;
     } else if (c == '[') {
@@ -200,6 +227,7 @@ class JsonParser {
 
 // --- HTTPS through WinHTTP -------------------------------------------------------------------
 
+#ifdef _WIN32
 std::wstring Wide(const std::string& s) {
   if (s.empty()) return {};
   const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), nullptr, 0);
@@ -208,12 +236,15 @@ std::wstring Wide(const std::string& s) {
   return w;
 }
 
-// A GET of `url` (redirects followed, as GitHub's downloads need), the body handed to `sink` in
-// pieces (false from it stops); `total` gets the length when the server says it. True if the
-// status was 200 and the whole body went to the sink.
-bool HttpGet(const std::string& url, const wchar_t* headers, const std::function<bool(const char*, size_t)>& sink,
-             uint64_t* total) {
+bool HttpGet(const std::string& url, const std::vector<std::string>& headers,
+             const std::function<bool(const char*, size_t)>& sink, uint64_t* total) {
   const std::wstring wurl = Wide(url);
+  std::wstring joined_headers;
+  for (size_t i = 0; i < headers.size(); ++i) {
+    if (i) joined_headers += L"\r\n";
+    joined_headers += Wide(headers[i]);
+  }
+  const wchar_t* hdr = joined_headers.empty() ? nullptr : joined_headers.c_str();
   URL_COMPONENTS parts{sizeof(parts)};
   wchar_t host[256] = L"", path[2048] = L"";
   parts.lpszHostName = host;
@@ -238,7 +269,7 @@ bool HttpGet(const std::string& url, const wchar_t* headers, const std::function
                  : nullptr;
   if (request) {
     WinHttpSetTimeouts(request, 10000, 10000, 15000, 30000);
-    if (WinHttpSendRequest(request, headers ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers ? DWORD(-1L) : 0,
+    if (WinHttpSendRequest(request, hdr ? hdr : WINHTTP_NO_ADDITIONAL_HEADERS, hdr ? DWORD(-1L) : 0,
                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
         WinHttpReceiveResponse(request, nullptr)) {
       DWORD status = 0, size = sizeof(status);
@@ -275,6 +306,62 @@ bool HttpGet(const std::string& url, const wchar_t* headers, const std::function
   if (session) WinHttpCloseHandle(session);
   return ok;
 }
+#else
+bool HttpGet(const std::string& url, const std::vector<std::string>& headers,
+             const std::function<bool(const char*, size_t)>& sink, uint64_t* total) {
+  static std::once_flag init_once;
+  std::call_once(init_once, [] { curl_global_init(CURL_GLOBAL_DEFAULT); });
+  CURL* curl = curl_easy_init();
+  if (!curl) return false;
+  if (total) *total = 0;
+  struct Context {
+    CURL* curl;
+    const std::function<bool(const char*, size_t)>* sink;
+    uint64_t* total;
+    bool aborted = false;
+  } ctx{curl, &sink, total};
+
+  auto write_cb = +[](char* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+    auto* c = static_cast<Context*>(userdata);
+    const size_t bytes = size * nmemb;
+    long status = 0;
+    curl_easy_getinfo(c->curl, CURLINFO_RESPONSE_CODE, &status);
+    if (status != 200) return bytes;
+    if (c->total && *c->total == 0) {
+      curl_off_t cl = -1;
+      if (curl_easy_getinfo(c->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &cl) == CURLE_OK && cl > 0) {
+        *c->total = static_cast<uint64_t>(cl);
+      }
+    }
+    if (!(*c->sink)(ptr, bytes)) {
+      c->aborted = true;
+      return 0;
+    }
+    return bytes;
+  };
+
+  struct curl_slist* list = nullptr;
+  for (const std::string& h : headers) list = curl_slist_append(list, h.c_str());
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "CoreOfLight/" COREOFLIGHT_VERSION);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+  if (list) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
+
+  const CURLcode res = curl_easy_perform(curl);
+  long status = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+  if (list) curl_slist_free_all(list);
+  curl_easy_cleanup(curl);
+  return res == CURLE_OK && !ctx.aborted && status == 200;
+}
+#endif
 
 fs::path LocalDataDir() {
   const fs::path base = LocalAppDataDir();
@@ -292,7 +379,7 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
   // /releases rather than /releases/latest: that one leaves out pre-releases, and ours are betas.
   std::string body;
   const std::string url = "https://api.github.com/repos/" + std::string(kOwner) + "/" + repo + "/releases?per_page=10";
-  if (!HttpGet(url, L"Accept: application/vnd.github+json\r\nX-GitHub-Api-Version: 2022-11-28",
+  if (!HttpGet(url, {"Accept: application/vnd.github+json", "X-GitHub-Api-Version: 2022-11-28"},
                [&](const char* data, size_t n) {
                  body.append(data, n);
                  return body.size() < (size_t(8) << 20);
@@ -311,11 +398,15 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
     if (version.starts_with("v")) version.erase(0, 1);
     if (version.empty() || (best && !VersionLess(best->version, version))) continue;
     const std::string wanted = asset_prefix + "-" + version + extension;
+    const std::string wanted_plain = asset_prefix + extension;
     const Json* assets = r.Get("assets");
     for (size_t i = 0; assets && i < assets->items.size(); ++i) {
       const Json& a = assets->items[i];
-      if (a.String("name") != wanted) continue;
-      Release release{repo, version, wanted, a.String("browser_download_url"), 0, {}};
+      const std::string asset_name = a.String("name");
+      const bool match = asset_name == wanted ||
+                         (extension.ends_with(".tar.gz") && asset_name == wanted_plain);
+      if (!match) continue;
+      Release release{repo, version, asset_name, a.String("browser_download_url"), 0, {}};
       if (std::string digest = a.String("digest"); digest.starts_with("sha256:") && digest.size() == 7 + 64) {
         release.sha256 = digest.substr(7);
         for (char& c : release.sha256) c = char(std::tolower(static_cast<unsigned char>(c)));
@@ -382,7 +473,7 @@ bool DownloadFile(const std::string& url, const fs::path& file, std::atomic<floa
   {
     std::ofstream out(part, std::ios::binary | std::ios::trunc);
     if (!out) return false;
-    ok = HttpGet(url, nullptr,
+    ok = HttpGet(url, {},
                  [&](const char* data, size_t n) {
                    out.write(data, std::streamsize(n));
                    done += n;

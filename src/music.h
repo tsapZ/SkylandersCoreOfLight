@@ -4,8 +4,15 @@
 // (skylanders-portal title_music.h), looped, faded in when its card is chosen and out when another
 // one is, through Windows' MCI (no audio library needed).
 
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
+
+#ifndef _WIN32
+struct SDL_AudioStream;
+#endif
 
 namespace coreoflight {
 
@@ -31,6 +38,12 @@ class MusicPlayer {
   float volume_ = 0.0f;  // 0..1, the fade
   float loudness_ = 0.6f;  // 0..1, the setting
   float since_check_ = 0.0f;  // seconds since Update last asked whether it still plays
+#ifndef _WIN32
+  SDL_AudioStream* stream_ = nullptr;
+  std::vector<uint8_t> pcm_;
+  size_t pcm_offset_ = 0;
+  int bytes_per_sec_ = 0;
+#endif
 };
 
 }  // namespace coreoflight

@@ -14,8 +14,13 @@
 namespace coreoflight {
 
 // The release asset a portable launcher updates from: <kPortablePrefix>-<version><kPortableExtension>.
+#ifdef _WIN32
 inline constexpr char kPortablePrefix[] = "CoreOfLightPortable";
 inline constexpr char kPortableExtension[] = ".zip";
+#else
+inline constexpr char kPortablePrefix[] = "CoreOfLight";
+inline constexpr char kPortableExtension[] = "-linux-amd64.tar.gz";
+#endif
 
 // Whether the launcher in `launcher_dir` is the portable one (portable.txt next to it).
 bool IsPortable(const std::filesystem::path& launcher_dir);

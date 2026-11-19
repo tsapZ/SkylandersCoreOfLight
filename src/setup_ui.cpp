@@ -1,7 +1,9 @@
 #include "setup_ui.h"
 #include "hints.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <cfloat>
@@ -137,6 +139,7 @@ void SetupScreen::Open() {
 void SetupScreen::FindGameFolders() {
   folders_ = {std::filesystem::path()};
   folder_ = 0;
+#ifdef _WIN32
   wchar_t windows[MAX_PATH] = L"";
   GetWindowsDirectoryW(windows, MAX_PATH);
   const std::wstring system_drive = std::filesystem::path(windows).root_name().wstring();
@@ -157,6 +160,12 @@ void SetupScreen::FindGameFolders() {
     }
     folders_.push_back(dir);
   }
+#else
+  const std::string home = EnvVarUtf8("HOME");
+  if (!home.empty()) {
+    folders_.push_back(PathFromUtf8(home) / "Games" / "Skylanders Recompiled");
+  }
+#endif
   // One set before (an earlier setup, coreoflight.ini, --install_dir) is chosen, and kept.
   if (GamesFolderChosen()) {
     const auto it = std::find(folders_.begin(), folders_.end(), GamesFolder());

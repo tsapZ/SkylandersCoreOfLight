@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
-project(coreoflight LANGUAGES CXX RC)
+if(WIN32)
+  project(coreoflight LANGUAGES CXX RC)
+else()
+  project(coreoflight LANGUAGES CXX)
+endif()
 
 # Skylanders: Core of Light, the launcher for the recompiled games (docs/roadmap.md, phase 1).
-# A small Win32 / Direct3D 11 program with Dear ImGui; it starts each game's own exe, so no game
-# depends on it.
+# A desktop launcher with Dear ImGui (Direct3D 11 on Windows, SDL3 + OpenGL on Linux); it starts
+# each game's own executable, so no game depends on it.
 
 # The launcher's version: the problem report names it, tools/package_installer.ps1 builds the
 # installer with it, and updates from GitHub Releases (#17) will compare against it.
@@ -12,8 +16,8 @@ set(COREOFLIGHT_VERSION "0.4.0-beta.7")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(NOT WIN32)
-  message(FATAL_ERROR "The launcher is a Windows program, as the games are.")
+if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "Unsupported platform: expected Windows or Linux.")
 endif()
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui)
@@ -22,7 +26,7 @@ if(NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
 endif()
 
 # The figure files (names, elements, stats) from skylanders-portal, without the games' SDK: its
-# skylanders_portal_figures target, with Windows' own AES and MD5.
+# skylanders_portal_figures target (CNG on Windows, OpenSSL on Linux).
 set(PORTAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/skylanders-portal)
 if(NOT EXISTS ${PORTAL_DIR}/CMakeLists.txt)
   message(FATAL_ERROR "thirdparty/skylanders-portal is missing: git submodule update --init")
@@ -32,7 +36,7 @@ endif()
 set(SKYLANDERS_STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/stb)
 add_subdirectory(${PORTAL_DIR} skylanders-portal EXCLUDE_FROM_ALL)
 
-add_executable(coreoflight WIN32
+set(COREOFLIGHT_SOURCES
   src/main.cpp
   src/platform.cpp
   src/games.cpp
@@ -67,24 +71,65 @@ add_executable(coreoflight WIN32
   src/gpu_tier.cpp
   src/portable.cpp
   src/language_import.cpp
-  src/coreoflight.rc
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
   ${IMGUI_DIR}/imgui_tables.cpp
   ${IMGUI_DIR}/imgui_widgets.cpp
-  ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
-  ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
 )
-# thirdparty/stb: stb_image's zlib decoder for Imaginators' archives (language_import.cpp).
+
+if(WIN32)
+  add_executable(coreoflight WIN32
+    ${COREOFLIGHT_SOURCES}
+    src/coreoflight.rc
+    ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+  )
+else()
+  add_executable(coreoflight
+    ${COREOFLIGHT_SOURCES}
+    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+  )
+endif()
+
+# thirdparty/stb: stb_image's zlib decoder for Imaginators' archives (language_import.cpp) and PNG textures.
 target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/backends thirdparty/stb)
-# IMGUI_IMPL_WIN32_DISABLE_GAMEPAD: the launcher reads every XInput pad itself (pad_state.h).
-target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
-                                               IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
-                                               COREOFLIGHT_VERSION="${COREOFLIGHT_VERSION}")
-target_link_libraries(coreoflight PRIVATE skylanders_portal_figures skylanders_alchemy d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
-# The fallback font next to the exe (main.cpp LoadFont: where Segoe UI isn't there, under Wine).
+target_compile_definitions(coreoflight PRIVATE COREOFLIGHT_VERSION="${COREOFLIGHT_VERSION}")
+
+if(WIN32)
+  # IMGUI_IMPL_WIN32_DISABLE_GAMEPAD: the launcher reads every XInput pad itself (pad_state.h).
+  target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
+                                                 IMGUI_IMPL_WIN32_DISABLE_GAMEPAD)
+  target_link_libraries(coreoflight PRIVATE skylanders_portal_figures skylanders_alchemy d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
+else()
+  find_package(OpenGL REQUIRED)
+  find_package(SDL3 REQUIRED CONFIG)
+  find_package(CURL REQUIRED)
+  find_package(OpenSSL REQUIRED)
+  find_package(LibArchive REQUIRED)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
+  find_package(Threads REQUIRED)
+  target_link_libraries(coreoflight PRIVATE
+    skylanders_portal_figures
+    skylanders_alchemy
+    OpenGL::GL
+    SDL3::SDL3
+    CURL::libcurl
+    OpenSSL::Crypto
+    LibArchive::LibArchive
+    PkgConfig::LIBUSB
+    Threads::Threads
+    ${CMAKE_DL_LIBS}
+  )
+  set_target_properties(coreoflight PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
+endif()
+
+# The fallback font next to the exe (main.cpp LoadFont: where system UI fonts aren't there).
 add_custom_command(TARGET coreoflight POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:coreoflight>/fonts)
 if(MSVC)
   target_compile_options(coreoflight PRIVATE /W3 /utf-8)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(coreoflight PRIVATE -Wall -Wextra -Wno-unused-parameter -ffile-prefix-map=${CMAKE_SOURCE_DIR}/=)
 endif()

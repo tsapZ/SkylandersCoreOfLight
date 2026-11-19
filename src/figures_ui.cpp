@@ -1622,7 +1622,7 @@ void FiguresScreen::DrawCopy(float width, float height, float u) {
     const Profile& target = copy_targets_[size_t(copy_target_)];
     std::error_code ec;
     fs::path rel = fs::relative(copy_figure_.file.parent_path(), figures_dir_, ec);
-    if (ec || rel.empty() || rel.native().starts_with(L"..")) rel.clear();
+    if (ec || rel.empty() || rel.u8string().starts_with(u8"..")) rel.clear();
     const fs::path dir = ProfileFiguresDir(target) / rel;
     fs::create_directories(dir, ec);
     const std::u8string stem = copy_figure_.file.stem().u8string();

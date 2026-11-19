@@ -9,8 +9,14 @@
 
 #include "xiso.h"
 
+#ifdef _WIN32
 #include <windows.h>
 #include <bcrypt.h>
+#else
+#include <cerrno>
+#include <cstring>
+#include <openssl/evp.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -125,6 +131,7 @@ bool XisoImage::Read(const Entry& entry, std::vector<uint8_t>& out) {
 }
 
 bool MakeDirs(const fs::path& dir) {
+#ifdef _WIN32
   const std::wstring path = dir.wstring();
   // Each prefix that ends before a separator, then the whole path; the drive ("Z:") and a UNC
   // server part are left alone (they exist or nothing can be made).
@@ -138,9 +145,15 @@ bool MakeDirs(const fs::path& dir) {
   }
   const DWORD attributes = GetFileAttributesW(path.c_str());
   return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+#else
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  return fs::is_directory(dir, ec);
+#endif
 }
 
 std::string LastErrorText() {
+#ifdef _WIN32
   const DWORD code = GetLastError();
   char text[256] = "";
   FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, code,
@@ -148,6 +161,11 @@ std::string LastErrorText() {
   std::string out = text;
   while (!out.empty() && (out.back() == '\n' || out.back() == '\r' || out.back() == ' ')) out.pop_back();
   return "Windows error " + std::to_string(code) + (out.empty() ? "" : ": " + out);
+#else
+  const int code = errno;
+  const char* msg = std::strerror(code);
+  return "errno " + std::to_string(code) + (msg && *msg ? std::string(": ") + msg : std::string());
+#endif
 }
 
 bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, uint64_t)>& progress,
@@ -168,6 +186,7 @@ bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, u
     if (!InFolder(e.path, skip_folder)) order.push_back(&e);
   }
   std::stable_partition(order.begin(), order.end(), [](const Entry* e) { return Lower(e->path) != "default.xex"; });
+#ifdef _WIN32
   // Windows' 260-character limit (MAX_PATH), checked before anything is written: a deep install
   // folder plus the disc's longest names (Spyro's Adventure's models/characters/minionsmonsters/...)
   // passes it, and the game couldn't open such a file either (seen with a folder of 150 characters,
@@ -181,6 +200,7 @@ bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, u
       return false;
     }
   }
+#endif
   for (const Entry* entry : order) {
     const Entry& e = *entry;
     const fs::path target = to / fs::path(std::u8string(reinterpret_cast<const char8_t*>(e.path.data()), e.path.size()));
@@ -223,11 +243,12 @@ bool XisoImage::Extract(const fs::path& to, const std::function<bool(uint64_t, u
 }
 
 std::string Sha256Hex(const void* data, size_t size) {
+  std::string out;
+  unsigned char digest[32] = {};
+#ifdef _WIN32
   BCRYPT_ALG_HANDLE alg = nullptr;
   BCRYPT_HASH_HANDLE hash = nullptr;
   if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return {};
-  std::string out;
-  unsigned char digest[32];
   if (BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) == 0) {
     if (BCryptHashData(hash, static_cast<PUCHAR>(const_cast<void*>(data)), ULONG(size), 0) == 0 &&
         BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
@@ -238,6 +259,14 @@ std::string Sha256Hex(const void* data, size_t size) {
     BCryptDestroyHash(hash);
   }
   BCryptCloseAlgorithmProvider(alg, 0);
+#else
+  unsigned int digest_len = 0;
+  if (EVP_Digest(data, size, digest, &digest_len, EVP_sha256(), nullptr) == 1 && digest_len == 32) {
+    char hex[65];
+    for (int i = 0; i < 32; ++i) std::snprintf(hex + 2 * i, 3, "%02x", digest[i]);
+    out.assign(hex, 64);
+  }
+#endif
   return out;
 }
 

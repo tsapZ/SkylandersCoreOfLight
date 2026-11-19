@@ -1,11 +1,15 @@
 #include "file_browser.h"
 #include "hints.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#include <shlobj.h>
+#endif
 
 #include <algorithm>
+#include <cctype>
 #include <cfloat>
-#include <cwctype>
+#include <set>
 #include <system_error>
 #include <utility>
 
@@ -65,9 +69,20 @@ bool IsFile(const fs::path& p) {
   return fs::is_regular_file(p, ec);
 }
 
-bool LessNoCase(const std::wstring& a, const std::wstring& b) {
-  return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(),
-                                      [](wchar_t x, wchar_t y) { return std::towlower(x) < std::towlower(y); });
+std::string LowerAscii(std::string_view s) {
+  std::string out(s);
+  for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return out;
+}
+
+bool LessNoCase(std::string_view a, std::string_view b) {
+  const size_t n = std::min(a.size(), b.size());
+  for (size_t i = 0; i < n; ++i) {
+    const unsigned char ca = static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(a[i])));
+    const unsigned char cb = static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(b[i])));
+    if (ca != cb) return ca < cb;
+  }
+  return a.size() < b.size();
 }
 
 }  // namespace
@@ -137,6 +152,7 @@ void FileBrowser::List(const fs::path& folder) {
                                   : "Find my discs (Downloads, Desktop, Documents and the drives)",
                           {}});
     }
+#ifdef _WIN32
     // Under Wine / Proton (SteamOS) the Linux home folder: WINEHOMEDIR is "\??\Z:\home\<user>".
     if (folders_only_) {
       wchar_t home[MAX_PATH] = L"";
@@ -169,6 +185,38 @@ void FileBrowser::List(const fs::path& folder) {
       if (label[0]) name += "  " + Utf8(fs::path(label));
       entries_.push_back({Entry::Kind::kPlace, name, fs::path(root)});
     }
+#else
+    std::set<std::string> seen;
+    auto add_place = [&](const std::string& label, const fs::path& p) {
+      std::error_code ec;
+      if (p.empty() || !fs::is_directory(p, ec)) return;
+      if (!seen.insert(PathUtf8(p)).second) return;
+      entries_.push_back({Entry::Kind::kPlace, label, p});
+    };
+    const std::string home = EnvVarUtf8("HOME");
+    if (!home.empty()) {
+      add_place(german_ ? "Pers\xC3\xB6nlicher Ordner  " + home : "Home  " + home, PathFromUtf8(home));
+    }
+    add_place("Downloads", UserDownloadsDir());
+    add_place("Desktop", DesktopDir());
+    add_place(german_ ? "Dokumente" : "Documents", skylanders::DocumentsFolder());
+    for (const fs::path& mount_root : {fs::path("/run/media"), fs::path("/media"), fs::path("/mnt")}) {
+      std::error_code ec;
+      for (fs::directory_iterator it(mount_root, fs::directory_options::skip_permission_denied, ec), end;
+           !ec && it != end; it.increment(ec)) {
+        if (!it->is_directory(ec)) continue;
+        if (mount_root == "/run/media") {
+          for (fs::directory_iterator sub(it->path(), fs::directory_options::skip_permission_denied, ec), sub_end;
+               !ec && sub != sub_end; sub.increment(ec)) {
+            if (sub->is_directory(ec)) add_place(PathUtf8(sub->path()), sub->path());
+          }
+        } else {
+          add_place(PathUtf8(it->path()), it->path());
+        }
+      }
+    }
+    add_place("/", fs::path("/"));
+#endif
     return;
   }
   entries_.push_back({Entry::Kind::kUp, german_ ? ".. (eine Ebene h\xC3\xB6her)" : ".. (one level up)", {}});
@@ -188,32 +236,33 @@ void FileBrowser::List(const fs::path& folder) {
                         german_ ? "Diesen Ordner einlesen (entpackte Disc)" : "Take this folder (an unpacked disc)",
                         folder});
   }
-  std::vector<std::pair<std::wstring, fs::path>> folders, isos;
+  std::vector<std::pair<std::string, fs::path>> folders, isos;
   std::error_code ec;
   for (fs::directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec), end; it != end;
        it.increment(ec)) {
     if (ec) break;
     std::error_code type_ec;
     const fs::path p = it->path();
-    const std::wstring name = p.filename().wstring();
-    if (name.empty() || name[0] == L'$') continue;  // the system's own folders
+    const std::string name = PathUtf8(p.filename());
+    if (name.empty() || name[0] == '$' || name[0] == '.') continue;  // system or hidden folders
     if (it->is_directory(type_ec)) {
+#ifdef _WIN32
       DWORD attributes = GetFileAttributesW(p.c_str());
       if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_HIDDEN)) continue;
+#endif
       folders.emplace_back(name, p);
     } else {
-      std::wstring ext = p.extension().wstring();
-      std::transform(ext.begin(), ext.end(), ext.begin(), [](wchar_t c) { return wchar_t(std::towlower(c)); });
+      const std::string ext = LowerAscii(PathUtf8(p.extension()));
       // An export of "Meine Daten exportieren" (data_transfer.h) instead of a disc in that mode.
-      if (ext == (for_backup_ ? L".zip" : L".iso") && !folders_only_) isos.emplace_back(name, p);
+      if (ext == (for_backup_ ? ".zip" : ".iso") && !folders_only_) isos.emplace_back(name, p);
     }
   }
   auto by_name = [](const auto& a, const auto& b) { return LessNoCase(a.first, b.first); };
   std::sort(folders.begin(), folders.end(), by_name);
   std::sort(isos.begin(), isos.end(), by_name);
   // The discs first: what the owner is looking for.
-  for (const auto& [name, p] : isos) entries_.push_back({Entry::Kind::kIso, Utf8(fs::path(name)), p});
-  for (const auto& [name, p] : folders) entries_.push_back({Entry::Kind::kFolder, Utf8(fs::path(name)), p});
+  for (const auto& [name, p] : isos) entries_.push_back({Entry::Kind::kIso, name, p});
+  for (const auto& [name, p] : folders) entries_.push_back({Entry::Kind::kFolder, name, p});
   // The first disc chosen (the unpacked one here, else the first ISO); for a folder the first one
   // in it, or "this folder" when it has none.
   if (folders_only_) {

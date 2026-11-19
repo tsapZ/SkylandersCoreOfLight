@@ -1,5 +1,7 @@
 #include "portable.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <fstream>
 #include <iterator>
@@ -116,6 +118,80 @@ fs::path WithSuffix(const fs::path& p, std::string_view suffix) { return WithPat
 
 std::string Utf8(const fs::path& p) { return PathUtf8(p); }
 
+bool EndsWithNoCase(std::string_view text, std::string_view suffix) {
+  if (text.size() < suffix.size()) return false;
+  const size_t offset = text.size() - suffix.size();
+  for (size_t i = 0; i < suffix.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(text[offset + i])) !=
+        std::tolower(static_cast<unsigned char>(suffix[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ReadTarArchive(const fs::path& archive_file, std::vector<Entry>& entries, bool german, std::string& error) {
+  const std::string broken =
+      german ? "Das heruntergeladene Update ist besch\xC3\xA4" "digt." : "The downloaded update is damaged.";
+  std::error_code ec;
+  const fs::path stage = TempDir() / "CoreOfLight" / ("portable_stage_" + std::to_string(MonotonicMs()));
+  fs::remove_all(stage, ec);
+  fs::create_directories(stage, ec);
+  std::string archive_error;
+  std::vector<fs::path> raw_files;
+  const bool ok = ExtractArchive(
+      archive_file,
+      [&](const std::string& rel) -> fs::path {
+        fs::path clean;
+        if (!SafeRelative(rel, clean)) return {};
+        raw_files.push_back(clean);
+        return stage / clean;
+      },
+      archive_error);
+  if (!ok) {
+    fs::remove_all(stage, ec);
+    error = broken;
+    return false;
+  }
+  std::vector<fs::path> files;
+  for (const fs::path& rel : raw_files) {
+    if (fs::is_regular_file(stage / rel, ec)) files.push_back(rel);
+  }
+  if (files.empty()) {
+    fs::remove_all(stage, ec);
+    error = broken;
+    return false;
+  }
+  // If every extracted file shares one wrapper folder (e.g. coreoflight-linux-amd64-release/), strip it.
+  fs::path wrapper = *files.front().begin();
+  bool strip_wrapper = !wrapper.empty() && files.front() != wrapper;
+  for (const fs::path& r : files) {
+    if (*r.begin() != wrapper || r == wrapper) {
+      strip_wrapper = false;
+      break;
+    }
+  }
+  for (const fs::path& rel : files) {
+    const fs::path disk = stage / rel;
+    Entry e;
+    if (strip_wrapper) {
+      for (auto it = std::next(rel.begin()); it != rel.end(); ++it) e.path /= *it;
+    } else {
+      e.path = rel;
+    }
+    std::ifstream in(disk, std::ios::binary);
+    if (!in) {
+      fs::remove_all(stage, ec);
+      error = broken;
+      return false;
+    }
+    e.data.assign(std::istreambuf_iterator<char>(in), {});
+    entries.push_back(std::move(e));
+  }
+  fs::remove_all(stage, ec);
+  return !entries.empty();
+}
+
 }  // namespace
 
 bool IsPortable(const fs::path& launcher_dir) {
@@ -123,16 +199,20 @@ bool IsPortable(const fs::path& launcher_dir) {
   return fs::is_regular_file(launcher_dir / kMarker, ec);
 }
 
-bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, const fs::path& exe_name, bool german,
+bool ApplyPortableUpdate(const fs::path& archive, const fs::path& launcher_dir, const fs::path& exe_name, bool german,
                          std::string& error) {
   std::vector<Entry> entries;
-  if (!ReadZip(zip, entries, german, error)) return false;
-  bool has_exe = false, has_marker = false;
+  const bool is_zip = EndsWithNoCase(PathUtf8(archive), ".zip");
+  if (is_zip ? !ReadZip(archive, entries, german, error) : !ReadTarArchive(archive, entries, german, error)) {
+    return false;
+  }
+  bool has_exe = false, has_marker = false, has_fonts = false;
   for (const Entry& e : entries) {
     has_exe |= e.path == exe_name;
     has_marker |= e.path == fs::path(kMarker);
+    has_fonts |= e.path == fs::path("fonts") / "NotoSans-Regular.ttf";
   }
-  if (!has_exe || !has_marker) {
+  if (!has_exe || (is_zip ? !has_marker : !has_fonts)) {
     error = german ? "Das Update ist kein portabler Core of Light." : "The update isn't a portable Core of Light.";
     return false;
   }
@@ -201,6 +281,7 @@ bool ApplyPortableUpdate(const fs::path& zip, const fs::path& launcher_dir, cons
       error = cant_write;
       return false;
     }
+    if (e.path == exe_name || EndsWithNoCase(PathUtf8(e.path), ".sh")) MakeExecutable(target);
   }
   HubLog("portable update: " + std::to_string(entries.size()) + " files replaced in " + Utf8(launcher_dir));
   return true;
