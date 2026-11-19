@@ -12,8 +12,10 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"The mouse cursor goes away while you don't move the mouse.",
-     "Der Mauszeiger verschwindet, solange du die Maus nicht bewegst."},
+    {"The Imaginators language row names your disc's own languages (an English disc says English).",
+     "Die Imaginators-Sprachzeile nennt die Sprachen deiner Disc (eine englische Disc sagt Englisch)."},
+    {"A games folder on a network share (\\\\server\\share) works now.",
+     "Ein Spiele-Ordner auf einer Netzwerkfreigabe (\\\\server\\freigabe) geht jetzt."},
 };
 
 }  // namespace coreoflight
