@@ -420,6 +420,10 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
   return best;
 }
 
+std::string ReleasePageUrl(const Release& release) {
+  return "https://github.com/" + std::string(kOwner) + "/" + release.repo + "/releases/tag/v" + release.version;
+}
+
 std::vector<Release> LoadKnownReleases(uint64_t* checked) {
   std::vector<Release> releases;
   if (checked) *checked = 0;

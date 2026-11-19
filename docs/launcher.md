@@ -460,6 +460,24 @@ The exe is `out\build\release\coreoflight.exe`. It is a plain Win32 / Direct3D 1
 Dear ImGui (thirdparty/imgui, 1.92.5, the version the games' SDK uses), so it builds in seconds
 and needs neither the SDK nor the games' sources.
 
+On Linux it is SDL3 + OpenGL 3.3 instead. Needs clang, SDL3 3.4.20 (Ubuntu 24.04 and Debian 12
+don't package it), libusb, curl, OpenSSL, libarchive and OpenGL headers:
+
+    cmake --preset linux-amd64-release -DCMAKE_PREFIX_PATH=/path/to/sdl3
+    cmake --build --preset linux-amd64-release
+    bash tools/package_linux.sh      # installer/Output/CoreOfLight-linux-amd64.tar.gz
+    bash tools/package_appimage.sh   # installer/Output/CoreOfLight-<version>-x86_64.AppImage
+
+The tarball holds `coreoflight`, its fonts and the `libSDL3.so.0` it links (found through the
+binary's `$ORIGIN` rpath, so the target machine needs no SDL3). The AppImage has the same files in
+one file; it doesn't update itself, its update question opens the release page. appimagetool 1.9.1 and
+the Type 2 runtime 20251108 are cached in `$SKYLANDERS_WORK/tools` (default
+`~/SkylandersDev/tools`) and checked against their pinned SHA-256 hashes;
+`APPIMAGETOOL` and `APPIMAGE_RUNTIME` point at copies of your own. Packaging needs `file`
+and uses `curl` to fetch the two pinned assets. If FUSE is unavailable, start the AppImage with
+`--appimage-extract-and-run`. Both packages use the system's OpenGL libraries. On a minimal
+Ubuntu 24.04 install, add `libopengl0` if `libOpenGL.so.0` is missing.
+
 The installer (`installer/CoreOfLight.iss`, Inno Setup 6): `tools\package_installer.ps1 -Games`
 after the release build. It stages the exe, the Visual C++ runtime DLLs from the local Visual
 Studio and, with `-Games`, the newest setup of each game from the repositories next to this one

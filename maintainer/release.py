@@ -23,6 +23,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -223,17 +224,63 @@ def in_vs(command):
     return f'cmd /d /s /c "call "{vcvars()}" >nul && {command}"'
 
 
+def linux_compilers(for_games):
+    """Select the compiler pair passed to CMake. Ubuntu installs clang-19 under versioned names."""
+    for suffix in ("", "-19"):
+        cc = shutil.which("clang" + suffix)
+        cxx = shutil.which("clang++" + suffix)
+        if not cc or not cxx:
+            continue
+        version = subprocess.run([cxx, "--version"], capture_output=True, text=True).stdout
+        match = re.search(r"clang version (\d+)", version)
+        if match and (not for_games or int(match.group(1)) >= 19):
+            return [f"-DCMAKE_C_COMPILER={cc}", f"-DCMAKE_CXX_COMPILER={cxx}"]
+    if for_games:
+        raise SystemExit("the games' Linux build needs clang and clang++ 19 or newer (Ubuntu 24.04: clang-19)")
+    raise SystemExit("the launcher's Linux build needs clang and clang++ (Ubuntu 24.04: clang-19)")
+
+
+def linux_preflight():
+    """Check the development packages before starting a game build."""
+    missing = []
+    modules = (("x11-xcb", "libx11-xcb-dev"), ("libusb-1.0", "libusb-1.0-0-dev"),
+               ("libcurl", "libcurl4-openssl-dev"), ("openssl", "libssl-dev"),
+               ("libarchive", "libarchive-dev"), ("gl", "libgl1-mesa-dev"))
+    if not shutil.which("pkg-config"):
+        missing.append("pkg-config")
+    else:
+        for module, package in modules:
+            if subprocess.run(["pkg-config", "--exists", module]).returncode:
+                missing.append(f"{module} ({package})")
+    if missing:
+        raise SystemExit("the games' Linux build needs: " + "; ".join(missing))
+
+
 def cmd_build(a):
     logs = sk.WORK / "logs"
     failed = []
-    for repo in pick_repos(a.repos):
+    linux = sys.platform.startswith("linux")
+    repos = pick_repos(a.repos)
+    if linux:
+        for_games = any(repo != sk.HUB for repo in repos)
+        compilers = linux_compilers(for_games)
+        if for_games:
+            linux_preflight()
+    for repo in repos:
         d = sk.repo_dir(repo)
         steps = []
         if repo == sk.HUB:
-            steps.append(("build", in_vs("cmake --build --preset release")))
-            if a.recipe == "package-installer":
-                steps.append(("package", ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                                          str(d / "tools" / "package_installer.ps1")]))
+            if linux:
+                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release", *compilers]))
+                steps.append(("build", ["cmake", "--build", "--preset", "linux-amd64-release"]))
+                if a.recipe in ("package-installer", "package-linux"):
+                    steps.append(("package", ["bash", str(d / "tools" / "package_linux.sh")]))
+                    steps.append(("package-appimage", ["bash", str(d / "tools" / "package_appimage.sh")]))
+            else:
+                steps.append(("build", in_vs("cmake --build --preset release")))
+                if a.recipe == "package-installer":
+                    steps.append(("package", ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                                              str(d / "tools" / "package_installer.ps1")]))
         else:
             # A game's profile-guided build (skylanders-portal cmake/pgo.cmake): --pgo takes its
             # profile from SKYLANDERS_WORK\pgo\<Repo>.profdata (made by the scripted training runs);
@@ -244,16 +291,24 @@ def cmd_build(a):
             value = profile.as_posix() if use else ""
             print(f"{repo}: {'profile-guided, ' + profile.name if use else 'no profile'}"
                   + (" (none made yet)" if a.pgo and not use else ""))
-            steps.append(("configure", in_vs(f"cmake --preset win-amd64-release -DSKYLANDERS_PGO_PROFILE={value}")))
-            steps.append((a.recipe, in_vs(f"just {a.recipe}")))
-            if a.test:
-                steps.append(("test", in_vs("just test-release")))
+            if linux:
+                recipe = "package-linux" if a.recipe in ("package-installer", "package-linux") else a.recipe
+                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release", *compilers,
+                                            f"-DSKYLANDERS_PGO_PROFILE={value}"]))
+                steps.append((recipe, ["just", recipe]))
+                if a.test:
+                    steps.append(("test", ["just", "test-release"]))
+            else:
+                steps.append(("configure", in_vs(f"cmake --preset win-amd64-release -DSKYLANDERS_PGO_PROFILE={value}")))
+                steps.append((a.recipe, in_vs(f"just {a.recipe}")))
+                if a.test:
+                    steps.append(("test", in_vs("just test-release")))
+        build_dir = d / "out" / "build" / ("linux-amd64-release" if linux else "win-amd64-release")
         for name, command in steps:
             log = logs / f"{repo}_{name}.log"
             started = datetime.datetime.now()
-            # A codegen run starts the SDK's rexglue.exe, which needs amd_fidelityfx_dx12.dll: it
-            # sits in the game's build folder (0xC0000135 without it).
-            code = run(command, cwd=d, log=log, path_first=d / "out" / "build" / "win-amd64-release")
+            # A codegen run starts the SDK's rexglue, which needs its shared/runtime libraries in PATH.
+            code = run(command, cwd=d, log=log, path_first=None if linux else build_dir)
             took = (datetime.datetime.now() - started).total_seconds()
             print(f"{repo}: {name} {'ok' if code == 0 else 'FAILED'} in {took:.0f} s ({log})")
             if code:
@@ -269,7 +324,7 @@ FORBIDDEN = re.compile(r"(^rom/(?!README\.md$).+|\.(xex|iso|dump|bin|igz|iga|bk2
 
 
 MOJIBAKE = re.compile("[\u00c2-\u00f4][\u0080-\u00bf]+")
-MOJIBAKE_EXT = (".cpp", ".h", ".inc", ".md", ".toml", ".example", ".iss", ".txt", ".py", ".ps1", ".cmake", ".json")
+MOJIBAKE_EXT = (".cpp", ".h", ".inc", ".md", ".toml", ".example", ".iss", ".txt", ".py", ".ps1", ".sh", ".cmake", ".json")
 
 
 def check_repo(repo, history=False):
@@ -316,28 +371,43 @@ def check_repo(repo, history=False):
     private = [e for e in emails if not e.endswith("users.noreply.github.com") and e != "noreply@github.com"]
     if private:
         problems.append(f"commits with a non-noreply e-mail: {sorted(private)}")
-    staging = d / "installer" / "staging"
-    if user and staging.exists():
-        needles = [f"Users\\{user}", f"Users/{user}"]
-        for f in staging.rglob("*"):
-            if f.suffix.lower() not in (".exe", ".dll"):
+    scan_roots = [d / "installer" / "staging"]
+    scan_roots += [p for p in (d / "dist").glob("*-linux-amd64-release") if p.is_dir()]
+    if user:
+        needles = [f"Users\\{user}", f"Users/{user}", f"/home/{user}"]
+        for root in scan_roots:
+            if not root.exists():
                 continue
-            data = f.read_bytes().lower()
-            for n in needles:
-                if n.lower().encode("ascii") in data or n.lower().encode("utf-16-le") in data:
-                    problems.append(f"{f.name} holds a build machine path ({n})")
-                    break
-            # The developer kit's log lines all start like this (SkylandersDevKit).
-            if b"dev kit: " in data:
-                problems.append(f"{f.name} holds the developer kit")
+            for f in root.rglob("*"):
+                if not f.is_file():
+                    continue
+                is_win_bin = f.suffix.lower() in (".exe", ".dll")
+                is_elf = False
+                if not is_win_bin:
+                    try:
+                        with open(f, "rb") as fh:
+                            is_elf = fh.read(4) == b"\x7fELF"
+                    except OSError:
+                        is_elf = False
+                if not is_win_bin and not is_elf:
+                    continue
+                data = f.read_bytes().lower()
+                for n in needles:
+                    if n.lower().encode("ascii") in data or n.lower().encode("utf-16-le") in data:
+                        problems.append(f"{f.name} holds a build machine path ({n})")
+                        break
+                # The developer kit's log lines all start like this (SkylandersDevKit).
+                if b"dev kit: " in data:
+                    problems.append(f"{f.name} holds the developer kit")
     # The private repositories (the developer kit, GiantsDecomp) must never be built into a
     # release: their CMake variables stay empty in the release build folder.
-    cache = d / "out" / "build" / "win-amd64-release" / "CMakeCache.txt"
-    if cache.exists():
-        for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
-            name, _, value = line.partition("=")
-            if name.split(":")[0] in ("SKYLANDERS_DEVKIT_DIR", "GIANTS_DECOMP_DIR") and value.strip():
-                problems.append(f"the release build has {name.split(':')[0]} set (private code would ship)")
+    for preset in ("win-amd64-release", "linux-amd64-release"):
+        cache = d / "out" / "build" / preset / "CMakeCache.txt"
+        if cache.exists():
+            for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+                name, _, value = line.partition("=")
+                if name.split(":")[0] in ("SKYLANDERS_DEVKIT_DIR", "GIANTS_DECOMP_DIR") and value.strip():
+                    problems.append(f"the {preset} build has {name.split(':')[0]} set (private code would ship)")
     return problems
 
 
@@ -354,7 +424,20 @@ def cmd_check(a):
 # --- publish ------------------------------------------------------------------------------------
 
 def footer(repo, version):
+    linux = sys.platform.startswith("linux")
     if repo == sk.HUB:
+        if linux:
+            return (
+                f"**Install:** download `CoreOfLight-linux-amd64.tar.gz` and unpack it (the SDL3 it needs, which "
+                "Ubuntu 24.04 doesn't package, is inside), or take the AppImage: "
+                f"`chmod +x CoreOfLight-{version}-x86_64.AppImage` and run it. The tarball updates itself; an "
+                "AppImage doesn't, so download the new file for a newer version.\n\n"
+                "On first start it asks for your own Xbox 360 discs as ISO files and installs the games for them, "
+                "downloading each game's tarball from its repository. Nothing of the games comes with this project.\n\n"
+                "If FUSE is unavailable, run the AppImage with `--appimage-extract-and-run`.\n\n"
+                "This is a beta: expect bugs. Please report them with Launcher settings (LB / Q) > \"Report a problem\" "
+                f"and a [new issue](https://github.com/{GH}/{repo}/issues/new/choose) (attach the text file it makes).\n\n"
+                "Not affiliated with Activision, Toys for Bob or Vicarious Visions. Skylanders is a trademark of its owners.\n")
         return (
             f"**Install:** either download `CoreOfLightSetup-{version}.exe` and run it (no admin rights needed), "
             "or take the ZIP above. Neither is signed, so Windows may show \"Windows protected your PC\": click "
@@ -365,6 +448,18 @@ def footer(repo, version):
             f"and a [new issue](https://github.com/{GH}/{repo}/issues/new/choose) (attach the text file it makes).\n\n"
             "Not affiliated with Activision, Toys for Bob or Vicarious Visions. Skylanders is a trademark of its owners.\n")
     g = sk.game(repo)
+    if linux:
+        return (
+            f"**The easy way:** install [Core of Light](https://github.com/{GH}/{sk.HUB}/releases), the launcher. It "
+            "sets this game up from your disc and keeps it up to date by itself.\n\n"
+            f"**On its own:** download `{repo}-linux-amd64.tar.gz`, unpack it, and run "
+            "`./linux-setup.sh <your ISO>` (an ISO file or an extracted disc folder). It copies the disc into `rom/` "
+            "next to the game and writes the settings file. The README says which disc version it needs.\n\n"
+            "The game's data (graphics, sound, levels, movies) doesn't come with it: the setup takes it from your own "
+            "disc.\n\n"
+            f"Problems: F4 > Game > \"Report a problem\" in the game, then a [new issue](https://github.com/{GH}/{repo}"
+            "/issues/new/choose).\n\n"
+            f"Not affiliated with Activision or {g.maker}. Skylanders is a trademark of its owners.\n")
     return (
         f"**The easy way:** install [Core of Light](https://github.com/{GH}/{sk.HUB}/releases), the launcher. It "
         "sets this game up from your disc and keeps it up to date by itself.\n\n"
@@ -449,8 +544,9 @@ def main():
     s.add_argument("-m", "--message", help="commit message file (default: the version)")
     s.add_argument("--push", action="store_true")
     s.add_argument("--repos", nargs="*")
-    s = sub.add_parser("build", help="build in the Visual Studio environment, logs in SKYLANDERS_WORK")
-    s.add_argument("--recipe", default="build-release", choices=["build-release", "package-installer"])
+    s = sub.add_parser("build", help="build release binaries/packages, logs in SKYLANDERS_WORK")
+    s.add_argument("--recipe", default="build-release",
+                   choices=["build-release", "package-installer", "package-linux"])
     s.add_argument("--test", action="store_true", help="also run the games' tests")
     s.add_argument("--pgo", action="store_true",
                    help="profile-guided: each game with its profile from SKYLANDERS_WORK\\pgo\\<Repo>.profdata")
