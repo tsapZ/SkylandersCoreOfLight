@@ -725,6 +725,10 @@ void LauncherUi::Start(size_t index) {
     say("Eine Sprache wird gerade eingespielt", "A language is being put in");
     return;
   }
+  if ((index == ImaginatorsIndex() || index == SuperChargersIndex()) && wiiu_figures_.running()) {
+    say("Die Wii-U-Figuren werden gerade eingebaut", "The Wii U figures are being put in");
+    return;
+  }
   // A newer setup than the installed game: ask first (once a launch; "Erst spielen" plays).
   if (UpdateAvailable(index) && !install_process_ && index < update_put_off_.size() && !update_put_off_[index]) {
     ask_update_ = int(index);
@@ -1208,7 +1212,93 @@ bool LauncherUi::LanguageLabel() {
     }
   }
   const bool sc_done = hub_screen_.SetActionLabel("sc_language", sc_en, sc_de);
-  return hub_screen_.SetActionLabel("im_language", en, de) && sc_done;
+  const bool wiiu_done = WiiuLabel();
+  return hub_screen_.SetActionLabel("im_language", en, de) && sc_done && wiiu_done;
+}
+
+bool LauncherUi::WiiuLabel() {
+#ifdef _WIN32
+  bool done = true;
+  for (const bool sc : {true, false}) {
+    const bool ready = sc ? SuperChargersReady() : ImaginatorsReady();
+    const char* game = sc ? "SuperChargers" : "Imaginators";
+    std::string en = std::string(game) + " isn't set up", de = std::string(game) + " ist nicht eingerichtet";
+    if (ready && WiiuFigures::Installed(found_[sc ? SuperChargersIndex() : ImaginatorsIndex()].rom)) {
+      en = "Added (press to take them out)";
+      de = "Drin (dr\xC3\xBC" "cken zum Herausnehmen)";
+    } else if (ready) {
+      en = "Add from my Wii U game";
+      de = "Aus meinem Wii-U-Spiel hinzuf\xC3\xBCgen";
+    }
+    done = hub_screen_.SetActionLabel(sc ? "sc_wiiu" : "im_wiiu", en, de) && done;
+  }
+  return done;
+#else
+  return true;
+#endif
+}
+
+void LauncherUi::AskWiiu(bool superchargers) {
+  if (wiiu_figures_.running()) return;  // its note shows how far it is
+  const char* game = superchargers ? "SuperChargers" : "Imaginators";
+  if (!(superchargers ? SuperChargersReady() : ImaginatorsReady())) {
+    ShowToast(german_ ? std::string(game) + " braucht zuerst seine Xbox-360-Disc." : std::string(game) + " needs its Xbox 360 disc first.",
+              10.0);
+    return;
+  }
+  if (WiiuFigures::Installed(found_[superchargers ? SuperChargersIndex() : ImaginatorsIndex()].rom)) {
+    wiiu_remove_ = superchargers ? 1 : 2;
+    return;
+  }
+  folder_for_data_ = false;
+  folder_browser_.SetForData(false);
+  folder_browser_.SetForWiiu(superchargers ? 1 : 2);
+  folder_browser_.Open();
+}
+
+// "Take the Wii U figures out of SuperChargers?": A takes them out (the originals back), B keeps them.
+bool LauncherUi::DrawWiiuRemove(float width, float height) {
+  const float u = UiScale(width, height);
+  const bool sc = wiiu_remove_ == 1;
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("wiiuremove", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const size_t index = sc ? SuperChargersIndex() : ImaginatorsIndex();
+  DrawBackdrop(dl, width, height, index < background_art_.size() ? background_art_[index] : std::filesystem::path());
+  const float bw = 720 * u, bh = 250 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const std::string title = german_ ? std::string("Wii-U-Figuren aus ") + (sc ? "SuperChargers" : "Imaginators") + " nehmen?"
+                                    : std::string("Take the Wii U figures out of ") + (sc ? "SuperChargers" : "Imaginators") + "?";
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
+  const char* line = german_ ? "Die Originaldateien des Spiels kommen zur\xC3\xBC" "ck; Spielst\xC3\xA4nde bleiben."
+                             : "The game's original files come back; your saves stay.";
+  Text(dl, regular_, 22 * u, {(width - TextWidth(regular_, 22 * u, line)) * 0.5f, a.y + 88 * u}, kDim, line);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, a.y + 158 * u}, q{x + 260 * u, a.y + 210 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    ButtonHint(dl, bold_, 24 * u, {p.x + (260 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool yes = button(a.x + 60 * u, "A", Rgba(70, 170, 70), german_ ? "Herausnehmen" : "Take out");
+  const bool no = button(b.x - 320 * u, "B", Rgba(200, 60, 60), german_ ? "Behalten" : "Keep");
+  ImGui::End();
+  if (yes || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    wiiu_figures_.StartRestore(sc ? WiiuFigures::Game::kSuperChargers : WiiuFigures::Game::kImaginators,
+                               found_[index].exe.parent_path(), german_);
+    wiiu_remove_ = 0;
+  } else if (no || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    wiiu_remove_ = 0;
+  }
+  return true;
 }
 
 void LauncherUi::AskLanguage(const std::filesystem::path& source, bool superchargers) {
@@ -1597,6 +1687,10 @@ bool LauncherUi::Draw(float width, float height) {
   // What the figure import brought in (#34), over whatever screen is open.
   if (const std::string summary = figure_import_.TakeSummary(); !summary.empty()) {
     ShowToast((german_ ? "Imaginators-Figuren: " : "Imaginators figures: ") + summary, 12.0);
+  }
+  if (const std::string summary = wiiu_figures_.TakeSummary(); !summary.empty()) {
+    ShowToast(summary, 14.0);
+    language_label_pending_ = true;  // the Wii U rows' values come with the language ones
   }
   if (const std::string summary = language_import_.TakeSummary(); !summary.empty()) {
     ShowToast(summary, 14.0);
@@ -2131,6 +2225,11 @@ void LauncherUi::DrawToast(float width, float height, bool start_screen) {
   } else if (figure_import_.running()) {
     text = german_ ? "Imaginators pr\xC3\xBC" "ft die Figuren ..." : "Imaginators is checking the figures ...";
     spinning = true;
+  } else if (wiiu_figures_.running()) {
+    const std::string step = wiiu_figures_.step();
+    text = (german_ ? "Wii-U-Figuren: " : "Wii U figures: ") + (step.empty() ? std::string("...") : step);
+    spinning = true;
+    progress = wiiu_figures_.progress();
   } else if (language_import_.running()) {
     const std::string step = language_import_.step();
     text = (german_ ? "Imaginators-Sprache: " : "Imaginators language: ") + (step.empty() ? std::string("...") : step);
@@ -2830,7 +2929,19 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (folder_browser_.is_open()) {
     folder_browser_.Draw(width, height);
     if (const std::filesystem::path chosen = folder_browser_.TakeChosen(); !chosen.empty()) {
-      if (folder_browser_.for_figures()) {
+      if (const int wiiu = folder_browser_.for_wiiu()) {
+        // The Wii U game for the Wii U figures (wiiu_figures.h); the note at the bottom right shows how far it is.
+        folder_browser_.SetForData(false);
+        const bool sc = wiiu == 1;
+        if (!WiiuFigures::LooksLikeWiiuGame(chosen)) {
+          ShowToast(german_ ? "Dort ist kein entpacktes Wii-U-Spiel (kein Ordner archives)."
+                            : "That isn't an extracted Wii U game (no archives folder).",
+                    10.0);
+        } else if (sc ? SuperChargersReady() : ImaginatorsReady()) {
+          wiiu_figures_.Start(sc ? WiiuFigures::Game::kSuperChargers : WiiuFigures::Game::kImaginators, chosen,
+                              found_[sc ? SuperChargersIndex() : ImaginatorsIndex()].exe.parent_path(), german_);
+        }
+      } else if (folder_browser_.for_figures()) {
         // The Imaginators exe checks the files (figure_import.h); the toast says what came in.
         static const Found none;
         size_t im = 0;
@@ -2895,6 +3006,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (ask_import_settings_) return DrawImportQuestion(width, height);
   if (!ask_reimport_.empty()) return DrawReimportQuestion(width, height);
   if (confirm_quit_) return DrawQuitConfirm(width, height);
+  if (wiiu_remove_) return DrawWiiuRemove(width, height);
   if (ask_update_ >= 0) return DrawUpdateConfirm(width, height);
   if (crash_code_ != 0) return DrawCrashReport(width, height);
   if (browser_.is_open()) {
@@ -2999,6 +3111,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
     }
     if (action == "im_language") AskLanguage({});  // the language first, then the PS3 disc
     if (action == "sc_language") AskLanguage({}, true);  // the language first, then the other 360 disc
+    if (action == "sc_wiiu" || action == "im_wiiu") AskWiiu(action == "sc_wiiu");  // the Wii U game, or take out
     if (action == "check_updates") StartUpdateCheck(true);
     // "Meine Daten exportieren / importieren" (data_transfer.h, #40): the export onto the desktop,
     // the import from the file picked in the browser.

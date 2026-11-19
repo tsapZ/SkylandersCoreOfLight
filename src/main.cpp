@@ -42,6 +42,7 @@
 #include "hub_log.h"
 #include "hub_settings.h"
 #include "language_import.h"
+#include "wiiu_figures.h"
 #include "launcher_ui.h"
 #include "pad_state.h"
 #include "platform.h"
@@ -85,6 +86,7 @@ struct LaunchOptions {
   std::filesystem::path portable_update;
   std::string sc_language;
   std::string im_language;
+  std::string wiiu_figures;
   bool fullscreen_arg = false;
   bool test_crash = false;
 };
@@ -124,6 +126,10 @@ void ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts) {
     } else if (arg.starts_with("--im_language=")) {
       // The same for Imaginators' import from its PS3 disc.
       opts.im_language = arg.substr(14);
+    } else if (arg.starts_with("--wiiu_figures=")) {
+      // A test of the Wii U figures (wiiu_figures.h) without the window: "<sc|im>|<Wii U folder>|<game folder>" or
+      // "<sc|im>|restore|<game folder>".
+      opts.wiiu_figures = arg.substr(15);
     } else if (arg == "--fullscreen") {
       // Fullscreen for this start, whatever the setting says (Steam's launch options on a
       // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
@@ -190,6 +196,36 @@ int RunHeadlessTools(const LaunchOptions& opts) {
     }
     const std::string summary = job.TakeSummary();
     coreoflight::HubLog(tag + summary);
+    return summary.empty() ? 1 : 0;
+  }
+  if (!opts.wiiu_figures.empty()) {
+    const std::string& spec = opts.wiiu_figures;
+    const size_t a = spec.find('|'), b = a == std::string::npos ? a : spec.find('|', a + 1);
+    const std::string game = spec.substr(0, a);
+    if (b == std::string::npos || (game != "sc" && game != "im")) {
+      coreoflight::HubLog("wiiu figures test: --wiiu_figures=\"<sc|im>|<Wii U folder>|<game folder>\" or "
+                          "\"<sc|im>|restore|<game folder>\"");
+      return 1;
+    }
+    const std::string source = spec.substr(a + 1, b - a - 1);
+    const std::filesystem::path game_dir = coreoflight::PathFromUtf8(spec.substr(b + 1));
+    const auto which = game == "sc" ? coreoflight::WiiuFigures::Game::kSuperChargers
+                                    : coreoflight::WiiuFigures::Game::kImaginators;
+    coreoflight::WiiuFigures job;
+    if (source == "restore") {
+      job.StartRestore(which, game_dir, false);
+    } else {
+      job.Start(which, coreoflight::PathFromUtf8(source), game_dir, false);
+    }
+    while (job.running()) {
+#ifdef _WIN32
+      Sleep(200);
+#else
+      SDL_Delay(200);
+#endif
+    }
+    const std::string summary = job.TakeSummary();
+    coreoflight::HubLog("wiiu figures test: " + summary);
     return summary.empty() ? 1 : 0;
   }
   return -1;
