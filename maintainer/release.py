@@ -23,6 +23,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -223,11 +224,42 @@ def in_vs(command):
     return f'cmd /d /s /c "call "{vcvars()}" >nul && {command}"'
 
 
+def linux_preflight():
+    """What the games' Linux build needs, checked before a long build starts instead of halfway
+    through it: clang 19 (Ubuntu 24.04's clang 18 and libstdc++ 13 hide the SDK's std::expected)
+    and the development packages behind the runtime libraries."""
+    missing = []
+    try:
+        version = subprocess.run(["clang++", "--version"], capture_output=True, text=True).stdout
+    except FileNotFoundError:
+        version = ""
+    m = re.search(r"clang version (\d+)", version)
+    if not m:
+        missing.append("clang++ 19 or newer")
+    elif int(m.group(1)) < 19:
+        missing.append(f"clang++ {m.group(1)} (19 or newer; Ubuntu 24.04: clang-19, then configure with "
+                       "-DCMAKE_C_COMPILER=clang-19 -DCMAKE_CXX_COMPILER=clang++-19)")
+    modules = (("x11-xcb", "libx11-xcb-dev"), ("libusb-1.0", "libusb-1.0-0-dev"),
+               ("libcurl", "libcurl4-openssl-dev"), ("openssl", "libssl-dev"),
+               ("libarchive", "libarchive-dev"), ("gl", "libgl1-mesa-dev"))
+    if not shutil.which("pkg-config"):
+        missing.append("pkg-config")
+    else:
+        for module, package in modules:
+            if subprocess.run(["pkg-config", "--exists", module]).returncode:
+                missing.append(f"{module} ({package})")
+    if missing:
+        raise SystemExit("the games' Linux build needs: " + "; ".join(missing))
+
+
 def cmd_build(a):
     logs = sk.WORK / "logs"
     failed = []
     linux = sys.platform.startswith("linux")
-    for repo in pick_repos(a.repos):
+    repos = pick_repos(a.repos)
+    if linux and any(repo != sk.HUB for repo in repos):
+        linux_preflight()
+    for repo in repos:
         d = sk.repo_dir(repo)
         steps = []
         if repo == sk.HUB:
