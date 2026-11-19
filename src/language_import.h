@@ -44,6 +44,9 @@ bool IsImaginatorsPs3Disc(const std::filesystem::path& source);
 bool IsSuperChargersDisc(const std::filesystem::path& source, std::vector<std::string>* languages = nullptr);
 // The languages of SuperChargers' installed disc folder (`rom`): its two ("es", "it" or "en", "de").
 std::vector<std::string> SuperChargersInstallLanguages(const std::filesystem::path& rom);
+// The languages of Imaginators' installed disc folder (`rom`), from the same suffixes: "es", "it" on the
+// European Spanish / Italian disc; empty when none is found (a disc whose banks carry no language suffix).
+std::vector<std::string> ImaginatorsInstallLanguages(const std::filesystem::path& rom);
 // The install's language whose place an import into `rom` took ("es"), empty if none (or Imaginators').
 std::string ImportedPlace(const std::filesystem::path& rom);
 // Whether the file is a PS3 disc image of any game (its volume is "PS3VOLUME").
