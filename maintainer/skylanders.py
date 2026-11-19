@@ -102,7 +102,8 @@ def release_assets(repo, version, platform=None):
     win = ([d / "installer" / "Output" / f"CoreOfLightSetup-{version}.exe",
             d / "installer" / "Output" / f"CoreOfLightPortable-{version}.zip"]
            if repo == HUB else [d / "installer" / "Output" / f"{repo}Setup-{version}.exe"])
-    linux = ([d / "installer" / "Output" / "CoreOfLight-linux-amd64.tar.gz"]
+    linux = ([d / "installer" / "Output" / "CoreOfLight-linux-amd64.tar.gz",
+              d / "installer" / "Output" / f"CoreOfLight-{version}-x86_64.AppImage"]
              if repo == HUB else [d / "dist" / f"{repo}-linux-amd64.tar.gz"])
     if plat == "all":
         return win + linux

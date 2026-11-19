@@ -236,6 +236,7 @@ def cmd_build(a):
                 steps.append(("build", ["cmake", "--build", "--preset", "linux-amd64-release"]))
                 if a.recipe in ("package-installer", "package-linux"):
                     steps.append(("package", ["bash", str(d / "tools" / "package_linux.sh")]))
+                    steps.append(("package-appimage", ["bash", str(d / "tools" / "package_appimage.sh")]))
             else:
                 steps.append(("build", in_vs("cmake --build --preset release")))
                 if a.recipe == "package-installer":
@@ -384,7 +385,21 @@ def cmd_check(a):
 # --- publish ------------------------------------------------------------------------------------
 
 def footer(repo, version):
+    linux = sys.platform.startswith("linux")
     if repo == sk.HUB:
+        if linux:
+            return (
+                f"**Install:** download `CoreOfLight-linux-amd64.tar.gz` and unpack it (the SDL3 it needs, which "
+                "Ubuntu 24.04 doesn't package, is inside), or take the AppImage: "
+                f"`chmod +x CoreOfLight-{version}-x86_64.AppImage` and run it. The tarball updates itself; an "
+                "AppImage doesn't, so download the new file for a newer version.\n\n"
+                "On first start it asks for your own Xbox 360 discs as ISO files and installs the games for them, "
+                "downloading each game's tarball from its repository. Nothing of the games comes with this project.\n\n"
+                "Ubuntu 24.04 needs `libfuse2t64` to start an AppImage (or run it with "
+                "`--appimage-extract-and-run`).\n\n"
+                "This is a beta: expect bugs. Please report them with Launcher settings (LB / Q) > \"Report a problem\" "
+                f"and a [new issue](https://github.com/{GH}/{repo}/issues/new/choose) (attach the text file it makes).\n\n"
+                "Not affiliated with Activision, Toys for Bob or Vicarious Visions. Skylanders is a trademark of its owners.\n")
         return (
             f"**Install:** either download `CoreOfLightSetup-{version}.exe` and run it (no admin rights needed), "
             "or take the ZIP above. Neither is signed, so Windows may show \"Windows protected your PC\": click "
@@ -395,6 +410,18 @@ def footer(repo, version):
             f"and a [new issue](https://github.com/{GH}/{repo}/issues/new/choose) (attach the text file it makes).\n\n"
             "Not affiliated with Activision, Toys for Bob or Vicarious Visions. Skylanders is a trademark of its owners.\n")
     g = sk.game(repo)
+    if linux:
+        return (
+            f"**The easy way:** install [Core of Light](https://github.com/{GH}/{sk.HUB}/releases), the launcher. It "
+            "sets this game up from your disc and keeps it up to date by itself.\n\n"
+            f"**On its own:** download `{repo}-linux-amd64.tar.gz`, unpack it, and run "
+            "`./linux-setup.sh <your ISO>` (an ISO file or an extracted disc folder). It copies the disc into `rom/` "
+            "next to the game and writes the settings file. The README says which disc version it needs.\n\n"
+            "The game's data (graphics, sound, levels, movies) doesn't come with it: the setup takes it from your own "
+            "disc.\n\n"
+            f"Problems: F4 > Game > \"Report a problem\" in the game, then a [new issue](https://github.com/{GH}/{repo}"
+            "/issues/new/choose).\n\n"
+            f"Not affiliated with Activision or {g.maker}. Skylanders is a trademark of its owners.\n")
     return (
         f"**The easy way:** install [Core of Light](https://github.com/{GH}/{sk.HUB}/releases), the launcher. It "
         "sets this game up from your disc and keeps it up to date by itself.\n\n"
