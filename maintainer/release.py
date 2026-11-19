@@ -224,21 +224,25 @@ def in_vs(command):
     return f'cmd /d /s /c "call "{vcvars()}" >nul && {command}"'
 
 
+def linux_compilers(for_games):
+    """Select the compiler pair passed to CMake. Ubuntu installs clang-19 under versioned names."""
+    for suffix in ("", "-19"):
+        cc = shutil.which("clang" + suffix)
+        cxx = shutil.which("clang++" + suffix)
+        if not cc or not cxx:
+            continue
+        version = subprocess.run([cxx, "--version"], capture_output=True, text=True).stdout
+        match = re.search(r"clang version (\d+)", version)
+        if match and (not for_games or int(match.group(1)) >= 19):
+            return [f"-DCMAKE_C_COMPILER={cc}", f"-DCMAKE_CXX_COMPILER={cxx}"]
+    if for_games:
+        raise SystemExit("the games' Linux build needs clang and clang++ 19 or newer (Ubuntu 24.04: clang-19)")
+    raise SystemExit("the launcher's Linux build needs clang and clang++ (Ubuntu 24.04: clang-19)")
+
+
 def linux_preflight():
-    """What the games' Linux build needs, checked before a long build starts instead of halfway
-    through it: clang 19 (Ubuntu 24.04's clang 18 and libstdc++ 13 hide the SDK's std::expected)
-    and the development packages behind the runtime libraries."""
+    """Check the development packages before starting a game build."""
     missing = []
-    try:
-        version = subprocess.run(["clang++", "--version"], capture_output=True, text=True).stdout
-    except FileNotFoundError:
-        version = ""
-    m = re.search(r"clang version (\d+)", version)
-    if not m:
-        missing.append("clang++ 19 or newer")
-    elif int(m.group(1)) < 19:
-        missing.append(f"clang++ {m.group(1)} (19 or newer; Ubuntu 24.04: clang-19, then configure with "
-                       "-DCMAKE_C_COMPILER=clang-19 -DCMAKE_CXX_COMPILER=clang++-19)")
     modules = (("x11-xcb", "libx11-xcb-dev"), ("libusb-1.0", "libusb-1.0-0-dev"),
                ("libcurl", "libcurl4-openssl-dev"), ("openssl", "libssl-dev"),
                ("libarchive", "libarchive-dev"), ("gl", "libgl1-mesa-dev"))
@@ -257,14 +261,17 @@ def cmd_build(a):
     failed = []
     linux = sys.platform.startswith("linux")
     repos = pick_repos(a.repos)
-    if linux and any(repo != sk.HUB for repo in repos):
-        linux_preflight()
+    if linux:
+        for_games = any(repo != sk.HUB for repo in repos)
+        compilers = linux_compilers(for_games)
+        if for_games:
+            linux_preflight()
     for repo in repos:
         d = sk.repo_dir(repo)
         steps = []
         if repo == sk.HUB:
             if linux:
-                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release"]))
+                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release", *compilers]))
                 steps.append(("build", ["cmake", "--build", "--preset", "linux-amd64-release"]))
                 if a.recipe in ("package-installer", "package-linux"):
                     steps.append(("package", ["bash", str(d / "tools" / "package_linux.sh")]))
@@ -286,7 +293,7 @@ def cmd_build(a):
                   + (" (none made yet)" if a.pgo and not use else ""))
             if linux:
                 recipe = "package-linux" if a.recipe in ("package-installer", "package-linux") else a.recipe
-                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release",
+                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release", *compilers,
                                             f"-DSKYLANDERS_PGO_PROFILE={value}"]))
                 steps.append((recipe, ["just", recipe]))
                 if a.test:
@@ -427,8 +434,7 @@ def footer(repo, version):
                 "AppImage doesn't, so download the new file for a newer version.\n\n"
                 "On first start it asks for your own Xbox 360 discs as ISO files and installs the games for them, "
                 "downloading each game's tarball from its repository. Nothing of the games comes with this project.\n\n"
-                "Ubuntu 24.04 needs `libfuse2t64` to start an AppImage (or run it with "
-                "`--appimage-extract-and-run`).\n\n"
+                "If FUSE is unavailable, run the AppImage with `--appimage-extract-and-run`.\n\n"
                 "This is a beta: expect bugs. Please report them with Launcher settings (LB / Q) > \"Report a problem\" "
                 f"and a [new issue](https://github.com/{GH}/{repo}/issues/new/choose) (attach the text file it makes).\n\n"
                 "Not affiliated with Activision, Toys for Bob or Vicarious Visions. Skylanders is a trademark of its owners.\n")

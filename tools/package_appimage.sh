@@ -35,9 +35,7 @@ cp "$stage/coreoflight" "$appdir/usr/bin/coreoflight"
 cp "$stage/libSDL3.so.0" "$appdir/usr/bin/libSDL3.so.0"
 cp -r "$stage/fonts" "$appdir/usr/bin/fonts"
 cp "$stage/LICENSE" "$appdir/usr/bin/LICENSE"
-if [ -f "$stage/LICENSE-SDL3.txt" ]; then
-  cp "$stage/LICENSE-SDL3.txt" "$appdir/usr/bin/LICENSE-SDL3.txt"
-fi
+cp "$stage/LICENSE-SDL3.txt" "$appdir/usr/bin/LICENSE-SDL3.txt"
 if [ -f "$stage/70-portal-of-power.rules" ]; then
   cp "$stage/70-portal-of-power.rules" "$appdir/usr/share/doc/coreoflight/70-portal-of-power.rules"
 fi
@@ -84,37 +82,47 @@ cp "$appdir/coreoflight.desktop" "$appdir/usr/share/applications/coreoflight.des
 cache="${SKYLANDERS_WORK:-$HOME/SkylandersDev}/tools"
 mkdir -p "$cache"
 
+# Verify cached copies too. An explicit override supplies a locally trusted file.
+pinned_asset() (
+  local url="$1" digest="$2" file="$3"
+  if [ ! -f "$file" ]; then
+    local tmp
+    tmp="$(mktemp "$file.XXXXXX")" || return 1
+    trap 'rm -f -- "$tmp"' EXIT
+    echo "downloading ${file##*/} into $cache ..." >&2
+    curl -fsSL --retry 3 --connect-timeout 20 -o "$tmp" "$url" || return 1
+    printf '%s  %s\n' "$digest" "$tmp" | sha256sum --check --status || return 1
+    chmod 0755 "$tmp" || return 1
+    mv -f "$tmp" "$file" || return 1
+  fi
+  printf '%s  %s\n' "$digest" "$file" | sha256sum --check --status
+)
+
 tool="${APPIMAGETOOL:-}"
-if [ -z "$tool" ] && command -v appimagetool >/dev/null 2>&1; then
-  tool="$(command -v appimagetool)"
-fi
-if [ -z "$tool" ] && [ -x "$cache/appimagetool-x86_64.AppImage" ]; then
-  tool="$cache/appimagetool-x86_64.AppImage"
-fi
 if [ -z "$tool" ]; then
-  command -v curl >/dev/null 2>&1 || { echo "curl is needed to download appimagetool once" >&2; exit 1; }
-  echo "downloading appimagetool into $cache (once) ..."
-  curl -fL --retry 3 --connect-timeout 20 -o "$cache/appimagetool-x86_64.AppImage" \
-    https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-  chmod 0755 "$cache/appimagetool-x86_64.AppImage"
-  tool="$cache/appimagetool-x86_64.AppImage"
+  tool="$cache/appimagetool-1.9.1-x86_64.AppImage"
+  if ! pinned_asset \
+      https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage \
+      ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 "$tool"; then
+    echo "Could not download or verify $tool" >&2
+    exit 1
+  fi
 fi
 
 runtime="${APPIMAGE_RUNTIME:-}"
 if [ -z "$runtime" ]; then
-  runtime="$cache/runtime-x86_64"
-  if [ ! -f "$runtime" ]; then
-    command -v curl >/dev/null 2>&1 || { echo "curl is needed to download the AppImage runtime once" >&2; exit 1; }
-    echo "downloading the AppImage runtime into $cache (once) ..."
-    curl -fL --retry 3 --connect-timeout 20 -o "$runtime" \
-      https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+  runtime="$cache/type2-runtime-20251108-x86_64"
+  if ! pinned_asset \
+      https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 \
+      2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d "$runtime"; then
+    echo "Could not download or verify $runtime" >&2
+    exit 1
   fi
 fi
-if [ ! -f "$tool" ] || [ ! -f "$runtime" ]; then
-  echo "appimagetool ($tool) or the runtime ($runtime) is missing" >&2
+if [ ! -x "$tool" ] || [ ! -f "$runtime" ]; then
+  echo "appimagetool ($tool) must be executable and the runtime ($runtime) must exist" >&2
   exit 1
 fi
-sha256sum "$tool" "$runtime"
 
 out="$repo/installer/Output"
 mkdir -p "$out"
@@ -123,4 +131,4 @@ ARCH=x86_64 VERSION="$version" APPIMAGE_EXTRACT_AND_RUN=1 \
   "$tool" --no-appstream --runtime-file "$runtime" "$appdir" "$appimage"
 chmod 0755 "$appimage"
 ls -lh "$appimage"
-echo "Ubuntu 24.04 users need libfuse2t64 (or --appimage-extract-and-run) to start an AppImage."
+echo "If FUSE is unavailable, use --appimage-extract-and-run."

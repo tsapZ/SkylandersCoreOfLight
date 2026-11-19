@@ -39,18 +39,21 @@ links SDL3 dynamically (the release tarball and AppImage carry it next to the bi
 newer: Ubuntu 24.04's clang 18 with libstdc++ 13 hides the `std::expected` the SDK's
 `src/system/map_parser` uses. Both need X11-xcb and the usual development packages. On Ubuntu 24.04:
 
-    sudo apt install clang-19 libx11-xcb-dev libusb-1.0-0-dev libcurl4-openssl-dev libssl-dev \
-        libarchive-dev libgl1-mesa-dev libudev-dev pkg-config cmake ninja-build
-    cmake --preset linux-amd64-release -DCMAKE_C_COMPILER=clang-19 -DCMAKE_CXX_COMPILER=clang++-19
+    sudo apt install clang-19 g++ curl file libx11-xcb-dev libusb-1.0-0-dev libcurl4-openssl-dev \
+        libssl-dev libarchive-dev libgl1-mesa-dev libudev-dev pkg-config cmake ninja-build
+    python3 maintainer/release.py build --repos SkylandersCoreOfLight --recipe package-linux
+
+The release tool uses clang 19 or newer for the games and also accepts Ubuntu's versioned
+`clang-19` and `clang++-19` executables.
 
 Build the release on the oldest distribution you support (Ubuntu 24.04 here): the binaries and the
-bundled SDL3 link its glibc, and older systems then run them.
+bundled SDL3 link against its system libraries.
 
 `build --recipe package-linux` writes the games' `dist/<Repo>-linux-amd64.tar.gz`, the launcher's
 `installer/Output/CoreOfLight-linux-amd64.tar.gz` (with `libSDL3.so.0` beside `coreoflight`), and
-`installer/Output/CoreOfLight-<version>-x86_64.AppImage`. appimagetool and its runtime are
-downloaded once into `$SKYLANDERS_WORK/tools` and reused; `APPIMAGETOOL` and `APPIMAGE_RUNTIME`
-point at copies of your own. An AppImage runs from a read-only mount and doesn't update itself: it
+`installer/Output/CoreOfLight-<version>-x86_64.AppImage`. appimagetool 1.9.1 and the Type 2
+runtime 20251108 are cached in `$SKYLANDERS_WORK/tools` and checked against fixed SHA-256 hashes.
+Use `APPIMAGETOOL` and `APPIMAGE_RUNTIME` to supply your own copies. An AppImage runs from a read-only mount and doesn't update itself: it
 opens the release page instead. `publish` uploads both files on Linux, and the release notes then
 describe the tarball and the AppImage.
 

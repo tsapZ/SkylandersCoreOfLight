@@ -37,16 +37,29 @@ fi
 cp -L "$sdl3" "$stage/libSDL3.so.0"
 chmod 0644 "$stage/libSDL3.so.0"
 
-# Its license (the zlib license keeps the notice): best effort, the packages put it in different
-# places.
-sdl_prefix="$(dirname "$(dirname "$sdl3")")"
-for f in "$sdl_prefix/share/licenses/SDL3/LICENSE.txt" /usr/share/licenses/SDL3/LICENSE.txt \
-         /usr/share/doc/SDL3/copyright /usr/share/doc/libsdl3-dev/copyright; do
-  if [ -f "$f" ]; then
-    cp "$f" "$stage/LICENSE-SDL3.txt"
+# SDL3 installs its notice at share/licenses/SDL3. Walk up from the library
+# so both lib/ and lib/<multiarch-triplet>/ find the installation prefix.
+sdl_dir="$(dirname "$(realpath "$sdl3")")"
+while [ "$sdl_dir" != / ]; do
+  notice="$sdl_dir/share/licenses/SDL3/LICENSE.txt"
+  if [ -f "$notice" ]; then
+    cp "$notice" "$stage/LICENSE-SDL3.txt"
     break
   fi
+  sdl_dir="$(dirname "$sdl_dir")"
 done
+if [ ! -f "$stage/LICENSE-SDL3.txt" ]; then
+  for notice in /usr/share/doc/libsdl3-0/copyright /usr/share/doc/libsdl3-dev/copyright; do
+    if [ -f "$notice" ]; then
+      cp "$notice" "$stage/LICENSE-SDL3.txt"
+      break
+    fi
+  done
+fi
+if [ ! -f "$stage/LICENSE-SDL3.txt" ]; then
+  echo "SDL3 license not found for $sdl3: install SDL3 with its license before packaging" >&2
+  exit 1
+fi
 
 cp -r "$repo/fonts" "$stage/fonts"
 cp "$repo/LICENSE" "$stage/LICENSE"
