@@ -1316,6 +1316,8 @@ bool IsSuperChargersDisc(const fs::path& source, std::vector<std::string>* langu
 
 std::vector<std::string> SuperChargersInstallLanguages(const fs::path& rom) { return InstallLanguages(rom / "archives"); }
 
+std::vector<std::string> ImaginatorsInstallLanguages(const fs::path& rom) { return InstallLanguages(rom / "archives"); }
+
 std::string ImportedPlace(const fs::path& rom) {
   const auto note = ReadFile(rom / "archives" / kBackupDir / kLanguageNote);
   if (!note) return {};

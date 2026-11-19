@@ -1158,9 +1158,24 @@ bool LauncherUi::LanguageLabel() {
   if (!hub_screen_.is_open()) return true;
   std::string en = "Imaginators isn't set up", de = "Imaginators ist nicht eingerichtet";
   if (ImaginatorsReady()) {
-    const std::string now = ImportedLanguage(found_[ImaginatorsIndex()].rom);
-    en = now.empty() ? "The disc's own (Spanish, Italian)" : "Changed (by a tool)";
-    de = now.empty() ? "Wie die Disc (Spanisch, Italienisch)" : "Ge\xC3\xA4ndert (mit einem Werkzeug)";
+    const std::filesystem::path& im_rom = found_[ImaginatorsIndex()].rom;
+    const std::string now = ImportedLanguage(im_rom);
+    // The disc's own languages from its files (ImaginatorsRecomp #21: a US disc speaks English, not the
+    // European disc's Spanish and Italian); none found just says "the disc's own".
+    std::string own_en, own_de;
+    size_t six_count = 0;
+    const LanguageImport::Language* six = LanguageImport::SuperChargersLanguages(&six_count);
+    for (const std::string& code : ImaginatorsInstallLanguages(im_rom)) {
+      for (size_t i = 0; i < six_count; ++i) {
+        if (code != six[i].code) continue;
+        own_en += (own_en.empty() ? "" : ", ") + std::string(six[i].name_en);
+        own_de += (own_de.empty() ? "" : ", ") + std::string(six[i].name_de);
+      }
+    }
+    const std::string own_label_en = own_en.empty() ? "The disc's own" : "The disc's own (" + own_en + ")";
+    const std::string own_label_de = own_de.empty() ? "Wie die Disc" : "Wie die Disc (" + own_de + ")";
+    en = now.empty() ? own_label_en : "Changed (by a tool)";
+    de = now.empty() ? own_label_de : "Ge\xC3\xA4ndert (mit einem Werkzeug)";
     size_t count = 0;
     const LanguageImport::Language* languages = LanguageImport::Languages(&count);
     for (size_t i = 0; i < count; ++i) {
