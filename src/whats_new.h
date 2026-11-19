@@ -12,10 +12,11 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"The Imaginators language row names your disc's own languages (an English disc says English).",
-     "Die Imaginators-Sprachzeile nennt die Sprachen deiner Disc (eine englische Disc sagt Englisch)."},
-    {"A games folder on a network share (\\\\server\\share) works now.",
-     "Ein Spiele-Ordner auf einer Netzwerkfreigabe (\\\\server\\freigabe) geht jetzt."},
+    {"Core of Light and the six games now come for Linux too (new; mitch030504's port): on the release pages.",
+     "Core of Light und die sechs Spiele gibt es jetzt auch f\xC3\xBCr Linux (neu; die Portierung von mitch030504): "
+     "auf den Release-Seiten."},
+    {"On Windows nothing changes in this version.",
+     "Unter Windows \xC3\xA4ndert sich in dieser Version nichts."},
 };
 
 }  // namespace coreoflight
