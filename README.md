@@ -207,7 +207,7 @@ text file to your desktop with the latest logs and settings of every game, your 
 taken out. Open an [issue](https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose) and
 drag that file in. After a crash the launcher offers it by itself.
 
-**Can I use my real portal and figures?** Yes. Plug it in: the games find it by themselves (Portal is *Automatic* in each game's settings and F4 menu), read your figures and save their progress on them, and the portal menu still has the figures you don't own. Every figure you put on gets a backup file. *Real USB portal only* leaves the menu out. The PS3, Wii and PC portals work as they are; an Xbox 360 portal needs the WinUSB driver (Zadig), as for Xenia. Xbox One portals don't work yet.
+**Can I use my real portal and figures?** Yes. Plug it in: the games find it by themselves (Portal is *Automatic* in each game's settings and F4 menu), read your figures and save their progress on them, and the portal menu still has the figures you don't own. Every figure you put on gets a backup file. *Real USB portal only* leaves the menu out. The PS3, Wii and PC portals work as they are, the wireless Spyro's Adventure portal too (plug in its USB receiver; a player tested it in all six); an Xbox 360 portal needs the WinUSB driver (Zadig), as for Xenia. Xbox One portals don't work yet.
 
 **Can I use figure files from an emulator?** Yes: RPCS3's, Dolphin's and Cemu's figure files (.sky) and 1 KB .bin dumps go into the Figures folder as they are, and the library and the games' portal menus show them under their game.
 
