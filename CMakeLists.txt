@@ -71,6 +71,8 @@ set(COREOFLIGHT_SOURCES
   src/gpu_tier.cpp
   src/portable.cpp
   src/language_import.cpp
+  src/zip_extract.cpp
+  src/wiiu_figures.cpp
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
   ${IMGUI_DIR}/imgui_tables.cpp

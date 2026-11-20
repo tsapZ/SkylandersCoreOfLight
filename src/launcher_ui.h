@@ -20,6 +20,7 @@
 #include "games.h"
 #include "hub_settings.h"
 #include "language_import.h"
+#include "wiiu_figures.h"
 #include "music.h"
 #include "portable.h"
 #include "profiles_ui.h"
@@ -281,6 +282,15 @@ class LauncherUi {
   bool LanguageLabel();
   bool language_label_pending_ = false;
   bool DrawLanguage(float width, float height);
+  // The Wii U figures (wiiu_figures.h, #56): the settings' "SuperChargers / Imaginators: Wii U figures" pick the
+  // extracted Wii U game in the folder browser, or, when they are in, ask whether to take them out (wiiu_remove_:
+  // 1 SuperChargers, 2 Imaginators). The rows' values come with LanguageLabel.
+  WiiuFigures wiiu_figures_;
+  int wiiu_remove_ = 0;
+  void AskWiiu(bool superchargers);
+  bool WiiuBlocksLanguage(bool superchargers);
+  bool WiiuLabel();
+  bool DrawWiiuRemove(float width, float height);
   DataFolderMove data_move_;
   std::vector<OldData> old_data_;
   bool ask_old_data_ = false;
