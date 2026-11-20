@@ -22,6 +22,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <system_error>
 
 namespace coreoflight {
@@ -268,6 +269,37 @@ std::string Sha256Hex(const void* data, size_t size) {
   }
 #endif
   return out;
+}
+
+bool ReadDiscXex(const fs::path& disc, std::vector<uint8_t>& out, uint64_t* bytes) {
+  std::error_code ec;
+  if (fs::is_directory(disc, ec)) {
+    // An unpacked disc: a folder with default.xex in it (the browser's "Diesen Ordner einlesen").
+    const fs::path xex = disc / "default.xex";
+    const uintmax_t size = fs::file_size(xex, ec);
+    if (ec || size == 0 || size > (512ull << 20)) return false;
+    std::ifstream in(xex, std::ios::binary);
+    if (!in) return false;
+    out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    if (out.empty()) return false;
+    if (bytes) {
+      *bytes = 0;
+      for (fs::recursive_directory_iterator it(disc, ec), end; it != end; it.increment(ec)) {
+        if (ec) break;
+        if (!it->is_regular_file(ec)) continue;
+        const std::u8string relative = it->path().lexically_relative(disc).generic_u8string();
+        if (XisoImage::InFolder(std::string(relative.begin(), relative.end()), "$SystemUpdate")) continue;
+        *bytes += it->file_size(ec);
+      }
+    }
+    return true;
+  }
+  auto image = XisoImage::Open(disc);
+  if (!image) return false;
+  const XisoImage::Entry* entry = image->Find("default.xex");
+  if (!entry || !image->Read(*entry, out)) return false;
+  if (bytes) *bytes = image->total_size("$SystemUpdate");
+  return true;
 }
 
 }  // namespace coreoflight

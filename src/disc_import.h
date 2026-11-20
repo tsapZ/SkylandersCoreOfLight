@@ -1,8 +1,8 @@
 #pragma once
 
-// Setting up a game's disc from the owner's own ISO (disc_import.cpp): the launcher reads the
-// image's default.xex, knows the game by its SHA-256 (the hash each game's repository pins) and
-// unpacks the disc into the rom\ folder that game reads.
+// Setting up a game's disc from the owner's own disc (disc_import.cpp): an ISO or a folder with an
+// unpacked disc. The launcher reads its default.xex, knows the game by its SHA-256 (the hash each
+// game's repository pins) and unpacks the disc into the rom\ folder that game reads.
 
 #include <atomic>
 #include <cstdint>

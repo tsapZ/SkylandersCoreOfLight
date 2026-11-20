@@ -5,8 +5,9 @@
 // can't drive): folders and .iso files, a folder holding an unpacked disc (default.xex in it), and
 // the drives and the usual folders (Downloads, Desktop, Documents) one level above a drive.
 // "Discs suchen" (Y, or the first entry above the drives) looks for the owner's discs by itself:
-// the ISOs in the usual folders and on the drives, each read and known by its default.xex's
-// SHA-256 as when setting one up, listed by game (disc_search.h).
+// the ISOs in the usual folders and on the drives and the folders with a default.xex (unpacked
+// discs), each read and known by its default.xex's SHA-256 as when setting one up, listed by game
+// (disc_search.h).
 
 #include <filesystem>
 #include <memory>
@@ -49,7 +50,7 @@ class FileBrowser {
   bool for_backup() const { return for_backup_; }
   bool is_open() const { return open_; }
   void Draw(float width, float height);
-  // The ISO or folder chosen since the last call, or empty.
+  // The disc (an ISO or an unpacked folder) chosen since the last call, or empty.
   std::filesystem::path TakeChosen();
 
  private:

@@ -75,9 +75,9 @@ game's logo and background, and every figure, hat and achievement its picture.</
 
 1. Download `CoreOfLightSetup-<version>.exe` from the [Releases](https://github.com/tsapZ/SkylandersCoreOfLight/releases)
    page and run it. It's about 3 MB and needs no admin rights.
-2. Start Core of Light. On the first start it asks for your language, then for your discs as ISO
-   files (one per game; it finds the others in the same folder by itself). It says how much room
-   each game needs, then downloads and installs them one after the other.
+2. Start Core of Light. On the first start it asks for your language, then for your discs, as ISO
+   files or unpacked folders (one per game; it finds the others in the same folder by itself). It
+   says how much room each game needs, then downloads and installs them one after the other.
 3. Pick a game and press **A**.
 
 What you need:
@@ -131,10 +131,11 @@ All six share one portal and one settings menu:
 
 ### Your discs in, six games out
 
-Show it your ISOs once and it does the rest: checks each disc, unpacks it and installs the game,
-on any drive you like. **Y** in its file browser finds the ISOs on your PC by itself. When a game
-has a new version, its card says so; *Update all* does every game in one go, and the launcher
-updates itself too. Saves, figures and settings stay.
+Show it your discs once and it does the rest: checks each disc, unpacks it (or copies the unpacked
+folder) and installs the game, on any drive you like. **Y** in its file browser finds your discs
+(ISOs and unpacked folders) on your PC by itself. When a game has a new version, its card says so;
+*Update all* does every game in one go, and the launcher updates itself too. Saves, figures and
+settings stay.
 
 ### One shelf for every figure
 

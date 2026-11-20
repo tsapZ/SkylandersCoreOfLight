@@ -382,7 +382,7 @@ LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
       if (wparam == VK_F11 && g_ui && !(HIWORD(lparam) & KF_REPEAT)) g_ui->ToggleFullscreen();
       break;
     case WM_DROPFILES: {
-      // An ISO dropped on the window: set up like one picked with X.
+      // A disc dropped on the window (an ISO or an unpacked folder): set up like one picked with X.
       const HDROP drop = reinterpret_cast<HDROP>(wparam);
       wchar_t path[MAX_PATH * 4] = L"";
       if (g_ui && DragQueryFileW(drop, 0, path, UINT(std::size(path)))) g_ui->AddDisc(path);

@@ -194,7 +194,7 @@ SetupScreen::Job SetupScreen::TakeJob() { return std::exchange(job_, Job{}); }
 std::string SetupScreen::TakeLanguage() { return std::exchange(language_, {}); }
 bool SetupScreen::TakeFinished() { return std::exchange(finished_, false); }
 
-// The discs the search has found since the last look: the first ISO of each game, with its size.
+// The discs the search has found since the last look: the first disc of each game, with its size.
 void SetupScreen::TakeSearchResults() {
   if (!search_) return;
   std::vector<FoundDisc> found;
@@ -206,33 +206,31 @@ void SetupScreen::TakeSearchResults() {
     // Imaginators' PS3 disc isn't one to set up (its languages come later, in the settings).
     if (d.game < 0 || d.languages || size_t(d.game) >= rows_.size()) continue;
     Row& r = rows_[size_t(d.game)];
-    if (!r.iso.empty() || r.state == State::kReady) continue;
-    auto image = XisoImage::Open(d.iso);
-    if (!image) continue;
-    r.iso = d.iso;
-    r.bytes = image->total_size("$SystemUpdate");
+    if (!r.disc.empty() || r.state == State::kReady) continue;
+    r.disc = d.disc;
+    r.bytes = d.bytes;
     r.state = State::kFound;
     r.chosen = true;
     r.automatic = true;
   }
 }
 
-void SetupScreen::AddIso(const std::filesystem::path& iso) {
+void SetupScreen::AddDisc(const std::filesystem::path& disc) {
   if (page_ == Page::kWelcome) page_ = Page::kDiscs;  // dropped on the window before
   if (page_ != Page::kDiscs) return;
-  auto image = XisoImage::Open(iso);
-  const XisoImage::Entry* xex = image ? image->Find("default.xex") : nullptr;
   std::vector<uint8_t> data;
-  if (!xex || !image->Read(*xex, data)) {
-    message_ = german_ ? "Das ist keine Xbox-360-Disc (ISO)." : "That isn't an Xbox 360 disc (ISO).";
+  uint64_t bytes = 0;
+  if (!ReadDiscXex(disc, data, &bytes)) {
+    message_ = german_ ? "Das ist keine Xbox-360-Disc (ISO oder entpackter Ordner)."
+                       : "That isn't an Xbox 360 disc (ISO or unpacked folder).";
     return;
   }
   const XexId id = IdentifyXex(data.data(), data.size());
   for (size_t i = 0; i < AllGames().size() && i < rows_.size(); ++i) {
     if (!IsGameDisc(AllGames()[i], id)) continue;
     Row& r = rows_[i];
-    r.iso = iso;
-    r.bytes = image->total_size("$SystemUpdate");
+    r.disc = disc;
+    r.bytes = bytes;
     r.automatic = false;
     if (r.state != State::kReady) {
       r.state = State::kFound;
@@ -246,9 +244,9 @@ void SetupScreen::AddIso(const std::filesystem::path& iso) {
     }
     selected_ = int(i);
     pick_for_ = -1;
-    // The other games' ISOs are often next to it: its folder and the one above, one level down.
+    // The other games' discs are often next to it: its folder and the one above, one level down.
     if (!search_ || search_->done) {
-      const fs::path folder = iso.parent_path();
+      const fs::path folder = disc.parent_path();
       const fs::path above = folder.has_relative_path() ? folder.parent_path() : folder;
       if (search_) search_->stop = true;
       search_ = StartDiscSearch({{above, 1}});
@@ -311,15 +309,15 @@ void SetupScreen::DrawWelcome(float width, float height) {
   const float left = 48 * u, wrap = std::min(width - 2 * left, 900 * u);
   Text(dl, regular_, 24 * u, {left, 150 * u}, kWhite,
        german_ ? "Hier spielst du alle sechs Skylanders-Spiele der Xbox 360 auf dem PC. Die Einrichtung "
-                 "dauert nur einen Moment: Core of Light sucht deine Discs (ISO-Dateien), zeigt, wie viel "
-                 "Platz sie brauchen, und installiert die Spiele dazu."
+                 "dauert nur einen Moment: Core of Light sucht deine Discs (ISO-Dateien oder entpackte "
+                 "Ordner), zeigt, wie viel Platz sie brauchen, und installiert die Spiele dazu."
                : "Here you play all six Xbox 360 Skylanders games on the PC. Setting up takes a moment: "
-                 "Core of Light looks for your discs (ISO files), shows the room they need and installs "
-                 "the games for them.",
+                 "Core of Light looks for your discs (ISO files or unpacked folders), shows the room they "
+                 "need and installs the games for them.",
        left + wrap);
   Text(dl, regular_, 20 * u, {left, 270 * u}, kDim,
-       german_ ? "Spieldaten sind nicht dabei: es braucht deine eigenen Discs als ISO."
-               : "No game data comes with it: it needs your own discs as ISOs.",
+       german_ ? "Spieldaten sind nicht dabei: es braucht deine eigenen Discs als ISO oder entpackten Ordner."
+               : "No game data comes with it: it needs your own discs as ISOs or unpacked folders.",
        left + wrap);
   // The language, left / right.
   const float y = 320 * u;
@@ -371,31 +369,32 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
   DrawBackdrop(dl, width, height, {});
   Title(dl, bold_, u, german_ ? "DEINE DISCS" : "YOUR DISCS");
   const float left = 48 * u, right = width - 48 * u;
-  // Nothing is looked for unasked (the owner, 2026-10-23): A on a game chooses its ISO, then its
+  // Nothing is looked for unasked (the owner, 2026-10-23): A on a game chooses its disc, then its
   // folder and the one above are looked through for the others; Y searches the whole PC.
   // How far the search is.
   {
-    const int folders = search_ ? search_->folders.load() : 0, isos = search_ ? search_->isos.load() : 0;
+    const int folders = search_ ? search_->folders.load() : 0, isos = search_ ? search_->isos.load() : 0,
+              unpacked = search_ ? search_->unpacked.load() : 0;
     const bool done = search_ && search_->done;
     int games = 0;
     for (const Row& r : rows_) games += r.state != State::kNoDisc ? 1 : 0;
-    char text[160];
+    char text[200];
     if (!search_) {
       std::snprintf(text, sizeof(text), "%s",
-                    german_ ? "A auf einem Spiel: seine ISO w\xC3\xA4hlen. Die anderen sucht Core of Light dann im selben Ordner."
-                            : "A on a game: choose its ISO. Core of Light then looks for the others in the same folder.");
+                    german_ ? "A auf einem Spiel: seine Disc w\xC3\xA4hlen (ISO oder entpackter Ordner). Die anderen sucht Core of Light dann im selben Ordner."
+                            : "A on a game: choose its disc (ISO or unpacked folder). Core of Light then looks for the others in the same folder.");
     } else if (done && nearby_) {
-      std::snprintf(text, sizeof(text), german_ ? "Im selben Ordner gesucht: %d von 6 Spielen zugeordnet. Stimmt eines nicht, w\xC3\xA4hlt A darauf eine andere ISO."
-                                                : "Searched the same folder: %d of 6 games filled in. If one is wrong, A on it picks another ISO.",
+      std::snprintf(text, sizeof(text), german_ ? "Im selben Ordner gesucht: %d von 6 Spielen zugeordnet. Stimmt eines nicht, w\xC3\xA4hlt A darauf eine andere Disc."
+                                                : "Searched the same folder: %d of 6 games filled in. If one is wrong, A on it picks another disc.",
                     games);
     } else if (done) {
-      std::snprintf(text, sizeof(text), german_ ? "Suche fertig: %d ISOs, %d von 6 Spielen gefunden"
-                                                : "Search done: %d ISOs, %d of 6 games found",
-                    isos, games);
+      std::snprintf(text, sizeof(text), german_ ? "Suche fertig: %d ISOs, %d entpackte Discs, %d von 6 Spielen gefunden"
+                                                : "Search done: %d ISOs, %d unpacked discs, %d of 6 games found",
+                    isos, unpacked, games);
     } else {
-      std::snprintf(text, sizeof(text), german_ ? "Suche l\xC3\xA4uft ...  %d Ordner, %d ISOs"
-                                                : "Searching ...  %d folders, %d ISOs",
-                    folders, isos);
+      std::snprintf(text, sizeof(text), german_ ? "Suche l\xC3\xA4uft ...  %d Ordner, %d ISOs, %d entpackte Discs"
+                                                : "Searching ...  %d folders, %d ISOs, %d unpacked discs",
+                    folders, isos, unpacked);
     }
     Text(dl, regular_, 20 * u, {left, 128 * u}, done || !search_ ? kDim : kGold, text);
   }
@@ -439,12 +438,12 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
           Text(dl, bold_, 16 * u, {px, y + 21 * u}, kGold, tag);
           px += TextWidth(bold_, 16 * u, tag) + 14 * u;
         }
-        Text(dl, regular_, 18 * u, {px, y + 19 * u}, kDim, FitStart(regular_, 18 * u, Utf8(r.iso), right - px - 18 * u));
+        Text(dl, regular_, 18 * u, {px, y + 19 * u}, kDim, FitStart(regular_, 18 * u, Utf8(r.disc), right - px - 18 * u));
         break;
       }
       default:
-        state = !search_ ? (german_ ? "Noch keine Disc  \xC2\xB7  A: ISO w\xC3\xA4hlen" : "No disc yet  \xC2\xB7  A: choose its ISO")
-                : search_->done ? (german_ ? "Keine Disc gefunden  \xC2\xB7  A: ISO w\xC3\xA4hlen" : "No disc found  \xC2\xB7  A: choose its ISO")
+        state = !search_ ? (german_ ? "Noch keine Disc  \xC2\xB7  A: Disc w\xC3\xA4hlen" : "No disc yet  \xC2\xB7  A: choose its disc")
+                : search_->done ? (german_ ? "Keine Disc gefunden  \xC2\xB7  A: Disc w\xC3\xA4hlen" : "No disc found  \xC2\xB7  A: choose its disc")
                                 : (german_ ? "Wird gesucht ..." : "Looking ...");
         break;
     }
@@ -509,7 +508,7 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
       job_ = {Job::Kind::kPickFolder, 0, {}};  // any folder (left / right: the suggestions)
     } else if (selected_ < n) {
       if (rows_[size_t(selected_)].state != State::kReady) {
-        job_ = {Job::Kind::kPickIso, size_t(selected_), {}};
+        job_ = {Job::Kind::kPickDisc, size_t(selected_), {}};
         pick_for_ = selected_;
         message_.clear();
       }
@@ -546,7 +545,7 @@ void SetupScreen::DrawDiscs(float width, float height, const Launcher& launcher)
   float hx = 48 * u;
   const float hy = height - 52 * u;
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 160, 70),
-            selected_ < n ? (german_ ? "ISO w\xC3\xA4hlen" : "Choose its ISO")
+            selected_ < n ? (german_ ? "Disc w\xC3\xA4hlen" : "Choose its disc")
             : selected_ == n ? (german_ ? "Anderer Ordner" : "Another folder")
                              : go);
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(60, 110, 220), german_ ? "An / aus" : "On / off");
@@ -570,7 +569,7 @@ void SetupScreen::Advance(const Launcher& launcher) {
         current_ = -1;
       } else {
         r.state = State::kImporting;
-        job_ = {Job::Kind::kImport, size_t(current_), r.iso};
+        job_ = {Job::Kind::kImport, size_t(current_), r.disc};
         return;
       }
     } else if (r.state == State::kImporting) {
@@ -600,7 +599,7 @@ void SetupScreen::Advance(const Launcher& launcher) {
       job_ = {Job::Kind::kInstall, i, {}};
     } else {
       r.state = State::kImporting;
-      job_ = {Job::Kind::kImport, i, r.iso};
+      job_ = {Job::Kind::kImport, i, r.disc};
     }
     return;
   }

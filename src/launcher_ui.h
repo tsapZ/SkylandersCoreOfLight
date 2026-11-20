@@ -47,8 +47,9 @@ class LauncherUi {
   void Refresh();
   // The game started last has ended: its time goes to the profile it was started with.
   void GameEnded();
-  // An ISO dropped on the window or given on the command line: set up like one picked with X.
-  void AddDisc(const std::filesystem::path& iso);
+  // A disc dropped on the window or given on the command line (an ISO or an unpacked folder): set
+  // up like one picked with X.
+  void AddDisc(const std::filesystem::path& disc);
   // The started game's window is up (main.cpp hides the launcher then): the launch screen ends.
   void GameWindowShown() { starting_ = false; }
   // While the game runs (main.cpp, about four times a second): its saves' automatic copy every
