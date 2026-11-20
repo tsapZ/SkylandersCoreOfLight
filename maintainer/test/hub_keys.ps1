@@ -3,6 +3,13 @@
 # releases, nothing downloaded or installed), driven by posted key presses (virtual key names or
 # numbers), mouse steps and window captures at "shot:<name>". Waits are milliseconds (wait:700).
 # rclick moves the real mouse: only while nobody uses the PC. -X 20000 puts the window off screen.
+#
+# The keyboard keys (launcher_ui.cpp / file_browser.cpp, 2026-11-20; the pad's letters are NOT the keys: X on the
+# pad is D here, twice a run went for nothing on a guessed key). Each screen's footer names its keys too.
+#   start screen: Enter play, Tab settings of the chosen game, D add a disc (file browser), F figures,
+#                 E achievements, S saves, P profiles, Q launcher settings, Left/Right the card, Esc quit
+#   file browser: Up/Down, Enter open / add, Y find my discs, Backspace or Esc back, PageUp/PageDown
+#   settings:     Q/E page, Up/Down row, Left/Right or Enter change, Y save, Esc back
 param([Parameter(Mandatory = $true)][string]$Docs, [Parameter(Mandatory = $true)][string]$Out,
       [Parameter(Mandatory = $true)][string]$Keys, [string]$Extra = "", [string]$Exe = "",
       [string]$Size = "", [int]$X = 0)
