@@ -28,7 +28,7 @@ import urllib.request
 import zipfile
 
 PACKAGE = "CoreOfLight-WiiU-Tools"
-PACKAGE_VERSION = "1"
+PACKAGE_VERSION = "2"
 
 # What goes in. A sha256 of None is recorded on download and printed, to be pinned here.
 PYTHON = {"version": "3.14.10",
@@ -41,7 +41,7 @@ WHEELS = [  # (project, version): the cp314 win_amd64 wheel, its hash from PyPI
 FFMPEG = {"release": "latest", "asset": "ffmpeg-n8.1-latest-win64-lgpl-8.1.zip"}  # hash from GitHub's asset digest
 TOOLS = [  # (repo, tag, the script the launcher runs): v0.2.0 has --install / --uninstall and PROGRESS lines (#56)
     ("superpatcher", "v0.2.0", "superpatcher.py"),
-    ("imagipatcher", "v0.2.0-pre", "imagipatcher.py"),
+    ("imagipatcher", "v0.2.1", "imagipatcher.py"),  # v0.2.1: game_heap_extra on builds that read it
 ]
 OWNER = "SkyP4tcher"
 USER_AGENT = "CoreOfLight-maintainer"

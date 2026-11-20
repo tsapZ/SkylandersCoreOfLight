@@ -28,14 +28,15 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// The package (maintainer/tools/wiiu_tools_package.py, CoreOfLight-WiiU-Tools-1: Python 3.14.10, numpy 2.5.5, scipy
-// 1.18.1, ffmpeg n8.1 LGPL, superpatcher v0.2.0 (cd2aa50), imagipatcher v0.2.0-pre (bdd51fe); 111 MB). A new tool
+// The package (maintainer/tools/wiiu_tools_package.py, CoreOfLight-WiiU-Tools-2: Python 3.14.10, numpy 2.5.5, scipy
+// 1.18.1, ffmpeg n8.1 LGPL, superpatcher v0.2.0 (cd2aa50), imagipatcher v0.2.1 (562759e: sets game_heap_extra on
+// Imaginators builds that read it, SkyP4tcher 2026-11-20); 111 MB). A new tool
 // version means a new package with a new name, URL and hash here (an unpacked package is never looked at again).
 // COREOFLIGHT_WIIU_PACKAGE=<zip> takes a local copy instead of the download (tests); its hash must match all the same.
-constexpr char kPackageName[] = "CoreOfLight-WiiU-Tools-1";
+constexpr char kPackageName[] = "CoreOfLight-WiiU-Tools-2";
 constexpr char kPackageUrl[] =
-    "https://github.com/tsapZ/CoreOfLight-WiiU-Tools/releases/download/v1/CoreOfLight-WiiU-Tools-1.zip";
-constexpr char kPackageSha256[] = "032b488325613169f74894d5c4d62d17c2160dc363e41b478dd3a72a2bcd09a0";
+    "https://github.com/tsapZ/CoreOfLight-WiiU-Tools/releases/download/v2/CoreOfLight-WiiU-Tools-2.zip";
+constexpr char kPackageSha256[] = "7999c0bda3b91d97bf5dc57535e547f8a38c9195c5427588f22944cd2ef33c97";
 
 // The tools do the whole job in the game folder themselves (SkyP4tcher's v0.2.0, made for this button, CoL #56):
 // `--wiiu <folder> --install <game folder>` converts, copies into rom\archives, sets the .igx files and the .toml
