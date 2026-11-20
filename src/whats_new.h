@@ -12,11 +12,15 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"Core of Light and the six games now come for Linux too (new; mitch030504's port): on the release pages.",
-     "Core of Light und die sechs Spiele gibt es jetzt auch f\xC3\xBCr Linux (neu; die Portierung von mitch030504): "
-     "auf den Release-Seiten."},
-    {"On Windows nothing changes in this version.",
-     "Unter Windows \xC3\xA4ndert sich in dieser Version nichts."},
+    {"Wii U figures (new): from your own extracted Wii U SuperChargers or Imaginators, SkyP4tcher's converter adds "
+     "the Nintendo figures to your game (here in the launcher settings).",
+     "Wii-U-Figuren (neu): aus deinem eigenen entpackten Wii-U-SuperChargers oder -Imaginators bringt SkyP4tchers "
+     "Konverter die Nintendo-Figuren in dein Spiel (hier in den Launcher-Einstellungen)."},
+    {"The disc search finds unpacked discs too (a folder with default.xex), not only ISO files (mitch030504).",
+     "Die Disc-Suche findet auch entpackte Discs (ein Ordner mit default.xex), nicht nur ISO-Dateien (mitch030504)."},
+    {"The start screen: the bar at the bottom is sharp, and the cards' edges and the chosen card's light are clean.",
+     "Der Startbildschirm: die Leiste unten ist scharf, die Kartenr\xC3\xA4nder und das Licht der gew\xC3\xA4hlten "
+     "Karte sind sauber."},
 };
 
 }  // namespace coreoflight
