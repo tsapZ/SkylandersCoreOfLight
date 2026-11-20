@@ -28,7 +28,7 @@ import urllib.request
 import zipfile
 
 PACKAGE = "CoreOfLight-WiiU-Tools"
-PACKAGE_VERSION = "2"
+PACKAGE_VERSION = "3"
 
 # What goes in. A sha256 of None is recorded on download and printed, to be pinned here.
 PYTHON = {"version": "3.14.10",
@@ -38,10 +38,15 @@ WHEELS = [  # (project, version): the cp314 win_amd64 wheel, its hash from PyPI
     ("numpy", "2.5.5"),
     ("scipy", "1.18.1"),
 ]
-FFMPEG = {"release": "latest", "asset": "ffmpeg-n8.1-latest-win64-lgpl-8.1.zip"}  # hash from GitHub's asset digest
+# BtbN's "latest" build is replaced every day, so the one package 2 shipped and was tested with is pinned by its hash: a
+# copy of it in the cache is used as it is; without one, the day's build with GitHub's asset digest (then pin that).
+FFMPEG = {"release": "latest", "asset": "ffmpeg-n8.1-latest-win64-lgpl-8.1.zip",
+          "sha256": "60fa9d234dc500e48af0d06de60238df5bd162968d4babca2abcaa0549c4ac77"}
 TOOLS = [  # (repo, tag, the script the launcher runs): v0.2.0 has --install / --uninstall and PROGRESS lines (#56)
     ("superpatcher", "v0.2.0", "superpatcher.py"),
-    ("imagipatcher", "v0.2.1", "imagipatcher.py"),  # v0.2.1: game_heap_extra on builds that read it
+    # v0.2.1: game_heap_extra on builds that read it; v0.2.2 (package 3): also finds the Windows builds, which keep
+    # the setting's name in the code, by their "Mods: game heap" log line (SkyP4tcher, tested in game 2026-11-20)
+    ("imagipatcher", "v0.2.2", "imagipatcher.py"),
 ]
 OWNER = "SkyP4tcher"
 USER_AGENT = "CoreOfLight-maintainer"
@@ -124,14 +129,19 @@ def main():
         manifest["parts"].append({"name": project, "version": version, "url": wheel["url"], "sha256": digest})
 
     # ffmpeg: only ffmpeg.exe and the licence from BtbN's static LGPL build.
-    release = get_json(f"https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/{FFMPEG['release']}")
-    asset = next(a for a in release["assets"] if a["name"] == FFMPEG["asset"])
-    path, digest = fetch(asset["browser_download_url"], cache, asset["name"], asset["digest"].split(":", 1)[1])
+    url = f"https://github.com/BtbN/FFmpeg-Builds/releases/download/{FFMPEG['release']}/{FFMPEG['asset']}"
+    if FFMPEG.get("sha256") and (cache / FFMPEG["asset"]).exists():
+        path, digest = fetch(url, cache, FFMPEG["asset"], FFMPEG["sha256"])
+    else:
+        release = get_json(f"https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/{FFMPEG['release']}")
+        asset = next(a for a in release["assets"] if a["name"] == FFMPEG["asset"])
+        url = asset["browser_download_url"]
+        path, digest = fetch(url, cache, asset["name"], asset["digest"].split(":", 1)[1])
     unzip(path, stage / "ffmpeg", strip_top=True, only=lambda n: n in ("bin/ffmpeg.exe", "LICENSE.txt"))
     (stage / "ffmpeg" / "bin" / "ffmpeg.exe").replace(stage / "ffmpeg" / "ffmpeg.exe")
     (stage / "ffmpeg" / "bin").rmdir()
     (stage / "ffmpeg" / "LICENSE.txt").replace(stage / "LICENSES" / "ffmpeg.txt")
-    manifest["parts"].append({"name": "ffmpeg", "version": FFMPEG["asset"], "url": asset["browser_download_url"],
+    manifest["parts"].append({"name": "ffmpeg", "version": FFMPEG["asset"], "url": url,
                               "sha256": digest, "source": "https://github.com/FFmpeg/FFmpeg"})
 
     # The tools at their tags, unchanged.
