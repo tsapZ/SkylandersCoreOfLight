@@ -218,7 +218,8 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
         $reader = New-Object IO.StreamReader($stream)
       }
       while ($null -ne ($line = $reader.ReadLine())) {
-        if ($line -match 'Input script: shot (\S+)( full)?') {
+        # Not the game's own "shot <name>" (its line names the file it wrote, "<name>.png").
+        if ($line -match 'Input script: shot (\S+)( full)?' -and -not $Matches[1].EndsWith(".png")) {
           $name = $Matches[1]; $full = [bool]$Matches[2]
           Start-Sleep -Milliseconds 1000
           $game = Get-Process $exe -ErrorAction SilentlyContinue | Select-Object -First 1
