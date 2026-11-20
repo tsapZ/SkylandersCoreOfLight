@@ -10,5 +10,7 @@ under [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creat
   artwork as a reference, as he wrote on #78)
 - `icon.png`: the launcher's icon (`src/coreoflight_morpheus284.ico` is made from it)
 
-Scaled for the launcher (frames and bar to a quarter, the background as JPEG, the icon padded square into
-seven sizes); nothing else changed. They are built into `coreoflight.exe`.
+Scaled for the launcher (the card frames to a quarter, the background as JPEG, the icon padded square into
+seven sizes); nothing else changed. The bar stays at its full 1811x110: it spans the whole window, about 120
+pixels high at 1440p, and a quarter of it (28 pixels high) looked blurry there. They are built into
+`coreoflight.exe`.

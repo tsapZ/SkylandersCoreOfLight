@@ -865,8 +865,13 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
   const float frame_h = w * kFrameAspect;
   const float top_h = frame_h * kTopV, bottom_h = frame_h * (1.0f - kBottomV);
   const bool framed = frame && h > top_h + bottom_h;
-  // Its picture window, from the frame's alpha (2026-11-12): x 6.1-93.9 %, y 3.3-40.3 % of the picture.
-  const ImVec2 win_a{x + 0.061f * w, y + 0.033f * frame_h}, win_b{x + 0.939f * w, y + 0.403f * frame_h};
+  // Its picture window, from the frame's alpha (2026-11-12): x 6.1-93.9 %, y 3.3-40.3 % of the picture where it
+  // is clear. The rim's soft inner shadow (alpha 233 down to 5) lies outside that on the left, right and top, so
+  // the picture reaches under it, to where the rim is solid (x 4.9-95.1 %, y 2.6 %): else the window's edge
+  // showed the start screen's sky through the shadow as a light line (the owner, 2026-11-20). The year stays on
+  // the clear window (`clear_a`).
+  const ImVec2 clear_a{x + 0.061f * w, y + 0.033f * frame_h};
+  const ImVec2 win_a{x + 0.049f * w, y + 0.026f * frame_h}, win_b{x + 0.951f * w, y + 0.403f * frame_h};
   // The frame (#78): a thick steel-blue rim, a gold line inside it on the chosen card.
   if (!framed) DrawCardFrame(dl, {x, y}, {x + w, y + h}, r, s, selected);
   // Two sparks running round the chosen card's border (the owner's wish for more life, 2026-10-24).
@@ -911,9 +916,9 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
     }
     // The year small in the window's corner, on every card alike.
     const float ys = 15 * s, yw = TextWidth(bold_, ys, year);
-    dl->AddRectFilled({win_a.x + 6 * s, win_a.y + 6 * s}, {win_a.x + 18 * s + yw, win_a.y + 10 * s + ys},
+    dl->AddRectFilled({clear_a.x + 6 * s, clear_a.y + 6 * s}, {clear_a.x + 18 * s + yw, clear_a.y + 10 * s + ys},
                       Rgba(10, 14, 40, 170), 8 * s);
-    Text(dl, bold_, ys, {win_a.x + 12 * s, win_a.y + 8 * s}, kWhite, year);
+    Text(dl, bold_, ys, {clear_a.x + 12 * s, clear_a.y + 8 * s}, kWhite, year);
     const float mid_h = h - top_h - bottom_h;
     dl->AddImage(frame, {x, y}, {x + w, y + top_h}, {0, 0}, {1, kTopV});
     dl->AddImage(frame, {x, y + top_h}, {x + w, y + top_h + mid_h}, {0, kTopV}, {1, kBottomV});
@@ -929,8 +934,13 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
         dl->AddCircleFilled(c, w * (0.06f + 0.022f * k), Rgba(255, 205, 90, int(8 + 9 * pulse)), 40);
       }
       if (const ImTextureID lit = LoadUiTexture(kUiCardLight)) {
-        dl->AddImage(lit, {x + w * 0.425f, frame_y(0.898f)}, {x + w * 0.575f, frame_y(0.985f)}, {0.425f, 0.898f},
-                     {0.575f, 0.985f}, IM_COL32(255, 255, 255, int(255 * (0.55f + 0.45f * pulse))));
+        // Cut round, not as the rectangle around the medallion: outside its circle card_light differs from
+        // card_base (light specks at the corners, a darker box below the rim), which showed as a rectangle
+        // round the light (the owner, 2026-11-20).
+        const ImVec2 la{x + w * 0.425f, frame_y(0.898f)}, lb{x + w * 0.575f, frame_y(0.985f)};
+        dl->AddImageRounded(lit, la, lb, {0.425f, 0.898f}, {0.575f, 0.985f},
+                            IM_COL32(255, 255, 255, int(255 * (0.55f + 0.45f * pulse))),
+                            0.5f * std::min(lb.x - la.x, lb.y - la.y), ImDrawFlags_RoundCornersAll);
       }
     }
     content_y = win_b.y + 14 * s;
