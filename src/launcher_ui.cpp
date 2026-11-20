@@ -930,8 +930,13 @@ void LauncherUi::DrawCard(size_t index, float x, float y, float w, float h, bool
         dl->AddCircleFilled(c, w * (0.06f + 0.022f * k), Rgba(255, 205, 90, int(8 + 9 * pulse)), 40);
       }
       if (const ImTextureID lit = LoadUiTexture(kUiCardLight)) {
-        dl->AddImage(lit, {x + w * 0.425f, frame_y(0.898f)}, {x + w * 0.575f, frame_y(0.985f)}, {0.425f, 0.898f},
-                     {0.575f, 0.985f}, IM_COL32(255, 255, 255, int(255 * (0.55f + 0.45f * pulse))));
+        // Cut round, not as the rectangle around the medallion: outside its circle card_light differs from
+        // card_base (light specks at the corners, a darker box below the rim), which showed as a rectangle
+        // round the light (the owner, 2026-11-20).
+        const ImVec2 la{x + w * 0.425f, frame_y(0.898f)}, lb{x + w * 0.575f, frame_y(0.985f)};
+        dl->AddImageRounded(lit, la, lb, {0.425f, 0.898f}, {0.575f, 0.985f},
+                            IM_COL32(255, 255, 255, int(255 * (0.55f + 0.45f * pulse))),
+                            0.5f * std::min(lb.x - la.x, lb.y - la.y), ImDrawFlags_RoundCornersAll);
       }
     }
     content_y = win_b.y + 14 * s;
