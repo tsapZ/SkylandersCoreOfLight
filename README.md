@@ -168,6 +168,9 @@ the game.
   Spanish and Italian).
 - **SuperChargers in any of its six languages** from another Xbox 360 disc of the game that has it
   (each European disc has two), even one of a build that can't run here itself.
+- **Wii U figures:** the Nintendo figures of the Wii U SuperChargers and Imaginators, from your own
+  extracted Wii U game, with SkyP4tcher's converters (launcher settings). Your game's own files are
+  kept, and the same button puts them back.
 - **Controller, keyboard or mouse:** the button hints at the bottom follow what you use, and can be
   clicked.
 
@@ -302,6 +305,11 @@ The pictures at the top of this page are drawn by `tools/make_banner.ps1`, the i
 - **[Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)** by the Noto Project Authors, the
   font where Windows' Segoe UI isn't there (Wine / Proton) and on the pictures at the top, in
   `fonts/` (SIL Open Font License, `fonts/OFL.txt`).
+- **[SkyP4tcher](https://github.com/SkyP4tcher)**: superpatcher and imagipatcher, the converters behind
+  the Wii U figures, downloaded as a package ([CoreOfLight-WiiU-Tools](https://github.com/tsapZ/CoreOfLight-WiiU-Tools),
+  LGPL-2.1-or-later).
+- **[mitch030504](https://github.com/mitch030504)**: the Linux port of the launcher and the games, and the
+  search for unpacked discs.
 - Figure save-data decoding builds on public reverse-engineering of the Skylanders NFC format,
   among others **[SkyReader](https://github.com/reedstrm/SkyReader)**.
 - Reading the Xbox discs follows the XDVDFS format as [extract-xiso](https://github.com/XboxDev/extract-xiso)
