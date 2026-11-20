@@ -292,7 +292,8 @@ The pictures at the top of this page are drawn by `tools/make_banner.ps1`, the i
   cards with their badges, the title plate and the bar at the bottom) follows his concept
   ([#78](https://github.com/tsapZ/SkylandersCoreOfLight/issues/78)); the card frames, the bottom
   bar, the start screen's background and the launcher's icon are his artwork, under
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (`assets/ui/morpheus284`).
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (`assets/ui/morpheus284`); the banner at the top
+  is made from them.
 - **[Dear ImGui](https://github.com/ocornut/imgui)** by Omar Cornut draws the launcher. Submodule
   (MIT).
 - **[stb_image](https://github.com/nothings/stb)** by Sean Barrett: its zlib decoder unpacks
