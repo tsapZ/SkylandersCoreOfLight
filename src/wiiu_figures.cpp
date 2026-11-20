@@ -3,13 +3,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <fstream>
 #include <functional>
 #include <thread>
 #include <utility>
 #include <vector>
 
-#include "game_settings.h"
 #include "hub_log.h"
 #include "platform.h"
 #include "updates.h"
@@ -31,30 +29,31 @@ namespace fs = std::filesystem;
 namespace {
 
 // The package (maintainer/tools/wiiu_tools_package.py, CoreOfLight-WiiU-Tools-1: Python 3.14.10, numpy 2.5.5, scipy
-// 1.18.1, ffmpeg n8.1 LGPL, superpatcher v0.1.2, imagipatcher v0.1.0-pre; 111 MB, 317 MB unpacked). A new tool
-// version means a new package with a new name, URL and hash here. COREOFLIGHT_WIIU_PACKAGE=<zip> takes a local copy
-// instead of the download (tests); its hash must match all the same.
+// 1.18.1, ffmpeg n8.1 LGPL, superpatcher v0.2.0 (cd2aa50), imagipatcher v0.2.0-pre (bdd51fe); 111 MB). A new tool
+// version means a new package with a new name, URL and hash here (an unpacked package is never looked at again).
+// COREOFLIGHT_WIIU_PACKAGE=<zip> takes a local copy instead of the download (tests); its hash must match all the same.
 constexpr char kPackageName[] = "CoreOfLight-WiiU-Tools-1";
 constexpr char kPackageUrl[] =
     "https://github.com/tsapZ/CoreOfLight-WiiU-Tools/releases/download/v1/CoreOfLight-WiiU-Tools-1.zip";
-constexpr char kPackageSha256[] = "68ab349edb5e72ea5f02c13b89306a3759c9617abda679ba1fc4b08f1424a907";
+constexpr char kPackageSha256[] = "032b488325613169f74894d5c4d62d17c2160dc363e41b478dd3a72a2bcd09a0";
 
-constexpr char kBackupDir[] = "wiiu_backup";      // in rom\archives
-constexpr char kListFile[] = "wiiu_figures.txt";  // in rom\archives\wiiu_backup: "replaced <path>" / "added <path>"
-
+// The tools do the whole job in the game folder themselves (SkyP4tcher's v0.2.0, made for this button, CoL #56):
+// `--wiiu <folder> --install <game folder>` converts, copies into rom\archives, sets the .igx files and the .toml
+// settings (on SuperChargers the slot sizes, or the exe on builds without them) and keeps everything it replaces in
+// <backup>\ with a manifest.json written before each change, so even a cut-short install can be undone; installing
+// again undoes the last one first. `--uninstall <game folder>` puts back what is still as the install left it (a file
+// an update replaced since stays) and removes the backup. Both print "PROGRESS n/total label" lines.
 struct Tool {
   const char* script;  // below the package
-  const char* exe;     // the game's exe (superpatcher patched it on builds before the ["Mods"] slot sizes)
-  const char* toml;    // the game's settings file next to it
+  const char* backup;  // the tool's backup folder in the game folder; its manifest.json = installed
   const char* name_en;
   const char* name_de;
 };
 
 const Tool& ToolFor(WiiuFigures::Game game) {
-  static const Tool kSuperChargers{"superpatcher/superpatcher.py", "superchargersrecompiled.exe",
-                                   "superchargersrecomp.toml", "SuperChargers", "SuperChargers"};
-  static const Tool kImaginators{"imagipatcher/imagipatcher.py", "imaginatorsrecompiled.exe", "imaginatorsrecomp.toml",
-                                 "Imaginators", "Imaginators"};
+  static const Tool kSuperChargers{"superpatcher/superpatcher.py", "superpatcher-backup", "SuperChargers",
+                                   "SuperChargers"};
+  static const Tool kImaginators{"imagipatcher/imagipatcher.py", "imagipatcher-backup", "Imaginators", "Imaginators"};
   return game == WiiuFigures::Game::kSuperChargers ? kSuperChargers : kImaginators;
 }
 
@@ -268,130 +267,12 @@ struct ToolOutput {
   }
 };
 
-// Puts the game's archives back as they were: every file kept in the backup goes back (the whole folder, not only
-// what the list names, so an install cut short loses nothing), the files the list says were added go, and so do
-// .new files an install cut short left; the backup goes only when all of that worked. True if there was nothing to
-// undo or all of it went back.
-bool RestoreArchives(const fs::path& rom) {
-  std::error_code ec;
-  const fs::path archives = rom / "archives", backup = archives / kBackupDir;
-  if (!fs::exists(backup, ec)) return true;
-  bool ok = true;
-  for (auto it = fs::recursive_directory_iterator(backup, ec); !ec && it != fs::recursive_directory_iterator();
-       it.increment(ec)) {
-    std::error_code e;
-    if (!it->is_regular_file(e) || it->path() == backup / kListFile) continue;
-    const fs::path rel = fs::relative(it->path(), backup, e);
-    const fs::path target = archives / rel, fresh = WithPathSuffix(target, ".new");
-    fs::copy_file(it->path(), fresh, fs::copy_options::overwrite_existing, e);
-    if (e || !MoveReplaceFile(fresh, target)) {
-      HubWarn("wiiu figures: couldn't put back " + PathUtf8(rel) + (e ? ": " + e.message() : std::string()));
-      fs::remove(fresh, e);
-      ok = false;
-    }
-  }
-  if (ec) {
-    HubWarn("wiiu figures: reading the backup failed: " + ec.message());
-    ok = false;
-  }
-  std::ifstream list(backup / kListFile);
-  std::string line;
-  while (std::getline(list, line)) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    const size_t space = line.find(' ');
-    if (space == std::string::npos) continue;
-    const fs::path target = archives / PathFromUtf8(line.substr(space + 1));
-    std::error_code e;
-    fs::remove(WithPathSuffix(target, ".new"), e);
-    if (line.compare(0, space, "added") != 0) continue;
-    fs::remove(target, e);
-    if (e) {
-      HubWarn("wiiu figures: couldn't remove " + PathUtf8(target.filename()) + ": " + e.message());
-      ok = false;
-      continue;
-    }
-    // Its folders too, when they are empty now (the tool made them).
-    for (fs::path dir = target.parent_path(); dir != archives && dir.has_relative_path(); dir = dir.parent_path()) {
-      if (!fs::is_empty(dir, e) || e || !fs::remove(dir, e)) break;
-    }
-  }
-  list.close();
-  if (ok) fs::remove_all(backup, ec);
-  return ok;
-}
-
-// Copies the converted archives into the game, keeping each original once. Each file's line goes into the list (and
-// to the disk) before the file is touched, and the new file is written next to it and renamed over it, so an install
-// cut short (the launcher closed, a crash, a full disk) still knows what it changed and RestoreArchives undoes it.
-bool InstallArchives(const fs::path& converted, const fs::path& rom, std::string& error) {
-  std::error_code ec;
-  std::vector<fs::path> files;
-  for (auto it = fs::recursive_directory_iterator(converted, ec); !ec && it != fs::recursive_directory_iterator();
-       it.increment(ec)) {
-    std::error_code e;
-    if (it->is_regular_file(e)) files.push_back(fs::relative(it->path(), converted, e));
-  }
-  if (ec || files.empty()) {
-    error = "no converted archives in " + PathUtf8(converted) + (ec ? ": " + ec.message() : std::string());
-    return false;
-  }
-  const fs::path archives = rom / "archives", backup = archives / kBackupDir;
-  fs::create_directories(backup, ec);
-  std::ofstream list(backup / kListFile, std::ios::app);
-  for (const fs::path& rel : files) {
-    const fs::path target = archives / rel, fresh = WithPathSuffix(target, ".new");
-    std::error_code e;
-    const bool had = fs::exists(target, e);
-    if (had && !fs::exists(backup / rel, e)) {
-      fs::create_directories((backup / rel).parent_path(), e);
-      fs::copy_file(target, backup / rel, e);
-      if (e) {
-        error = "backup of " + PathUtf8(rel) + ": " + e.message();
-        return false;
-      }
-    }
-    list << (had ? "replaced " : "added ") << GenericPathUtf8(rel) << "\n";
-    if (!list.flush()) {
-      error = std::string("writing ") + kListFile;
-      return false;
-    }
-    fs::create_directories(target.parent_path(), e);
-    fs::copy_file(converted / rel, fresh, fs::copy_options::overwrite_existing, e);
-    if (e || !MoveReplaceFile(fresh, target)) {
-      error = "copy of " + PathUtf8(rel) + (e ? ": " + e.message() : std::string());
-      fs::remove(fresh, e);
-      return false;
-    }
-  }
-  return true;
-}
-
-// Everything Start changed, back: the archives, the .igx files imagipatcher's --apply-config rewrote (their .orig
-// copies; the disc's own data, which an update of the game doesn't replace), and the settings it turned on. Not the
-// exe: superpatcher patched it only on builds before the ["Mods"] slot sizes, and an update may have replaced it
-// since, so its .orig could be an older exe. Not the .toml's .orig either (newer settings of the player's own).
-bool RestoreAll(WiiuFigures::Game game, const fs::path& rom, const fs::path& exe_dir) {
-  const Tool& tool = ToolFor(game);
-  bool ok = RestoreArchives(rom);
-  std::error_code ec;
-  for (const fs::path& changed : {rom / "MemoryPoolConfigs.igx", rom / "VramBudget.igx"}) {
-    const fs::path orig = WithPathSuffix(changed, ".orig");
-    if (!fs::exists(orig, ec)) continue;
-    fs::copy_file(orig, changed, fs::copy_options::overwrite_existing, ec);
-    if (ec) {
-      HubWarn("wiiu figures: couldn't put back " + PathUtf8(changed.filename()) + ": " + ec.message());
-      ok = false;
-    } else {
-      fs::remove(orig, ec);
-    }
-  }
-  const fs::path toml = exe_dir / tool.toml;
-  WriteGameSetting(toml, "Portal", "portal_menu_nintendo", "bool", "false");
-  if (game == WiiuFigures::Game::kSuperChargers) {
-    WriteGameSetting(toml, "Mods", "hero_data_slot_size", "int", "0");
-    WriteGameSetting(toml, "Mods", "vehicle_slot_size", "int", "0");
-  }
-  return ok;
+// The tool's last line for an error message, short enough for the toast (a missing-files error lists dozens; the
+// whole line is in coreoflight.log).
+std::string LastLine(const ToolOutput& out) {
+  if (out.last.empty()) return {};
+  const std::string& line = out.last.back();
+  return line.size() > 160 ? line.substr(0, 157) + "..." : line;
 }
 
 }  // namespace
@@ -404,7 +285,11 @@ bool WiiuFigures::LooksLikeWiiuGame(const fs::path& folder) {
 
 bool WiiuFigures::Installed(const fs::path& rom) {
   std::error_code ec;
-  return fs::exists(rom / "archives" / kBackupDir / kListFile, ec);
+  const fs::path game = rom.parent_path();
+  for (WiiuFigures::Game g : {Game::kSuperChargers, Game::kImaginators}) {
+    if (fs::exists(game / ToolFor(g).backup / "manifest.json", ec)) return true;
+  }
+  return false;
 }
 
 std::string WiiuFigures::step() const {
@@ -428,60 +313,20 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
     (void)game, (void)wiiu, (void)rom, (void)exe_dir;
     Finish(*s, german ? "Die Wii-U-Figuren gibt es bisher nur unter Windows." : "The Wii U figures are Windows only for now.");
 #else
+    (void)rom;
     const Tool& tool = ToolFor(game);
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
-    // A second run starts from the game's own files (else the tool's .orig copies would become the patched ones).
-    if (Installed(rom) && !RestoreAll(game, rom, exe_dir)) {
-      return Finish(*s, german ? "Die Dateien vom letzten Mal lie\xC3\x9F" "en sich nicht zur\xC3\xBC" "cklegen."
-                               : "Couldn't put back the files from last time.");
-    }
-    std::error_code ec;
-    const fs::path work = TempDir() / "CoreOfLight" / (std::string("wiiu-") + tool.name_en);
-    fs::remove_all(work, ec);
-    fs::create_directories(work, ec);
     SetStep(*s, german ? "Wandle deine Wii-U-Dateien um (ein paar Minuten)" : "Converting your Wii U files (a few minutes)");
-    ToolOutput out{*s, 0.3f, 0.85f, {}};
-    // No PROGRESS lines from the tool: creep towards 0.8 so the bar moves (most runs take 2-5 minutes).
-    std::atomic<bool> converting{true};
-    std::thread creep([&] {
-      while (converting) {
-        const float p = s->progress.load();
-        if (p < 0.8f) s->progress = p + (0.8f - p) * 0.004f;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      }
-    });
-    const fs::path pkg = PackageDir();
-    const int code = RunPython({(pkg / tool.script).wstring(), L"--wiiu", wiiu.wstring(), L"--x360", rom.parent_path().wstring(),
-                                L"--output", work.wstring()},
+    ToolOutput out{*s, 0.3f, 0.99f, {}};
+    const int code = RunPython({(PackageDir() / tool.script).wstring(), L"--wiiu", wiiu.wstring(), L"--install",
+                                exe_dir.wstring()},
                                std::ref(out));
-    converting = false;
-    creep.join();
     if (code != 0) {
-      std::string why = out.last.empty() ? std::string() : out.last.back();
-      return Finish(*s, (german ? "Die Umwandlung ging nicht: " : "The conversion didn't work: ") +
+      const std::string why = LastLine(out);
+      // A stop half way is undone by the take-out button: the tool wrote its manifest before each change.
+      return Finish(*s, (german ? "Das ging nicht: " : "That didn't work: ") +
                             (code < 0 ? std::string(german ? "Python startete nicht." : "Python didn't start.") : why));
-    }
-    SetStep(*s, german ? "Lege die Figuren ins Spiel" : "Putting the figures into the game");
-    s->progress = 0.88f;
-    if (!InstallArchives(work / "archives", rom, error)) {
-      HubWarn("wiiu figures: " + error);
-      RestoreArchives(rom);
-      return Finish(*s, german ? "Die Dateien lie\xC3\x9F" "en sich nicht ins Spiel legen; es ist wieder wie vorher."
-                               : "Couldn't put the files into the game; it is back as it was.");
-    }
-    // The tool's own settings step on the game folder (memory, the video memory budget where it sets one, the
-    // portal menu's Nintendo row), then that row on here too (superpatcher sets it only in its test copies).
-    SetStep(*s, german ? "Stelle den Speicher ein" : "Setting the memory");
-    ToolOutput config{*s, 0.9f, 0.98f, {}};
-    const wchar_t* config_flag = game == Game::kSuperChargers ? L"--patch-exe" : L"--apply-config";
-    const int config_code = RunPython({(pkg / tool.script).wstring(), config_flag, (game == Game::kSuperChargers ? exe_dir : rom.parent_path()).wstring()}, std::ref(config));
-    WriteGameSetting(exe_dir / tool.toml, "Portal", "portal_menu_nintendo", "bool", "true");
-    fs::remove_all(work, ec);
-    if (config_code != 0) {
-      const std::string why = config.last.empty() ? std::string() : config.last.back();
-      return Finish(*s, std::string(german ? "Die Figuren sind drin, aber der Speicher lie\xC3\x9F sich nicht einstellen: "
-                                           : "The figures are in, but the memory couldn't be set: ") + why);
     }
     Finish(*s, german ? std::string("Die Wii-U-Figuren sind in ") + tool.name_de +
                             ": im Portalmen\xC3\xBC unter Nintendo."
@@ -493,12 +338,32 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
 void WiiuFigures::StartRestore(Game game, const fs::path& rom, const fs::path& exe_dir, bool german) {
   shared_ = std::make_shared<Shared>();
   std::thread([s = shared_, game, rom, exe_dir, german] {
+#ifndef _WIN32
+    (void)game, (void)rom, (void)exe_dir;
+    Finish(*s, german ? "Die Wii-U-Figuren gibt es bisher nur unter Windows." : "The Wii U figures are Windows only for now.");
+#else
+    (void)rom;
     const Tool& tool = ToolFor(game);
+    std::string error;
+    if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
     SetStep(*s, german ? "Lege die Originaldateien zur\xC3\xBC" "ck" : "Putting the original files back");
-    const bool ok = RestoreAll(game, rom, exe_dir);
-    Finish(*s, ok ? (german ? std::string(tool.name_de) + " ist wieder wie vorher." : std::string(tool.name_en) + " is back as it was.")
-                  : (german ? "Nicht alles lie\xC3\x9F sich zur\xC3\xBC" "cklegen; siehe coreoflight.log."
-                            : "Not everything could be put back; see coreoflight.log."));
+    ToolOutput out{*s, 0.3f, 0.99f, {}};
+    bool kept = false;
+    const int code = RunPython({(PackageDir() / tool.script).wstring(), L"--uninstall", exe_dir.wstring()},
+                               [&](const std::string& text) {
+                                 out(text);
+                                 if (text.find("left as it is") != std::string::npos) kept = true;
+                               });
+    if (code != 0) {
+      const std::string why = LastLine(out);
+      return Finish(*s, (german ? "Nicht alles lie\xC3\x9F sich zur\xC3\xBC" "cklegen: " : "Not everything could be put back: ") + why);
+    }
+    // A file an update replaced since the install stays as it is (the tool's report names it).
+    Finish(*s, german ? std::string(tool.name_de) + " ist wieder wie vorher." +
+                            (kept ? " Was ein Update seitdem ersetzt hat, bleibt so (coreoflight.log)." : "")
+                      : std::string(tool.name_en) + " is back as it was." +
+                            (kept ? " What an update replaced since stays as it is (coreoflight.log)." : ""));
+#endif
   }).detach();
 }
 

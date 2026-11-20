@@ -39,9 +39,9 @@ WHEELS = [  # (project, version): the cp314 win_amd64 wheel, its hash from PyPI
     ("scipy", "1.18.1"),
 ]
 FFMPEG = {"release": "latest", "asset": "ffmpeg-n8.1-latest-win64-lgpl-8.1.zip"}  # hash from GitHub's asset digest
-TOOLS = [  # (repo, tag, the script the launcher runs)
-    ("superpatcher", "v0.1.2", "superpatcher.py"),
-    ("imagipatcher", "v0.1.0-pre", "imagipatcher.py"),
+TOOLS = [  # (repo, tag, the script the launcher runs): v0.2.0 has --install / --uninstall and PROGRESS lines (#56)
+    ("superpatcher", "v0.2.0", "superpatcher.py"),
+    ("imagipatcher", "v0.2.0-pre", "imagipatcher.py"),
 ]
 OWNER = "SkyP4tcher"
 USER_AGENT = "CoreOfLight-maintainer"
@@ -80,7 +80,8 @@ def unzip(path, target, strip_top=False, only=None):
             if not name or name.endswith("/") or (only and not only(name)):
                 continue
             dest = target / name
-            if not dest.resolve().is_relative_to(target.resolve()):
+            # (not Path.is_relative_to: that needs Python 3.9, and the maintainer tools run on 3.8 too)
+            if os.path.commonpath([str(dest.resolve()), str(target.resolve())]) != str(target.resolve()):
                 raise SystemExit(f"{path.name}: {info.filename} leaves the folder")
             dest.parent.mkdir(parents=True, exist_ok=True)
             with z.open(info) as src, open(dest, "wb") as out:
@@ -167,7 +168,8 @@ def main():
 
 
 def check(stage):
-    """The package runs on its own: numpy and scipy.signal import, both tools answer --help, ffmpeg has xma2."""
+    """The package runs on its own: numpy and scipy.signal import, both tools answer --help with the --install and
+    --uninstall the launcher calls, ffmpeg has xma2."""
     py = stage / "python" / "python.exe"
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
     env["PATH"] = str(stage / "ffmpeg") + os.pathsep + env.get("PATH", "")
@@ -180,7 +182,10 @@ def check(stage):
         r = run(str(py), str(stage / repo / script), "--help")
         if r.returncode or "usage" not in r.stdout.lower():
             raise SystemExit(f"{repo} --help failed: {(r.stderr or r.stdout)[-800:]}")
-        print(f"{repo} ok")
+        if "--install" not in r.stdout or "--uninstall" not in r.stdout:
+            raise SystemExit(f"{repo} has no --install / --uninstall (the launcher calls them)")
+        v = run(str(py), str(stage / repo / script), "--version")
+        print(f"{repo} ok: {(v.stdout or v.stderr).strip()}")
     r = run(str(stage / "ffmpeg" / "ffmpeg.exe"), "-hide_banner", "-decoders")
     if r.returncode or " xma2 " not in r.stdout:
         raise SystemExit("ffmpeg has no xma2 decoder")

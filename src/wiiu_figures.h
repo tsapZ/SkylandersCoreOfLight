@@ -8,11 +8,10 @@
 // the tools' tagged source), so nobody installs Python.
 //
 // Steps, on a thread of its own: the package (download, check, unpack into %LOCALAPPDATA%\CoreOfLight\wiiu-tools);
-// the tool converts into a work folder (--wiiu, --x360, --output); the converted archives go into the game's
-// rom\archives, each original kept once in rom\archives\wiiu_backup (with a list, wiiu_figures.txt, of what was
-// replaced and what added); then the tool's own settings step (--patch-exe for SuperChargers: its ["Mods"] slot
-// sizes; --apply-config for Imaginators: memory pools, video memory budget, the portal menu's Nintendo row), which
-// keeps its originals as .orig. Restore puts all of it back.
+// then one tool run in the game folder (v0.2.0, made for this button): `--wiiu <folder> --install <game folder>`
+// converts, copies into rom\archives and sets the .igx files and the .toml settings, keeping everything it replaces
+// in superpatcher-backup / imagipatcher-backup with a manifest.json; `--uninstall <game folder>` puts it back.
+// Progress from the tools' "PROGRESS n/total label" lines.
 //
 // Windows only for now (the package is a Windows one); elsewhere Start says so.
 
@@ -30,11 +29,12 @@ class WiiuFigures {
 
   // Whether `folder` looks like an extracted Wii U game: an archives folder, or content\archives below it.
   static bool LooksLikeWiiuGame(const std::filesystem::path& folder);
-  // Whether the Wii U figures are in the game whose disc folder is `rom` (its wiiu_figures.txt is there).
+  // Whether the Wii U figures are in the game whose disc folder is `rom` (the tool's backup manifest is in its parent).
   static bool Installed(const std::filesystem::path& rom);
 
-  // `wiiu` the player's extracted Wii U game, `rom` the game's disc folder (as the launcher found it; the tools take
-  // its parent as the Core of Light folder), `exe_dir` the folder with the game's exe and .toml.
+  // `wiiu` the player's extracted Wii U game, `rom` the game's disc folder (as the launcher found it), `exe_dir` the
+  // folder with the game's exe and .toml: the tools' game folder (they write its rom\archives and keep their backup
+  // there; in an installed game that is rom's parent).
   void Start(Game game, const std::filesystem::path& wiiu, const std::filesystem::path& rom,
              const std::filesystem::path& exe_dir, bool german);
   // Puts the game back as it was before Start.
