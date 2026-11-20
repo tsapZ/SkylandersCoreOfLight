@@ -680,13 +680,13 @@ void LauncherUi::GameRunning() {
   AutoBackup(running_profile_, AllGames()[running_game_], found_[running_game_].exe);
 }
 
-void LauncherUi::AddDisc(const std::filesystem::path& iso) {
-  // During the first-run setup a dropped ISO is filled in there (its game's row) instead.
+void LauncherUi::AddDisc(const std::filesystem::path& disc) {
+  // During the first-run setup a dropped disc is filled in there (its game's row) instead.
   if (setup_.is_open()) {
-    setup_.AddIso(iso);
+    setup_.AddDisc(disc);
     return;
   }
-  if (!import_.running()) import_.Start(iso, found_, german_);
+  if (!import_.running()) import_.Start(disc, found_, german_);
 }
 
 void* LauncherUi::TakeStartedProcess() {
@@ -2867,7 +2867,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
   }
   if (ask_language_) return DrawLanguage(width, height);
   if (setup_.is_open()) {
-    // X on its disc page: the file browser for an ISO the search didn't find, over the setup.
+    // X on its disc page: the file browser for a disc the search didn't find, over the setup.
     if (browser_.is_open()) {
       browser_.Draw(width, height);
       if (const std::filesystem::path chosen = browser_.TakeChosen(); !chosen.empty()) {
@@ -2875,7 +2875,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
         if (browse_for_language_ || IsImaginatorsPs3Disc(chosen)) {
           TakeLanguageDisc(chosen);
         } else {
-          setup_.AddIso(chosen);
+          setup_.AddDisc(chosen);
         }
       }
       return true;
@@ -2886,10 +2886,10 @@ bool LauncherUi::DrawScreens(float width, float height) {
     if (job.kind == SetupScreen::Job::Kind::kInstall && !install_process_ && job.game < setups_.size()) {
       BeginInstall(job.game, false);
     } else if (job.kind == SetupScreen::Job::Kind::kImport && !import_.running()) {
-      import_.Start(job.iso, found_, german_);
+      import_.Start(job.disc, found_, german_);
     } else if (job.kind == SetupScreen::Job::Kind::kCancel) {
       import_.Cancel();
-    } else if (job.kind == SetupScreen::Job::Kind::kPickIso) {
+    } else if (job.kind == SetupScreen::Job::Kind::kPickDisc) {
       browser_.Open();
     } else if (job.kind == SetupScreen::Job::Kind::kPickFolder) {
       folder_for_data_ = false;
@@ -3251,7 +3251,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (profile_clicked || ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false) || ImGui::IsKeyPressed(ImGuiKey_P, false)) {
     profiles_screen_.Open(&found_);
   }
-  // X / D: the owner's own disc (ISO) for a game, recognised and unpacked into its rom folder.
+  // X / D: the owner's own disc (an ISO or an unpacked folder) for a game, recognised and unpacked
+  // into its rom folder.
   if (!import_.running() &&
       (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_D, false))) {
     browser_.Open();  // ISO files and unpacked discs alike, with the pad (file_browser.h)
@@ -3276,8 +3277,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
       const bool over = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y;
       dl->AddRectFilled(a, b, over ? Rgba(70, 80, 150, 245) : Rgba(24, 30, 70, 240), 20 * u);
       dl->AddRect(a, b, kGold, 20 * u, 0, 3 * u);
-      const char* line = german_ ? "Noch keine Disc eingelesen  \xC2\xB7  X: Disc einlesen (ISO ausw\xC3\xA4hlen)"
-                                 : "No disc set up yet  \xC2\xB7  X: add a disc (choose its ISO)";
+      const char* line = german_ ? "Noch keine Disc eingelesen  \xC2\xB7  X: Disc einlesen (ISO oder Ordner)"
+                                 : "No disc set up yet  \xC2\xB7  X: add a disc (ISO or folder)";
       Text(dl, bold_, 22 * u, {a.x + (bw - TextWidth(bold_, 22 * u, line)) * 0.5f, a.y + 19 * u}, kWhite, line);
       if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) browser_.Open();
     }

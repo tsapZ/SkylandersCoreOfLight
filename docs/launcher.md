@@ -33,17 +33,17 @@ exe and gets out of the way while the game runs; no game needs it.
   - *Willkommen*: what the launcher is, that the discs are the player's own, the language (left /
     right), A on to the discs, B skips the setup.
   - *Deine Discs*: the six games, nothing looked for unasked (the owner's wish). A on a game
-    opens the launcher's file browser (pad and keyboard) for its ISO, or an ISO is dropped on the
-    window; it is known by its default.xex and goes to its game's row ("Das ist die Disc von
-    ..." when it is another game's). Then its folder and the one above (one level down) are looked
-    through on a thread (`src/disc_search.cpp`, the reads are the ISOs' directories and
-    default.xex only) and the other games' ISOs found there are filled in as "automatisch
-    erkannt"; a wrong one is changed with A on its game. X ticks a game off and on, Y searches
-    the whole PC (the file browser's search: Downloads, Desktop and Documents four folders deep,
-    the drives two). Each row shows the ISO's size and path, or "Schon eingerichtet" /
-    "Keine Disc gefunden". Below: "Braucht 23,6 GB · frei auf G: 640,8 GB" (each chosen disc
-    without its system update, 150 MB per game, 256 MB to spare), in red with "Einrichten" off
-    when the drive the games go to is too full.
+    opens the launcher's file browser (pad and keyboard) for its disc (an ISO or an unpacked
+    folder), or a disc is dropped on the window; it is known by its default.xex and goes to its
+    game's row ("Das ist die Disc von ..." when it is another game's). Then its folder and the one
+    above (one level down) are looked through on a thread (`src/disc_search.cpp`, the reads are
+    the ISOs' directories and the folders' default.xex only) and the other games' discs found there
+    are filled in as "automatisch erkannt"; a wrong one is changed with A on its game. X ticks a
+    game off and on, Y searches the whole PC (the file browser's search: Downloads, Desktop and
+    Documents four folders deep, the drives two). Each row shows the disc's size and path, or
+    "Schon eingerichtet" / "Keine Disc gefunden". Below: "Braucht 23,6 GB · frei auf G: 640,8 GB"
+    (each chosen disc without its system update, 150 MB per game, 256 MB to spare), in red with
+    "Einrichten" off when the drive the games go to is too full.
   - *Einrichten*: each chosen game installed from its setup (when it isn't), then its disc set
     up, one after the other, with the import's progress bar; B stops after the step running
     (a disc being unpacked at once). *Fertig*: how many are ready; A to the cards.
@@ -108,12 +108,14 @@ exe and gets out of the way while the game runs; no game needs it.
   before anything is written. A disc that is set up already, a game that isn't installed and an
   unknown disc each get their own message. A folder with an
   unpacked disc (default.xex in it) works the same way: O picks one with the Windows dialog, or
-  drop it on the window; its files are copied into the rom folder. The ISO itself stays where it
+  drop it on the window; its files are copied into the rom folder. The disc itself stays where it
   is. **"Discs suchen"** (Y in the browser, or its first entry above the drives) looks for the
-  discs by itself on a thread of its own: every .iso of 100 MB or more in Downloads, Desktop and
-  Documents (four folder levels down) and on the fixed and removable drives (two levels; Windows',
-  the programs' and hidden folders left out), each read like a disc being set up and listed by
-  game when its default.xex is one of the six ("Trap Team · D:\ISOs\..."); A sets it up.
+  discs by itself on a thread of its own: every .iso of 100 MB or more and every folder with a
+  default.xex in it (an unpacked disc) in Downloads, Desktop and Documents (four folder levels
+  down) and on the fixed and removable drives (two levels; Windows', the programs' and hidden
+  folders left out), each read like a disc being set up and listed by game when its default.xex is
+  one of the six ("Trap Team · D:\ISOs\..."); A sets it up. A disc folder isn't looked into (its
+  files are the disc's contents).
   Checked 2026-10-23 on the owner's PC: all eight discs among 9 ISO files in 644 folders, in about
   3 s.
 - **The title music** (`src/music.cpp`): while a game's card is chosen its title music plays,

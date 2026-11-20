@@ -1,7 +1,8 @@
 #pragma once
 
 // Reading an Xbox 360 disc image (xiso.cpp): the game partition's XDVDFS file system, as a full
-// dump (the partition 0xFD90000 into the image, XGD2) or a trimmed image (at 0) has it.
+// dump (the partition 0xFD90000 into the image, XGD2) or a trimmed image (at 0) has it. A disc
+// unpacked into a folder (default.xex in it) is read the same way, file by file.
 
 #include <cstdint>
 #include <filesystem>
@@ -51,6 +52,11 @@ class XisoImage {
 
 // SHA-256 of a buffer, lower-case hex (Windows' CNG).
 std::string Sha256Hex(const void* data, size_t size);
+
+// The default.xex of a disc: an ISO image's, or an unpacked folder's (one with default.xex in it),
+// read into `out`; false if it has none. `bytes`, when given, is the disc's files without its
+// $SystemUpdate folder (what setting it up writes).
+bool ReadDiscXex(const std::filesystem::path& disc, std::vector<uint8_t>& out, uint64_t* bytes = nullptr);
 
 // The folders up to `dir` made one by one, an existing one (also a link) taken as it is; false
 // when `dir` isn't a folder afterwards. In place of std::filesystem::create_directories, which

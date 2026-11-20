@@ -113,7 +113,7 @@ void FileBrowser::ListSearch() {
     const Game& g = AllGames()[size_t(d.game)];
     const std::string name = std::string(german_ ? g.name_de : g.name_en) +
                              (d.languages ? (german_ ? " (PS3-Disc, f\xC3\xBCr die Sprache)" : " (PS3 disc, for its languages)") : "");
-    entries_.push_back({Entry::Kind::kFound, name + "  \xC2\xB7  " + Utf8(d.iso), d.iso});
+    entries_.push_back({Entry::Kind::kFound, name + "  \xC2\xB7  " + Utf8(d.disc), d.disc});
   }
 }
 
@@ -331,28 +331,39 @@ void FileBrowser::Draw(float width, float height) {
          : for_sc_language_ ? (german_ ? "W\xC3\xA4hle eine Xbox-360-Disc von SuperChargers mit der Sprache"
                                        : "Choose an Xbox 360 disc of SuperChargers with the language")
          : for_language_ ? (german_ ? "W\xC3\xA4hle deine PS3-Disc von Imaginators" : "Choose your PS3 disc of Imaginators")
-                         : (german_ ? "W\xC3\xA4hle die ISO deiner Disc" : "Choose your disc's ISO"));
+                         : (german_ ? "W\xC3\xA4hle deine Disc (ISO oder entpackter Ordner)"
+                                    : "Choose your disc (ISO or unpacked folder)"));
   }
   const float left = 48 * u, top = 128 * u;
   std::string where = folder_.empty() ? (german_ ? "Dieser PC" : "This PC") : Utf8(folder_);
   if (searching_view_ && search_) {
     ListSearch();
-    const int folders = search_->folders.load(), isos = search_->isos.load();
+    const int folders = search_->folders.load(), isos = search_->isos.load(),
+              unpacked = search_->unpacked.load();
     const int discs = int(entries_.size());
-    char status[200];
+    char status[260];
     // "1 Ordner", "2 ISO-Dateien": the right word for the number, no "Disc(s)".
     auto count = [](int n, const char* one, const char* many) {
       return n == 1 ? std::string("1 ") + one : std::to_string(n) + " " + many;
     };
     if (!search_->done) {
       std::snprintf(status, sizeof(status),
-                    german_ ? "Suche nach Discs ... %d Ordner und %s durchsucht" : "Looking for discs ... %d folders and %s searched",
-                    folders, (german_ ? count(isos, "ISO-Datei", "ISO-Dateien") : count(isos, "ISO file", "ISO files")).c_str());
+                    german_ ? "Suche nach Discs ... %d Ordner, %s und %s durchsucht"
+                            : "Looking for discs ... %d folders, %s and %s searched",
+                    folders,
+                    (german_ ? count(isos, "ISO-Datei", "ISO-Dateien") : count(isos, "ISO file", "ISO files")).c_str(),
+                    (german_ ? count(unpacked, "entpackte Disc", "entpackte Discs")
+                             : count(unpacked, "unpacked disc", "unpacked discs"))
+                        .c_str());
     } else {
       const std::string found = german_ ? (discs ? count(discs, "Skylanders-Disc", "Skylanders-Discs") : "keine Skylanders-Disc")
                                         : (discs ? count(discs, "Skylanders disc", "Skylanders discs") : "no Skylanders disc");
-      const std::string seen = german_ ? count(isos, "ISO-Datei", "ISO-Dateien") + " in " + count(folders, "Ordner", "Ordnern")
-                                       : count(isos, "ISO file", "ISO files") + " in " + count(folders, "folder", "folders");
+      const std::string seen = german_ ? count(isos, "ISO-Datei", "ISO-Dateien") + " und " +
+                                            count(unpacked, "entpackte Disc", "entpackte Discs") + " in " +
+                                            count(folders, "Ordner", "Ordnern")
+                                      : count(isos, "ISO file", "ISO files") + " and " +
+                                            count(unpacked, "unpacked disc", "unpacked discs") + " in " +
+                                            count(folders, "folder", "folders");
       std::snprintf(status, sizeof(status), german_ ? "Fertig: %s gefunden, %s durchsucht" : "Done: found %s, searched %s",
                     found.c_str(), seen.c_str());
     }
@@ -469,8 +480,8 @@ void FileBrowser::Draw(float width, float height) {
                                       : "Its .iso or unpacked folder, another build too; the disc itself stays as it is.")
          : for_language_ ? (german_ ? "Eine entschl\xC3\xBCsselte .iso oder ihr entpackter Ordner; sie selbst bleibt, wie sie ist."
                                   : "A decrypted .iso or its unpacked folder; the disc itself stays as it is.")
-         : german_ ? "Die ISO wird in den rom-Ordner des Spiels entpackt; sie selbst bleibt, wo sie ist."
-                   : "The ISO is unpacked into the game's rom folder; the file itself stays where it is.");
+         : german_ ? "Die ISO wird in den rom-Ordner entpackt, ein Ordner dorthin kopiert."
+                   : "An ISO is unpacked into the game's rom folder, a folder copied there.");
   }
   ImGui::End();
 }
