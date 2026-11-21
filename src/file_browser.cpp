@@ -224,6 +224,8 @@ void FileBrowser::List(const fs::path& folder) {
   if (folders_only_) {
     entries_.push_back({Entry::Kind::kThisFolder,
                         for_wiiu_      ? (german_ ? "Dieses Wii-U-Spiel umwandeln" : "Convert this Wii U game")
+                        : for_3ds_ ? (german_ ? "Diesen Ordner f\xC3\xBCr die 3DS-Spiele nehmen"
+                                            : "Use this folder for the 3DS games")
                         : for_figures_ ? (german_ ? "Diesen Ordner pr\xC3\xBC" "fen und importieren"
                                                 : "Check and import this folder")
                         : for_data_  ? (german_ ? "Hier den Ordner Skylanders f\xC3\xBCr die Spieldaten nehmen"
@@ -316,11 +318,13 @@ void FileBrowser::Draw(float width, float height) {
     Text(dl, bold_, 22 * u, {48 * u, 34 * u}, kDim,
          for_wiiu_ == 1 ? (german_ ? "SUPERCHARGERS: WII-U-FIGUREN" : "SUPERCHARGERS: WII U FIGURES")
          : for_wiiu_    ? (german_ ? "IMAGINATORS: WII-U-FIGUREN" : "IMAGINATORS: WII U FIGURES")
+         : for_3ds_ ? (german_ ? "3DS-ORDNER" : "3DS FOLDER")
          : for_figures_ ? (german_ ? "IMAGINATORS-FIGUREN" : "IMAGINATORS FIGURES")
          : for_data_  ? (german_ ? "SPIELDATEN-ORDNER" : "DATA FOLDER")
                       : (german_ ? "SPIELE-ORDNER" : "GAMES FOLDER"));
     Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
          for_wiiu_      ? (german_ ? "Wo liegt dein entpacktes Wii-U-Spiel?" : "Where is your extracted Wii U game?")
+         : for_3ds_ ? (german_ ? "Wo liegen deine 3DS-Dumps?" : "Where are your 3DS dumps?")
          : for_figures_ ? (german_ ? "Welcher Ordner hat die Figurendateien?" : "Which folder has the figure files?")
          : for_data_  ? (german_ ? "Wohin mit Spielst\xC3\xA4nden und Figuren?" : "Where should saves and figures go?")
                       : (german_ ? "Wo liegen deine Spiele?" : "Where are your games?"));
@@ -468,6 +472,8 @@ void FileBrowser::Draw(float width, float height) {
     Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
          for_wiiu_ ? (german_ ? "Der Ordner mit content\\archives (oder archives selbst). Deine Wii-U-Dateien bleiben, wie sie sind."
                               : "The folder with content\\archives (or archives itself). Your Wii U files stay as they are.")
+         : for_3ds_ ? (german_ ? "Dumps deiner Module (.cci, .3ds) hier und zwei Ordner tiefer werden gefunden."
+                             : "Dumps of your cartridges (.cci, .3ds) here and two folders down are found.")
          : for_figures_ ? (german_ ? "Unterordner z\xC3\xA4hlen mit. Imaginators pr\xC3\xBC" "ft jede Datei selbst; nur echte kommen dazu."
                                  : "Subfolders count too. Imaginators checks every file itself; only real ones come in.")
          : for_data_ ? (german_ ? "Darin kommt ein Ordner Skylanders mit allem: Spielst\xC3\xA4nde, Figuren, Profile."

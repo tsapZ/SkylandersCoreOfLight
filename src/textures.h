@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string>
+#include <vector>
 
 #include "imgui.h"
 
@@ -23,6 +25,11 @@ void SetTextureDevice(void* device);
 // The picture in `path` (decoded once and kept), or ImTextureID{} if there is none or it can't be
 // read; a missing file is looked for again only after a while.
 ImTextureID LoadTexture(const std::filesystem::path& path);
+
+// A picture made in memory (`w` x `h` RGBA rows), kept under `key` (ASCII, e.g. "ds3:1:P"): made
+// on the first call, the same texture after that. Game art (the 3DS dumps' icons), so
+// --no_game_art leaves it out.
+ImTextureID LoadTextureRgba(const std::string& key, int w, int h, const std::vector<uint8_t>& rgba);
 
 // The launcher's own pictures built into the exe (coreoflight.rc, RCDATA): morpheus284's frames for the
 // start screen (#78, CC BY 4.0). Not the games' art, so --no_game_art keeps them. Decoded once and kept;

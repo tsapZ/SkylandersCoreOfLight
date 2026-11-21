@@ -85,6 +85,7 @@ HubSettings LoadHubSettings() {
   s.setup_done = IsOn(get("setup_done"), s.setup_done);
   s.games_dir = Unescaped(get("games_dir"));
   s.old_data_kept = IsOn(get("old_data_kept"), s.old_data_kept);
+  s.ds3_folder = Unescaped(get("ds3_folder"));
   for (int p = 0; p < 2; ++p) {
     const std::string v = get(p == 0 ? "pad_rumble_p1" : "pad_rumble_p2");
     if (!v.empty() && v.size() < 4 && std::all_of(v.begin(), v.end(), ::isdigit)) {

@@ -268,6 +268,22 @@ ImTextureID LoadTextureKeyed(const std::filesystem::path& path, int x, int y, in
 #endif
 }
 
+ImTextureID LoadTextureRgba(const std::string& key, int w, int h, const std::vector<uint8_t>& rgba) {
+  if (g_no_game_art || w <= 0 || h <= 0 || rgba.size() < size_t(w) * size_t(h) * 4) return ImTextureID{};
+#ifdef _WIN32
+  // Its own key space ("rgba:"), apart from the file paths.
+  auto [it, added] = g_textures.try_emplace(L"rgba:" + std::wstring(key.begin(), key.end()));
+  Entry& e = it->second;
+  if (added && g_device) e.view = TextureOf(rgba, UINT(w), UINT(h));
+  return e.view ? reinterpret_cast<ImTextureID>(e.view) : ImTextureID{};
+#else
+  auto [it, added] = g_textures.try_emplace("rgba:" + key);
+  Entry& e = it->second;
+  if (added && g_gl_ready) e.tex = TextureOf(rgba.data(), w, h);
+  return e.tex ? ImTextureID(uintptr_t(e.tex)) : ImTextureID{};
+#endif
+}
+
 ImTextureID LoadUiTexture(int resource_id) {
 #ifdef _WIN32
   Entry& e = g_ui_textures[resource_id];

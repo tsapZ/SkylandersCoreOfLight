@@ -194,6 +194,14 @@ bool ReadTarArchive(const fs::path& archive_file, std::vector<Entry>& entries, b
 
 }  // namespace
 
+bool ReadZipFiles(const fs::path& zip, std::vector<ZipFile>& files, bool german, std::string& error) {
+  std::vector<Entry> entries;
+  if (!ReadZip(zip, entries, german, error)) return false;
+  files.reserve(files.size() + entries.size());
+  for (Entry& e : entries) files.push_back({std::move(e.path), std::move(e.data)});
+  return true;
+}
+
 bool IsPortable(const fs::path& launcher_dir) {
   std::error_code ec;
   return fs::is_regular_file(launcher_dir / kMarker, ec);

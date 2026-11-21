@@ -375,7 +375,7 @@ uint64_t Now() { return NowFileTimeTicks(); }
 }  // namespace
 
 std::optional<Release> FetchLatestRelease(const std::string& repo, const std::string& asset_prefix,
-                                          const std::string& extension) {
+                                          const std::string& extension, const std::string& tag_prefix) {
   // /releases rather than /releases/latest: that one leaves out pre-releases, and ours are betas.
   std::string body;
   const std::string url = "https://api.github.com/repos/" + std::string(kOwner) + "/" + repo + "/releases?per_page=10";
@@ -395,7 +395,7 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
   for (const Json& r : releases.items) {
     if (const Json* draft = r.Get("draft"); draft && draft->flag) continue;
     std::string version = r.String("tag_name");
-    if (version.starts_with("v")) version.erase(0, 1);
+    if (!tag_prefix.empty() && version.starts_with(tag_prefix)) version.erase(0, tag_prefix.size());
     if (version.empty() || (best && !VersionLess(best->version, version))) continue;
     const std::string wanted = asset_prefix + "-" + version + extension;
     const std::string wanted_plain = asset_prefix + extension;
