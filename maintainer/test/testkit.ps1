@@ -177,6 +177,21 @@ function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]
   # to go before calling it another run (2026-11-12: three runs of a chain were lost to this).
   for ($i = 0; $i -lt 120 -and (Get-Process *recompiled* -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
   if (Get-Process *recompiled* -ErrorAction SilentlyContinue) { throw "a game is already running" }
+  # The portal menu's lists (recent, pinned, favourites) are in the data folder next to the user data
+  # (<user data>\..\Skylanders\Figures), which every run shares: the owner's are put in before each run, so a menu
+  # picture doesn't show what an earlier test placed (2026-11-21: Recent led with a figure a night's crash run had put
+  # on). The owner's files are only read.
+  $menuDir = Join-Path (Join-Path (Split-Path $UserData -Parent) "Skylanders") "Figures"
+  if (Test-Path $menuDir) {
+    foreach ($list in "recent", "pinned", "favourites") {
+      foreach ($player in 1, 2) {
+        $name = "portal_menu_${list}_p$player.txt"
+        $own = Join-Path (Join-Path $script:Skylanders "Figures") $name
+        $copy = Join-Path $menuDir $name
+        if (Test-Path $own) { Copy-Item $own $copy -Force } elseif (Test-Path $copy) { Remove-Item $copy -Force }
+      }
+    }
+  }
   $repoDir = Get-RepoDir $Repo
   $logDir = Join-Path $repoDir "out\build\win-amd64-$Build\logs"
   $before = Get-Date
