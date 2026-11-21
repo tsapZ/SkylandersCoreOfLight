@@ -1,0 +1,123 @@
+{
+  "discs": [
+    {
+      "file": "Skylanders - Giants (USA, Europe) (En,Fr,De,Es,It,Nl,Sv,No,Da,Fi).iso",
+      "game": "giants",
+      "match": "exact",
+      "sha256": "12d1e29e4f07fbc559bc1a4988dd6bf346c3d16e30cbf862e2683e862f9fc09e",
+      "code_pin": "82150000:9fb7c356cbba689b46370ce2c1d5228e8e41b47d019ddfbdf49fd8a96c6584fe"
+    },
+    {
+      "file": "Skylanders - Imaginators (Europe) (Es,It).iso",
+      "game": "imaginators",
+      "match": "exact",
+      "sha256": "4298c4f6fb1684bed34dd8d2292b508782b37e3709ba1ed58b08ec334a9f7029",
+      "code_pin": "82480000:91c6d66ea09dff54b1650fb9b446081dcb180095e9d29b60a0432ea284e8ea7f"
+    },
+    {
+      "file": "Skylanders - Imaginators (USA).iso",
+      "game": "imaginators",
+      "match": "code",
+      "sha256": "591d84c9da765c22ca6d4aef554324b8c01ca184c343b6b31c1d240b6506842b",
+      "code_pin": "82480000:91c6d66ea09dff54b1650fb9b446081dcb180095e9d29b60a0432ea284e8ea7f"
+    },
+    {
+      "file": "Skylanders - Spyro's Adventure (Russia).iso",
+      "game": "ssa",
+      "match": "other",
+      "sha256": "0598a9638d92ec0070f4fb701323c132427dd76af3cd5a0ebc1d61f211b84041",
+      "code_pin": "82110000:3d6a86a8777cd8bd093d15c19cad2394bc825d4795eb80c9ce9e8fb2e3e5ce3e"
+    },
+    {
+      "file": "Skylanders - Spyro's Adventure (USA, Europe) (En,Fr,De,Es,It,Nl,Sv,No,Da,Fi).iso",
+      "game": "ssa",
+      "match": "exact",
+      "sha256": "e195f5130c1e23fb4654baf7c383ef97d02c89aeb7d4389705ae31235646ef7b",
+      "code_pin": "82110000:0a6b070c95f730a77a8662afdbbb297a15ce8a465c344951ab5ff1bb94bd802d"
+    },
+    {
+      "file": "Skylanders - SuperChargers (Europe) (Es,It).iso",
+      "game": "superchargers",
+      "match": "exact",
+      "sha256": "02846647633e93c627e74b92d3ad63a90e1504546958fc8d81e28ac65de1f9bc",
+      "code_pin": "82450000:3140330d024070a570409f8ebb651593ffdf5e038495721f2ca3538dbecd4671"
+    },
+    {
+      "file": "Skylanders - SuperChargers (Europe).iso",
+      "game": "superchargers",
+      "match": "exact",
+      "sha256": "02ff6672d460c9aaa54e69d584af67a7138c6c93cde5e04b0da4284207be7c61",
+      "code_pin": "82450000:3140330d024070a570409f8ebb651593ffdf5e038495721f2ca3538dbecd4671"
+    },
+    {
+      "file": "Skylanders - SuperChargers (USA).iso",
+      "game": "superchargers",
+      "match": "code",
+      "sha256": "0c44c6e11cfb34fd858bd05116f626dfecbefcada8c31d5687ea3e230e48d859",
+      "code_pin": "82450000:3140330d024070a570409f8ebb651593ffdf5e038495721f2ca3538dbecd4671"
+    },
+    {
+      "file": "Skylanders - Swap Force (Europe) (En,De).iso",
+      "game": "swapforce",
+      "match": "exact",
+      "sha256": "dc58d3851bbd89935e9ecf2ee84b158ec400f049da46c937a4713477a50c79d7",
+      "code_pin": "823E0000:0dcab6aa8cfb5c82f42e603d165a1966615073bf1f4372bd1733cd5fcca3e31b"
+    },
+    {
+      "file": "Skylanders - Swap Force (Europe) (Es,It).iso",
+      "game": "swapforce",
+      "match": "code",
+      "sha256": "3db455f6ee17e8cb3a4d58873d96583d9160396d360a0130e5eb88adad8a5518",
+      "code_pin": "823E0000:0dcab6aa8cfb5c82f42e603d165a1966615073bf1f4372bd1733cd5fcca3e31b"
+    },
+    {
+      "file": "Skylanders - Swap Force (Latin America) (En,Es,Pt).iso",
+      "game": "swapforce",
+      "match": "code",
+      "sha256": "f164dcfc67cd38d1ee1509c78d30e7a00cd2b5b049716dc894fbf8c2d590bbd2",
+      "code_pin": "823E0000:0dcab6aa8cfb5c82f42e603d165a1966615073bf1f4372bd1733cd5fcca3e31b"
+    },
+    {
+      "file": "Skylanders - Swap Force (USA).iso",
+      "game": "swapforce",
+      "match": "code",
+      "sha256": "5d9a3bc3c2d85ed59684a9c5f94daf6bffcfdfedcef7650a866737edbf3f4ac3",
+      "code_pin": "823E0000:0dcab6aa8cfb5c82f42e603d165a1966615073bf1f4372bd1733cd5fcca3e31b"
+    },
+    {
+      "file": "Skylanders - Trap Team (Europe) (Es,It).iso",
+      "game": "trapteam",
+      "match": "code",
+      "sha256": "11af90a3a6a672b5e9b059185596497e9821e2445bbb74261f7bd7159e8e56eb",
+      "code_pin": "821A0000:08c372fa42acfd04eb2d3ec047dfe92552e67c597d46f4f174673d2ee8c65687"
+    },
+    {
+      "file": "Skylanders - Trap Team (Europe) (Fr,Nl).iso",
+      "game": "trapteam",
+      "match": "code",
+      "sha256": "95e273f479ad71198d7daaa6234e6ee6364861ce29b002ba782154a1fcf08d3c",
+      "code_pin": "821A0000:08c372fa42acfd04eb2d3ec047dfe92552e67c597d46f4f174673d2ee8c65687"
+    },
+    {
+      "file": "Skylanders - Trap Team (Europe).iso",
+      "game": "trapteam",
+      "match": "exact",
+      "sha256": "f1d2373e4507e21cc371e6f22d02e909602a1b5bc4704896c3c099cc64002a35",
+      "code_pin": "821A0000:08c372fa42acfd04eb2d3ec047dfe92552e67c597d46f4f174673d2ee8c65687"
+    },
+    {
+      "file": "Skylanders - Trap Team (Latin America) (En,Es,Pt).iso",
+      "game": "trapteam",
+      "match": "code",
+      "sha256": "81459e26a7663697d2979e9340c399b5e564d76f23adc255bc76b5fdaae4342f",
+      "code_pin": "821A0000:08c372fa42acfd04eb2d3ec047dfe92552e67c597d46f4f174673d2ee8c65687"
+    },
+    {
+      "file": "Skylanders - Trap Team (USA).iso",
+      "game": "trapteam",
+      "match": "code",
+      "sha256": "53c1e991809b9fa1f803bc65f2c8c24580a04331c72738187ce529c29267888f",
+      "code_pin": "821A0000:08c372fa42acfd04eb2d3ec047dfe92552e67c597d46f4f174673d2ee8c65687"
+    }
+  ]
+}
