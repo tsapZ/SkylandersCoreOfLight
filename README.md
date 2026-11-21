@@ -204,7 +204,9 @@ achievements.
 **A disc isn't accepted.** Each game is made for the code of one disc; its page says which. Another
 pressing with the same code (a European disc with other languages, for example) works too. If yours
 still isn't taken, make a problem report (below) and open an issue: the report says which disc it
-is.
+is. A disc that is another build of one of the six (its code differs from the port's) is named with
+its game and version instead of "unknown" — the Russian disc of Spyro's Adventure, 0.0.0.4, for
+example; it can't be set up, because the port is made for another build.
 
 **Something crashed or looks wrong.** The launcher's settings (LB) > *Report a problem* writes one
 text file to your desktop with the latest logs and settings of every game, your Windows user name
