@@ -42,7 +42,7 @@ bool StartLauncher(const std::filesystem::path& exe);
 
 // Every file of a ZIP (stored or deflated, each checked against its CRC), its path relative and
 // checked (no drive, no "..") as the update takes them; for other downloads such as the 3DS
-// screen's Azahar (ds3_games.h). False with `error` set when the ZIP is damaged.
+// screen's game packages (ds3_games.h). False with `error` set when the ZIP is damaged.
 struct ZipFile {
   std::filesystem::path path;
   std::vector<char> data;

@@ -87,9 +87,24 @@ void Ds3Screen::Open() {
   open_ = true;
   const std::string chosen = LoadHubSettings().ds3_folder;
   folder_ = chosen.empty() ? UserDownloadsDir() : FolderFromStored(chosen);
-  installed_ = InstalledAzaharVersion();
+  RefreshInstalled();
   StartScan();
-  Ds3LookForAzaharUpdate();
+  Ds3LookForUpdates();
+}
+
+void Ds3Screen::RefreshInstalled() {
+  installed_.clear();
+  set_up_.clear();
+  for (const Ds3Game& g : Ds3Games()) {
+    installed_.push_back(InstalledDs3Version(g));
+    set_up_.push_back(!installed_.back().empty() && Ds3SetUp(g));
+  }
+}
+
+Ds3Screen::Need Ds3Screen::NeedOf(const Ds3Dump& d) const {
+  if (installed_.size() <= d.game || installed_[d.game].empty()) return d.supported() ? Need::kPackage : Need::kOtherRegion;
+  if (set_up_[d.game]) return Need::kNothing;
+  return d.supported() ? Need::kSetup : Need::kOtherRegion;
 }
 
 void Ds3Screen::StartScan() {
@@ -126,20 +141,47 @@ void* Ds3Screen::TakeStartedProcess() {
 void Ds3Screen::StartSelected() {
   if (selected_ < 0 || size_t(selected_) >= dumps_.size() || busy_ || started_) return;
   if (install_.running()) {
-    Say(german_ ? "Erst wenn Azahar fertig installiert ist." : "Once Azahar is installed.", true);
+    Say(german_ ? "Einen Moment, erst wird das Spiel fertig eingerichtet." : "One moment, the game is being set up first.", true);
     return;
   }
-  if (installed_.empty()) {
-    Say(german_ ? "Erst Azahar for Skylanders installieren (Y)." : "Install Azahar for Skylanders first (Y).", true);
-    return;
+  const Ds3Dump& d = dumps_[size_t(selected_)];
+  switch (NeedOf(d)) {
+    case Need::kOtherRegion:
+      Say(german_ ? "Bisher l\xC3\xA4uft nur die europ\xC3\xA4ische Fassung dieses Spiels."
+                  : "Only the European edition of this game runs so far.",
+          true);
+      return;
+    case Need::kPackage:
+    case Need::kSetup:
+      // Everything it needs, then the start (Draw, once the install is done).
+      install_dump_ = d;
+      start_after_ = true;
+      install_.Start(d.game, &d, NeedOf(d) == Need::kPackage, german_);
+      return;
+    case Need::kNothing:
+      break;
   }
   std::string error;
-  if (void* p = StartDs3Dump(dumps_[size_t(selected_)], german_, error)) {
+  if (void* p = StartDs3Game(d, german_, error)) {
     started_ = p;
-    Say(german_ ? "Azahar startet ..." : "Azahar is starting ...", false);
+    Say(german_ ? "Das Spiel startet ..." : "The game is starting ...", false);
   } else {
     Say(error, true);
   }
+}
+
+void Ds3Screen::UpdateSelected() {
+  if (selected_ < 0 || size_t(selected_) >= dumps_.size() || busy_ || started_ || install_.running()) return;
+  const Ds3Dump& d = dumps_[size_t(selected_)];
+  if (NeedOf(d) == Need::kOtherRegion) {
+    Say(german_ ? "Bisher l\xC3\xA4uft nur die europ\xC3\xA4ische Fassung dieses Spiels."
+                : "Only the European edition of this game runs so far.",
+        true);
+    return;
+  }
+  install_dump_ = d;
+  start_after_ = false;
+  install_.Start(d.game, &d, true, german_);
 }
 
 void Ds3Screen::Draw(float width, float height) {
@@ -177,25 +219,37 @@ void Ds3Screen::Draw(float width, float height) {
     report_count_ = false;
   }
   const bool searching = scan_ != nullptr;
-  // The install, when it's done: its message, the version now there, and where it went.
+  // The install, when it's done: its message, what is there now, and the start it was for.
   {
     std::string text;
     bool ok = false;
-    std::filesystem::path folder;
-    if (install_.TakeResult(text, ok, folder)) {
-      Say(text, !ok);
-      if (ok) WriteGameSetting(HubSettingsFile(), "Hub", "ds3_azahar", "string", StoredFolder(folder));
-      installed_ = InstalledAzaharVersion();
+    if (install_.TakeResult(text, ok)) {
+      RefreshInstalled();
+      const bool start = ok && start_after_ && !busy_ && !started_;
+      start_after_ = false;
+      if (start) {
+        std::string error;
+        if (void* p = StartDs3Game(install_dump_, german_, error)) {
+          started_ = p;
+          Say(german_ ? "Das Spiel startet ..." : "The game is starting ...", false);
+        } else {
+          Say(error, true);
+        }
+      } else {
+        Say(text, !ok);
+      }
     }
   }
-  // Azahar at the top right: which version is there, or that it's missing; a newer one on GitHub.
-  const std::string newest = Ds3NewestAzahar();
-  const bool newer = !installed_.empty() && !newest.empty() && VersionLess(installed_, newest);
-  {
-    const std::string line = installed_.empty() ? (german_ ? "Azahar for Skylanders: noch nicht installiert"
-                                                           : "Azahar for Skylanders: not installed yet")
-                                                : "Azahar for Skylanders " + installed_;
-    Text(dl, bold_, 20 * u, {width - 48 * u - TextWidth(bold_, 20 * u, line), 44 * u}, installed_.empty() ? kGold : kDim, line);
+  // The chosen card's game at the top right: its package version, or that it's missing; a newer one on GitHub.
+  const int n_dumps = int(dumps_.size());
+  const size_t game = n_dumps > 0 ? dumps_[size_t(std::clamp(selected_, 0, n_dumps - 1))].game : Ds3Games().size();
+  const std::string installed = game < installed_.size() ? installed_[game] : std::string();
+  const std::string newest = Ds3NewestVersion();
+  const bool newer = !installed.empty() && installed != "?" && !newest.empty() && VersionLess(installed, newest);
+  if (game < Ds3Games().size()) {
+    const std::string line = installed.empty() ? (german_ ? "Noch nicht installiert" : "Not installed yet")
+                                               : (german_ ? "Version " : "Version ") + installed;
+    Text(dl, bold_, 20 * u, {width - 48 * u - TextWidth(bold_, 20 * u, line), 44 * u}, installed.empty() ? kGold : kDim, line);
     if (newer) {
       const std::string note = german_ ? newest + " ist da (Y)" : newest + " is out (Y)";
       Text(dl, regular_, 18 * u, {width - 48 * u - TextWidth(regular_, 18 * u, note), 70 * u}, kGreen, note);
@@ -220,7 +274,7 @@ void Ds3Screen::Draw(float width, float height) {
     selected_ = std::min(n - 1, selected_ + 1);
   }
   if (n > 0 && (once(ImGuiKey_Enter) || once(ImGuiKey_GamepadFaceDown))) StartSelected();
-  if (!install_.running() && !busy_ && (once(ImGuiKey_Y) || once(ImGuiKey_GamepadFaceUp))) install_.Start(german_);
+  if (n > 0 && (once(ImGuiKey_Y) || once(ImGuiKey_GamepadFaceUp))) UpdateSelected();
   if (once(ImGuiKey_X) || once(ImGuiKey_GamepadFaceLeft)) browser_.Open(folder_);
 
   // The cards: one per dump, its own icon, the game, the region, whether it can run.
@@ -236,10 +290,10 @@ void Ds3Screen::Draw(float width, float height) {
       Text(dl, bold_, 24 * u, {a.x + 28 * u, a.y + 22 * u}, kWhite,
            german_ ? "Hier sind noch keine 3DS-Spiele." : "No 3DS games here yet.");
       Text(dl, regular_, 19 * u, {a.x + 28 * u, a.y + 60 * u}, kDim,
-           german_ ? "Lege Dumps deiner eigenen Module (entschl\xC3\xBCsselt, .cci oder .3ds) in diesen Ordner, oder "
-                     "w\xC3\xA4hle mit X einen anderen. Gesucht wird auch zwei Ordner tief."
-                   : "Put dumps of your own cartridges (decrypted, .cci or .3ds) in this folder, or pick another "
-                     "one with X. Folders two levels down count too.",
+           german_ ? "Lege Dumps deiner eigenen Module (.cci oder .3ds, die europ\xC3\xA4ische Fassung) in diesen Ordner, "
+                     "oder w\xC3\xA4hle mit X einen anderen. Gesucht wird auch zwei Ordner tief."
+                   : "Put dumps of your own cartridges (.cci or .3ds, the European edition) in this folder, or pick "
+                     "another one with X. Folders two levels down count too.",
            bw - 56 * u);
     }
   } else {
@@ -285,10 +339,16 @@ void Ds3Screen::Draw(float width, float height) {
       std::snprintf(sub, sizeof(sub), "%s  \xC2\xB7  %d", Ds3RegionName(d.region, german_), g.year);
       Text(dl, regular_, 17 * u, {la.x + (card_w - TextWidth(regular_, 17 * u, sub)) * 0.5f, ty}, kDim, sub);
       ty += 28 * u;
-      const std::string state = d.encrypted ? (german_ ? "Verschl\xC3\xBCsselt" : "Encrypted")
-                                : installed_.empty() ? (german_ ? "Azahar fehlt (Y)" : "Needs Azahar (Y)")
-                                                     : (german_ ? "Bereit" : "Ready");
-      const ImU32 state_col = d.encrypted ? kRed : installed_.empty() ? kGold : kGreen;
+      const Need need = NeedOf(d);
+      const bool this_one = install_.running() && install_dump_.game == d.game;
+      const std::string state =
+          this_one                       ? (install_.setting_up() ? (german_ ? "Wird eingerichtet ..." : "Setting up ...")
+                                                                  : (german_ ? "Wird geladen ..." : "Downloading ..."))
+          : need == Need::kOtherRegion   ? (german_ ? "Nur EU-Fassung" : "Europe only")
+          : need == Need::kPackage       ? (german_ ? "Installieren (A)" : "Install (A)")
+          : need == Need::kSetup         ? (german_ ? "Einrichten (A)" : "Set up (A)")
+                                         : (german_ ? "Bereit" : "Ready");
+      const ImU32 state_col = this_one ? kWhite : need == Need::kOtherRegion ? kRed : need == Need::kNothing ? kGreen : kGold;
       Text(dl, bold_, 18 * u, {la.x + (card_w - TextWidth(bold_, 18 * u, state)) * 0.5f, ty}, state_col, state);
     }
   }
@@ -298,9 +358,16 @@ void Ds3Screen::Draw(float width, float height) {
     const float bw = std::min(620 * u, width - 2 * left);
     const ImVec2 a{(width - bw) * 0.5f, bar_top - 46 * u};
     const float p = std::clamp(install_.progress(), 0.0f, 1.0f);
-    char line[96];
-    std::snprintf(line, sizeof(line), german_ ? "Azahar for Skylanders wird geladen ... %d %%" : "Getting Azahar for Skylanders ... %d %%",
-                  int(p * 100));
+    const Ds3Game& g = Ds3Games()[install_dump_.game];
+    const std::string name = german_ ? g.name_de : g.name_en;
+    char line[160];
+    if (install_.setting_up()) {
+      std::snprintf(line, sizeof(line),
+                    german_ ? "%s: die Spieldateien werden aus deinem Dump gemacht ..." : "%s: making the game files from your dump ...",
+                    name.c_str());
+    } else {
+      std::snprintf(line, sizeof(line), german_ ? "%s wird geladen ... %d %%" : "Getting %s ... %d %%", name.c_str(), int(p * 100));
+    }
     Text(dl, bold_, 19 * u, {a.x, a.y - 26 * u}, kWhite, line);
     dl->AddRectFilled(a, {a.x + bw, a.y + 12 * u}, Rgba(40, 50, 100), 6 * u);
     dl->AddRectFilled(a, {a.x + bw * p, a.y + 12 * u}, kGreen, 6 * u);
@@ -312,10 +379,10 @@ void Ds3Screen::Draw(float width, float height) {
   float hx = left;
   const float hy = height - 52 * u;
   if (n > 0) hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 160, 70), german_ ? "Starten" : "Play");
-  const char* install_label = installed_.empty() ? (german_ ? "Azahar installieren" : "Install Azahar")
-                              : newer            ? (german_ ? "Azahar aktualisieren" : "Update Azahar")
-                                                 : (german_ ? "Azahar neu installieren" : "Reinstall Azahar");
-  hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), install_label, "Y");
+  if (n > 0 && !installed.empty()) {
+    hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40),
+              newer ? (german_ ? "Aktualisieren" : "Update") : (german_ ? "Neu installieren" : "Reinstall"), "Y");
+  }
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "X", Rgba(50, 120, 220), german_ ? "Ordner w\xC3\xA4hlen" : "Pick folder", "X");
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
   ImGui::End();

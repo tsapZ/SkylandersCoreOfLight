@@ -134,8 +134,8 @@ void ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts) {
       // Fullscreen for this start, whatever the setting says (Steam's launch options on a
       // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
       opts.fullscreen_arg = true;
-    } else if (arg.starts_with("--azahar_zip=")) {
-      // The 3DS screen's Azahar from a local ZIP (ds3_games.h, read there through LaunchArgs).
+    } else if (arg.starts_with("--ds3_package_zip=")) {
+      // The 3DS screen's game package from a local ZIP (ds3_games.h, read there through LaunchArgs).
     } else if (arg == "--test_crash") {
       opts.test_crash = true;
     } else if (opts.iso.empty()) {

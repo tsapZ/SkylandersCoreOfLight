@@ -114,7 +114,7 @@ class LauncherUi {
   int platinum_new_ = -1;
   double platinum_until_ = 0;
   void* started_ = nullptr;
-  bool ds3_process_ = false;  // started_ is Azahar from the 3DS screen: its end isn't a game's
+  bool ds3_process_ = false;  // started_ is a 3DS game from the 3DS screen: its end isn't a 360 game's
   // The running game: its key, the profile it was started with and when (MonotonicMs).
   std::string running_key_;
   Profile running_profile_;

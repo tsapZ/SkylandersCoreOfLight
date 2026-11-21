@@ -571,11 +571,11 @@ std::string GameErrorMessage(const Found& found) {
 
 void LauncherUi::GameExitCode(unsigned long code) {
   starting_ = false;
-  // Azahar (the 3DS screen): closed its own way, often not with 0; no crash report for an Xbox 360 game.
+  // A 3DS game (the 3DS screen): its own runtime, no crash report for an Xbox 360 game.
   if (ds3_process_) {
     ds3_process_ = false;
     char line[64];
-    std::snprintf(line, sizeof(line), "3DS: Azahar ended, exit code 0x%08lX", code);
+    std::snprintf(line, sizeof(line), "3DS: the game ended, exit code 0x%08lX", code);
     HubLog(line);
     return;
   }
@@ -706,7 +706,7 @@ void* LauncherUi::TakeStartedProcess() {
 
 void LauncherUi::Start(size_t index) {
   if (index >= found_.size()) return;
-  // An Azahar from the 3DS screen is starting (its window not up yet) or running: one at a time.
+  // A 3DS game from the 3DS screen is starting (its window not up yet) or running: one at a time.
   if (ds3_process_) return;
   // A does what the card needs: a game without its disc opens the disc browser, one that isn't
   // installed or has another disc version says so (nothing could run).
@@ -3134,11 +3134,11 @@ bool LauncherUi::DrawScreens(float width, float height) {
   if (ds3_screen_.is_open()) {
     ds3_screen_.set_busy(ds3_process_);
     ds3_screen_.Draw(width, height);
-    // Azahar with a dump: main.cpp waits for it as for a game (the launcher hides meanwhile).
+    // A 3DS game: main.cpp waits for it as for a game (the launcher hides meanwhile).
     if (void* p = ds3_screen_.TakeStartedProcess()) {
       started_ = p;
       ds3_process_ = true;
-      music_.Stop();  // the chosen card's title music would go on behind Azahar
+      music_.Stop();  // the chosen card's title music would go on behind the game
     }
     return true;
   }
