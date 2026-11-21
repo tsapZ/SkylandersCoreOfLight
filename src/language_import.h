@@ -55,6 +55,12 @@ bool IsPs3Disc(const std::filesystem::path& iso);
 // The language imported into Imaginators' disc folder (`rom`): "en", "de", "?" for an import
 // without a note (the Python tool's, or one that didn't finish), empty when the disc is as it came.
 std::string ImportedLanguage(const std::filesystem::path& rom);
+// Bowser's and Donkey Kong's texts (the Wii U figures, Core of Light #124) in the language imported into Imaginators'
+// `rom`, from the Wii U files of that language the Wii U figures brought along (WiiuFigures keeps them): how many now
+// show it. UndoWiiuText takes that back (before the Wii U figures are converted again or taken out); false when an
+// archive couldn't be written (the game running).
+int PointWiiuTextAtImport(const std::filesystem::path& rom);
+bool UndoWiiuText(const std::filesystem::path& rom);
 
 class LanguageImport {
  public:
