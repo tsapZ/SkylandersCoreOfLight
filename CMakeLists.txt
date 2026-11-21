@@ -40,6 +40,8 @@ set(COREOFLIGHT_SOURCES
   src/main.cpp
   src/platform.cpp
   src/games.cpp
+  src/disc_id.cpp
+  src/disc_report.cpp
   src/game_settings.cpp
   src/hub_settings.cpp
   src/disc_import.cpp
