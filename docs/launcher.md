@@ -99,14 +99,16 @@ exe and gets out of the way while the game runs; no game needs it.
   eingelesen" with a button for it. Dropping an ISO on the window
   or on coreoflight.exe does the same. The launcher reads the image's file system itself (XDVDFS,
   src/xiso.cpp: a full Xbox 360 dump with the game partition 0xFD90000 into it, or a trimmed image),
-  knows the game by its default.xex's SHA-256 (the hash each game pins) and unpacks the disc into
-  the rom\ folder that game reads, with a progress bar; default.xex comes last, so a folder left
-  half done never counts as a disc. B doesn't quit meanwhile: it asks, and a second B within a few
-  seconds stops the unpacking (an older disc's default.xex in the folder goes then, so the mix
-  never counts as a disc). The disc's `$SystemUpdate` folder (the console's, about 100 MB) is left
-  out, as the installers do, and a drive without room for the disc (plus 256 MB) gets a message
-  before anything is written. A disc that is set up already, a game that isn't installed and an
-  unknown disc each get their own message. A folder with an
+  knows the game by its default.xex's SHA-256, or by its code pin (another pressing with the same
+  code), and unpacks the disc into the rom\ folder that game reads, with a progress bar; default.xex
+  comes last, so a folder left half done never counts as a disc. B doesn't quit meanwhile: it asks,
+  and a second B within a few seconds stops the unpacking (an older disc's default.xex in the folder
+  goes then, so the mix never counts as a disc). The disc's `$SystemUpdate` folder (the console's,
+  about 100 MB) is left out, as the installers do, and a drive without room for the disc (plus
+  256 MB) gets a message before anything is written. A disc that is set up already, a game that isn't
+  installed and an unknown disc each get their own message. A disc that is another build of one of
+  the six is named with its game and version (the Russian disc of Spyro's Adventure, 0.0.0.4, for
+  example) and not set up: its code is not the one the port is made for. A folder with an
   unpacked disc (default.xex in it) works the same way: O picks one with the Windows dialog, or
   drop it on the window; its files are copied into the rom folder. The disc itself stays where it
   is. **"Discs suchen"** (Y in the browser, or its first entry above the drives) looks for the

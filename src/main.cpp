@@ -37,6 +37,7 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
 #endif
+#include "disc_report.h"
 #include "gpu_tier.h"
 #include "hints.h"
 #include "hub_log.h"
@@ -83,6 +84,7 @@ void LogTerminate() {
 
 struct LaunchOptions {
   std::filesystem::path iso;
+  std::filesystem::path check_disc;
   std::filesystem::path portable_update;
   std::string sc_language;
   std::string im_language;
@@ -96,6 +98,9 @@ void ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts) {
     const std::string& arg = args[i];
     if (arg.starts_with("--documents=")) {
       coreoflight::SetDocumentsDir(coreoflight::PathFromUtf8(arg.substr(12)));
+    } else if (arg.starts_with("--check_disc=")) {
+      // The disc check without a window (disc_report.h); set up nothing.
+      opts.check_disc = coreoflight::PathFromUtf8(arg.substr(13));
     } else if (arg.starts_with("--install_dir=")) {
       // A library folder for games installed from the launcher (games.h StartGameInstall).
       coreoflight::SetInstallDir(coreoflight::PathFromUtf8(arg.substr(14)));
@@ -143,6 +148,10 @@ void ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts) {
 }
 
 int RunHeadlessTools(const LaunchOptions& opts) {
+  if (!opts.check_disc.empty()) {
+    // One JSON line on stdout; no window, no user data (disc_report.h).
+    return coreoflight::CheckDiscReport(opts.check_disc);
+  }
   if (!opts.portable_update.empty()) {
     const std::filesystem::path exe = coreoflight::SelfExePath();
 #ifdef _WIN32

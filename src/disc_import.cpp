@@ -316,6 +316,26 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
             Phase::kFailed);
         return;
       }
+      // A build of one of the six whose code isn't the port's (Spyro's Adventure's Russian disc,
+      // version 0.0.0.4, for example): name it, so the message isn't "unknown disc".
+      const int other = GameForTitleId(id.title_id);
+      if (other >= 0) {
+        const std::string other_name = german ? games[other].name_de : games[other].name_en;
+        char version[24], region[16];
+        std::snprintf(version, sizeof(version), "%u.%u.%u.%u", id.version >> 28, (id.version >> 24) & 0xF,
+                      (id.version >> 8) & 0xFFFF, id.version & 0xFF);
+        std::snprintf(region, sizeof(region), "%08X", id.region);
+        say(other_name +
+                (german ? ": Das ist ein anderer Build (Version " + std::string(version) + ", Region " + region +
+                              "), nicht die Disc, f\xC3\xBCr die der Port gemacht ist. Sein Code unterscheidet "
+                              "sich; das Spiel kann ihn nicht ausf\xC3\xBChren, deshalb wird er nicht eingerichtet. "
+                              "Nimm die Disc, die auf der Seite des Spiels steht."
+                        : ": this is another build (version " + std::string(version) + ", region " + region +
+                              "), not the disc the port is made for. Its code differs, so the game can't run it "
+                              "and it isn't set up. Use the disc named on the game's page."),
+            Phase::kFailed);
+        return;
+      }
       say(german ? "Diese Disc kennt Core of Light nicht: ein anderes Spiel oder ein anderer Build (jedes "
                    "Spiel ist f\xC3\xBCr den Code einer Disc gemacht, meist der europ\xC3\xA4ischen; siehe die "
                    "Seite des Spiels). Was f\xC3\xBCr eine Disc es ist, steht in Problem melden."
