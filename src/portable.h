@@ -10,6 +10,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace coreoflight {
 
@@ -38,5 +39,14 @@ void RemoveUpdateLeftovers(const std::filesystem::path& launcher_dir);
 // Starts the launcher `exe` in its own folder with this launcher's arguments (after an update).
 // False if it couldn't.
 bool StartLauncher(const std::filesystem::path& exe);
+
+// Every file of a ZIP (stored or deflated, each checked against its CRC), its path relative and
+// checked (no drive, no "..") as the update takes them; for other downloads such as the 3DS
+// screen's Azahar (ds3_games.h). False with `error` set when the ZIP is damaged.
+struct ZipFile {
+  std::filesystem::path path;
+  std::vector<char> data;
+};
+bool ReadZipFiles(const std::filesystem::path& zip, std::vector<ZipFile>& files, bool german, std::string& error);
 
 }  // namespace coreoflight

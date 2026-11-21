@@ -13,6 +13,7 @@
 #include "data_transfer.h"
 #include "saves_ui.h"
 #include "disc_import.h"
+#include "ds3_ui.h"
 #include "file_browser.h"
 #include "figure_import.h"
 #include "figures_ui.h"
@@ -113,6 +114,7 @@ class LauncherUi {
   int platinum_new_ = -1;
   double platinum_until_ = 0;
   void* started_ = nullptr;
+  bool ds3_process_ = false;  // started_ is Azahar from the 3DS screen: its end isn't a game's
   // The running game: its key, the profile it was started with and when (MonotonicMs).
   std::string running_key_;
   Profile running_profile_;
@@ -133,6 +135,7 @@ class LauncherUi {
   FiguresScreen figures_screen_;
   ProfilesScreen profiles_screen_;
   AchievementsScreen achievements_screen_;
+  Ds3Screen ds3_screen_;  // R3 / 3: the 3DS games (ds3_ui.h)
   SavesScreen saves_screen_;  // RT / S
   size_t running_game_ = 0;          // AllGames index of the running game
   uint64_t last_auto_backup_ = 0;    // MonotonicMs of the last automatic copy
