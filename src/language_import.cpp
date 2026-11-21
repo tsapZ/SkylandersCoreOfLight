@@ -16,6 +16,7 @@
 #include "alchemy/lzma_decoder.h"
 #include "hub_log.h"
 #include "inflate.h"
+#include "wiiu_figures.h"
 #include "xiso.h"
 
 // stb_image's zlib decoder for the raw deflate blocks, every function static (nothing else of it
@@ -1187,13 +1188,15 @@ int SuperChargersMovies(Job& job, std::vector<std::string>& skipped) {
 // ---- The way back ----
 
 // add_language.py's restore: the movies back, every archive's entries back and cut to its length.
-bool Restore(const fs::path& archives, int* restored) {
+// `only_step`: undo only that step's records (<archive>.<step>.json, the Wii U texts' "wiiu"), and keep the
+// rest of the import (its note, its movies, the folder).
+bool Restore(const fs::path& archives, int* restored, const std::string& only_step = {}) {
   const fs::path backup = archives / kBackupDir;
   std::error_code ec;
   *restored = 0;
   if (!fs::is_directory(backup, ec)) return true;
   const fs::path store = backup / kMoviesDir;
-  if (fs::is_directory(store, ec)) {
+  if (only_step.empty() && fs::is_directory(store, ec)) {
     for (const auto& e : fs::directory_iterator(store, ec)) fs::rename(e.path(), archives / e.path().filename(), ec);
     fs::remove(store, ec);
   }
@@ -1207,6 +1210,7 @@ bool Restore(const fs::path& archives, int* restored) {
     const std::u8string u8 = e.path().filename().u8string();
     std::string record_name(u8.begin(), u8.end());
     if (!EndsWith(record_name, ".json")) continue;
+    if (!only_step.empty() && !EndsWith(record_name, "." + only_step + ".json")) continue;
     std::string archive = record_name.substr(0, record_name.size() - 5);
     if (!EndsWith(Lower(archive), ".pak")) archive = archive.substr(0, archive.rfind('.'));  // "<archive>.<step>.json"
     auto text = ReadFile(e.path());
@@ -1236,6 +1240,11 @@ bool Restore(const fs::path& archives, int* restored) {
     // ends up as the disc has it.
     std::sort(records.begin(), records.end(), [](const Record& a, const Record& b) { return a.size > b.size; });
     const fs::path path = archives / Path(archive);
+    // An archive that is gone (the Wii U figures taken out by their own tool): nothing to put back.
+    if (!fs::exists(path, ec)) {
+      for (const Record& r : records) fs::remove(r.file, ec);
+      continue;
+    }
     {
       std::fstream f(path, std::ios::binary | std::ios::in | std::ios::out);
       if (!f) return false;
@@ -1256,9 +1265,67 @@ bool Restore(const fs::path& archives, int* restored) {
     for (const Record& r : records) fs::remove(r.file, ec);
     ++*restored;
   }
+  if (!only_step.empty()) return true;
   fs::remove(backup / kLanguageNote, ec);
   fs::remove(backup, ec);
   return true;
+}
+
+// Bowser and Donkey Kong (Core of Light #124): the Wii U figures' tool (imagipatcher, wiiu_figures.h) converts their
+// files for the languages the 360 disc has, so their place entry ("_es.lng") holds the Wii U game's real Spanish, and
+// the import above has no PS3 twin for it (the PS3 game has no Nintendo characters): with English imported, every
+// Skylander's upgrades read English but theirs Spanish. When the Wii U files of the imported language came along too
+// (WiiuFigures runs the tool with --languages), the place entries point at those inside the same archive: a table
+// entry each, nothing appended, recorded as the "wiiu" step (<archive>.wiiu.json), which Restore undoes with the rest
+// and UndoWiiuText on its own (the Wii U tool leaves a file alone that changed since its install). The number of
+// entries pointed.
+constexpr char kWiiuStep[] = "wiiu";
+
+int PointWiiuText(const fs::path& rom, const std::string& language) {
+  const fs::path archives = rom / "archives", backup = archives / kBackupDir;
+  const LanguageInfo* lang = InfoOf(language);
+  std::error_code ec;
+  if (!lang || !fs::is_directory(archives, ec)) return 0;
+  // The place the import took: the install's first language that isn't the imported one (Start's choice).
+  const LanguageInfo* place = nullptr;
+  for (const LanguageInfo& info : kImaginatorsPlaces) {
+    if (!place && language != info.code && !ArchiveNames(archives, (std::string(info.suffix) + ".pak").c_str()).empty()) {
+      place = &info;
+    }
+  }
+  if (!place) return 0;
+  const std::string place_text = std::string(place->suffix) + ".lng", lang_text = std::string(lang->suffix) + ".lng";
+  int total = 0;
+  for (const std::string& name : ArchiveNames(archives, ".pak")) {
+    const fs::path record = backup / Path(name + "." + kWiiuStep + ".json");
+    if (fs::exists(record, ec)) continue;  // done before
+    Iga x;
+    if (!x.Open(FileReader(archives / Path(name)))) continue;
+    std::unordered_map<std::string, size_t> by_name;
+    bool has_place = false;
+    for (size_t i = 0; i < x.files().size(); ++i) {
+      const std::string lower = Lower(x.files()[i].name);
+      by_name[lower] = i;
+      has_place = has_place || EndsWith(lower, place_text);
+    }
+    if (!has_place) continue;
+    std::vector<Change> changes;
+    for (size_t i = 0; i < x.files().size(); ++i) {
+      const std::string lower = Lower(x.files()[i].name);
+      if (!EndsWith(lower, place_text)) continue;
+      const auto j = by_name.find(lower.substr(0, lower.size() - place_text.size()) + lang_text);
+      if (j != by_name.end() && j->second != i) changes.push_back({i, {}, j->second});
+    }
+    if (changes.empty()) continue;
+    fs::create_directories(backup, ec);
+    if (!WriteChanges(archives / Path(name), x, record, changes)) {
+      HubWarn("language import: couldn't point " + name + "'s text at " + language);
+      continue;
+    }
+    HubLog("language import: " + name + ": " + std::to_string(changes.size()) + " text(s) now " + language);
+    total += int(changes.size());
+  }
+  return total;
 }
 
 // The install's languages: its voice banks' suffixes ("_es" / "_it", or "_en" / "_de").
@@ -1340,6 +1407,16 @@ bool IsPs3Disc(const fs::path& iso) {
 bool IsImaginatorsPs3Disc(const fs::path& source) {
   SourceDisc disc;
   return disc.Open(source) && disc.Has("permanent_ps3.pak") && disc.Has("juicedomain_permanent.pak");
+}
+
+int PointWiiuTextAtImport(const fs::path& rom) {
+  const std::string language = ImportedLanguage(rom);
+  return language.empty() || language == "?" ? 0 : PointWiiuText(rom, language);
+}
+
+bool UndoWiiuText(const fs::path& rom) {
+  int restored = 0;
+  return Restore(rom / "archives", &restored, kWiiuStep);
 }
 
 std::string ImportedLanguage(const fs::path& rom) {
@@ -1503,6 +1580,12 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
       std::ofstream note(job->backup / kLanguageNote, std::ios::binary | std::ios::trunc);
       note << language << "\n";
     }
+    // Bowser and Donkey Kong (CoL #124): their Wii U files in this language, if the Wii U figures brought them.
+    const int wiiu_texts = PointWiiuText(rom, language);
+    const bool wiiu_without = wiiu_texts == 0 && WiiuFigures::Installed(rom);
+    if (wiiu_without) {
+      HubLog("language import: the Wii U figures have no " + language + " text; converted again, they get it");
+    }
     const std::string name = LanguageName(language, german);
     char text[400];
     if (spanish_place) {
@@ -1534,6 +1617,12 @@ void LanguageImport::Start(const fs::path& source, const fs::path& rom, const st
     if (!job->texts) {
       return finish(german ? "Keine Texte gefunden: passt die Disc zu diesem Imaginators?"
                            : "No texts found: does the disc match this Imaginators?");
+    }
+    if (wiiu_without) {
+      finish(std::string(text) +
+             (german ? " Bowser und Donkey Kong bekommen sie, wenn die Wii-U-Figuren noch einmal umgewandelt werden."
+                     : " Bowser and Donkey Kong get it once the Wii U figures are converted again."));
+      return;
     }
     finish(text);
   }).detach();

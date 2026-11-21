@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "hub_log.h"
+#include "language_import.h"
 #include "platform.h"
 #include "updates.h"
 #include "zip_extract.h"
@@ -315,20 +316,52 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
     (void)game, (void)wiiu, (void)rom, (void)exe_dir;
     Finish(*s, german ? "Die Wii-U-Figuren gibt es bisher nur unter Windows." : "The Wii U figures are Windows only for now.");
 #else
-    (void)rom;
     const Tool& tool = ToolFor(game);
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
+    // Imaginators with another language imported (CoL #124): the earlier pointing of Bowser's and Donkey Kong's texts
+    // undone first (the tool leaves a file alone that changed since its install), and the Wii U files of that language
+    // kept next to the disc's own, so their texts can show it too.
+    std::vector<std::wstring> args = {(PackageDir() / tool.script).wstring(), L"--wiiu", wiiu.wstring(), L"--install",
+                                      exe_dir.wstring()};
+    std::string imported;
+    if (game == Game::kImaginators) {
+      if (!UndoWiiuText(rom)) {
+        return Finish(*s, german ? "Imaginators l\xC3\xA4sst sich gerade nicht \xC3\xA4ndern (l\xC3\xA4uft es noch?)."
+                                 : "Imaginators can't be changed right now (is it still running?).");
+      }
+      imported = ImportedLanguage(rom);
+      std::vector<std::string> languages = ImaginatorsInstallLanguages(rom);
+      if (imported.size() == 2 && !languages.empty() &&
+          std::find(languages.begin(), languages.end(), imported) == languages.end()) {
+        std::wstring list(imported.begin(), imported.end());
+        for (const std::string& l : languages) list += L"," + std::wstring(l.begin(), l.end());
+        args.push_back(L"--languages");
+        args.push_back(list);
+        HubLog("Wii U figures: with the imported " + imported + " text");
+      } else {
+        imported.clear();
+      }
+    }
     SetStep(*s, german ? "Wandle deine Wii-U-Dateien um (ein paar Minuten)" : "Converting your Wii U files (a few minutes)");
     ToolOutput out{*s, 0.3f, 0.99f, {}};
-    const int code = RunPython({(PackageDir() / tool.script).wstring(), L"--wiiu", wiiu.wstring(), L"--install",
-                                exe_dir.wstring()},
-                               std::ref(out));
+    int code = RunPython(args, std::ref(out));
+    if (code > 0 && !imported.empty()) {
+      // A Wii U game without that language (its files missing): converted as before, with the disc's languages only.
+      HubWarn("Wii U figures: not with " + imported + " (" + LastLine(out) + "), again with the disc's languages");
+      args.resize(args.size() - 2);
+      imported.clear();
+      code = RunPython(args, std::ref(out));
+    }
     if (code != 0) {
       const std::string why = LastLine(out);
       // A stop half way is undone by the take-out button: the tool wrote its manifest before each change.
       return Finish(*s, (german ? "Das ging nicht: " : "That didn't work: ") +
                             (code < 0 ? std::string(german ? "Python startete nicht." : "Python didn't start.") : why));
+    }
+    if (!imported.empty()) {
+      const int texts = PointWiiuTextAtImport(rom);
+      HubLog("Wii U figures: " + std::to_string(texts) + " text(s) in " + imported);
     }
     Finish(*s, german ? std::string("Die Wii-U-Figuren sind in ") + tool.name_de +
                             ": im Portalmen\xC3\xBC unter Nintendo."
@@ -344,10 +377,15 @@ void WiiuFigures::StartRestore(Game game, const fs::path& rom, const fs::path& e
     (void)game, (void)rom, (void)exe_dir;
     Finish(*s, german ? "Die Wii-U-Figuren gibt es bisher nur unter Windows." : "The Wii U figures are Windows only for now.");
 #else
-    (void)rom;
     const Tool& tool = ToolFor(game);
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
+    // Bowser's and Donkey Kong's texts pointed at the imported language (CoL #124) back first, or the tool would
+    // leave their changed files in.
+    if (game == Game::kImaginators && !UndoWiiuText(rom)) {
+      return Finish(*s, german ? "Imaginators l\xC3\xA4sst sich gerade nicht \xC3\xA4ndern (l\xC3\xA4uft es noch?)."
+                               : "Imaginators can't be changed right now (is it still running?).");
+    }
     SetStep(*s, german ? "Lege die Originaldateien zur\xC3\xBC" "ck" : "Putting the original files back");
     ToolOutput out{*s, 0.3f, 0.99f, {}};
     bool kept = false;
