@@ -11,7 +11,7 @@ endif()
 
 # The launcher's version: the problem report names it, tools/package_installer.ps1 builds the
 # installer with it, and updates from GitHub Releases (#17) will compare against it.
-set(COREOFLIGHT_VERSION "0.5.0-beta.2")
+set(COREOFLIGHT_VERSION "0.5.0-beta.3")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
