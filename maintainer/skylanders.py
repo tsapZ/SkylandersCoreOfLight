@@ -102,9 +102,14 @@ def release_assets(repo, version, platform=None):
     win = ([d / "installer" / "Output" / f"CoreOfLightSetup-{version}.exe",
             d / "installer" / "Output" / f"CoreOfLightPortable-{version}.zip"]
            if repo == HUB else [d / "installer" / "Output" / f"{repo}Setup-{version}.exe"])
-    linux = ([d / "installer" / "Output" / "CoreOfLight-linux-amd64.tar.gz",
-              d / "installer" / "Output" / f"CoreOfLight-{version}-x86_64.AppImage"]
-             if repo == HUB else [d / "dist" / f"{repo}-linux-amd64.tar.gz"])
+    # Every Linux architecture whose package was built into the output folder: a release can carry
+    # amd64 and arm64 next to each other, whichever machine built which one.
+    if repo == HUB:
+        out = d / "installer" / "Output"
+        linux = (sorted(out.glob("CoreOfLight-linux-*.tar.gz"))
+                 + sorted(out.glob(f"CoreOfLight-{version}-*.AppImage")))
+    else:
+        linux = sorted((d / "dist").glob(f"{repo}-linux-*.tar.gz"))
     if plat == "all":
         return win + linux
     return linux if plat.startswith("linux") else win

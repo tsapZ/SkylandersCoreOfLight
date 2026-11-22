@@ -20,6 +20,19 @@ if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(FATAL_ERROR "Unsupported platform: expected Windows or Linux.")
 endif()
 
+# The Linux packages are named after the machine's architecture, and so are the release assets the
+# launcher looks for. Set here once so the app and the packaging scripts agree.
+if(NOT WIN32)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    set(COREOFLIGHT_LINUX_ARCH "amd64")
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+    set(COREOFLIGHT_LINUX_ARCH "arm64")
+  else()
+    message(FATAL_ERROR "Unsupported Linux architecture: ${CMAKE_SYSTEM_PROCESSOR} (expected x86_64 or aarch64)")
+  endif()
+  message(STATUS "Linux architecture: ${COREOFLIGHT_LINUX_ARCH}")
+endif()
+
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui)
 if(NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
   message(FATAL_ERROR "thirdparty/imgui is missing: git submodule update --init")
@@ -108,6 +121,8 @@ if(WIN32)
                                                  IMGUI_IMPL_WIN32_DISABLE_GAMEPAD)
   target_link_libraries(coreoflight PRIVATE skylanders_portal_figures skylanders_alchemy d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
 else()
+  # The suffix in every Linux release asset's name (portable launcher, game setups and updates).
+  target_compile_definitions(coreoflight PRIVATE COREOFLIGHT_LINUX_ARCH="${COREOFLIGHT_LINUX_ARCH}")
   find_package(OpenGL REQUIRED)
   find_package(SDL3 REQUIRED CONFIG)
   find_package(CURL REQUIRED)

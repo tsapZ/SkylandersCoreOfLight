@@ -2133,7 +2133,7 @@ std::filesystem::path AssetPath(const std::string& name) { return std::filesyste
 // Versioned local filename for downloaded release archives when the upstream asset omits version.
 std::filesystem::path LocalAssetPath(const Release& r) {
 #ifndef _WIN32
-  constexpr std::string_view kTarExt = "-linux-amd64.tar.gz";
+  constexpr std::string_view kTarExt = "-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz";
   if (!r.version.empty() && r.asset == r.repo + std::string(kTarExt)) {
     const std::string name =
         (r.repo == "SkylandersCoreOfLight" ? std::string("CoreOfLight-") : r.repo + "-") + r.version + std::string(kTarExt);
@@ -2149,6 +2149,7 @@ struct LauncherUi::UpdateWork {
   std::mutex mutex;
   std::atomic<bool> checking{false};
   bool fresh = false;              // a check ended (under `mutex`)
+  bool answered = false;           // GitHub answered at least once (under `mutex`)
   std::vector<Release> releases;   // what it found (under `mutex`)
   std::atomic<int> download{0};    // 0 none, 1 running, 2 done, 3 failed
   std::atomic<float> progress{0.0f};
@@ -2184,18 +2185,24 @@ void LauncherUi::StartUpdateCheck(bool manual, const std::string& why) {
   for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo) + "Setup", ".exe"});
 #else
   std::vector<Wanted> repos = {{"SkylandersCoreOfLight", kPortablePrefix, kPortableExtension}};
-  for (const Game& game : AllGames()) repos.push_back({game.repo, std::string(game.repo), "-linux-amd64.tar.gz"});
+  for (const Game& game : AllGames()) {
+    repos.push_back({game.repo, std::string(game.repo), std::string("-linux-") + COREOFLIGHT_LINUX_ARCH + ".tar.gz"});
+  }
 #endif
   std::thread([work = work_, repos] {
     std::vector<Release> found;
+    bool answered = false;
     for (const Wanted& w : repos) {
-      if (auto release = FetchLatestRelease(w.repo, w.prefix, w.extension)) found.push_back(*release);
+      bool this_one = false;
+      if (auto release = FetchLatestRelease(w.repo, w.prefix, w.extension, "v", &this_one)) found.push_back(*release);
+      answered = answered || this_one;
     }
     // Nothing at all: no network (or GitHub down); the releases known before stay.
     if (!found.empty()) SaveKnownReleases(found);
     {
       std::lock_guard lock(work->mutex);
       work->releases = std::move(found);
+      work->answered = answered;
       work->fresh = true;
     }
     work->checking = false;
@@ -2204,19 +2211,31 @@ void LauncherUi::StartUpdateCheck(bool manual, const std::string& why) {
 
 void LauncherUi::UpdateReleases() {
   std::vector<Release> found;
+  bool answered = false;
   {
     std::lock_guard lock(work_->mutex);
     if (!work_->fresh) return;
     work_->fresh = false;
     found = std::move(work_->releases);
+    answered = work_->answered;
   }
   const bool manual = std::exchange(manual_check_, false);
   if (found.empty()) {
-    HubWarn("updates: no answer from GitHub (no network, or it is down or busy)");
-    if (manual) {
-      ShowToast(german_ ? "Keine Verbindung zu GitHub: Updates lassen sich gerade nicht pr\xC3\xBC" "fen"
-                        : "No connection to GitHub: updates can't be checked right now",
-                8.0);
+    if (!answered) {
+      HubWarn("updates: no answer from GitHub (no network, or it is down or busy)");
+      if (manual) {
+        ShowToast(german_ ? "Keine Verbindung zu GitHub: Updates lassen sich gerade nicht pr\xC3\xBC" "fen"
+                          : "No connection to GitHub: updates can't be checked right now",
+                  8.0);
+      }
+    } else {
+      // GitHub answered, but no release has an asset for this machine's architecture (yet).
+      HubLog("updates: GitHub has no Linux " COREOFLIGHT_LINUX_ARCH " release asset");
+      if (manual) {
+        ShowToast(german_ ? "F\xC3\xBCr Linux " COREOFLIGHT_LINUX_ARCH " gibt es noch keine Ver\xC3\xB6" "ffentlichung"
+                          : "There is no Linux " COREOFLIGHT_LINUX_ARCH " release yet",
+                  8.0);
+      }
     }
     return;
   }
@@ -2389,6 +2408,11 @@ void LauncherUi::ApplyReleases() {
   for (size_t i = 0; i < AllGames().size() && i < setups_.size(); ++i) {
     const Game& game = AllGames()[i];
     for (const Release& r : releases_) {
+#ifndef _WIN32
+      // A release cached on x86 (or a Windows setup) never goes onto an arm64 machine, and the other
+      // way round.
+      if (!r.asset.ends_with("-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz")) continue;
+#endif
       if (r.repo != game.repo) continue;
       // The release's setup when it's newer than the one here, or there is none here.
       if (setups_[i].empty() || VersionLess(SetupVersion(game, setups_[i]), r.version)) {

@@ -2,7 +2,7 @@
 # The launcher as an AppImage: the tarball's files in an AppDir, packed with appimagetool.
 #
 #   bash tools/package_linux.sh        # the files to put into the AppDir
-#   bash tools/package_appimage.sh     # -> installer/Output/CoreOfLight-<version>-x86_64.AppImage
+#   bash tools/package_appimage.sh     # -> installer/Output/CoreOfLight-<version>-<x86_64|aarch64>.AppImage
 #
 # appimagetool and its runtime are downloaded once into $SKYLANDERS_WORK/tools (default
 # ~/SkylandersDev/tools) and reused; APPIMAGETOOL and APPIMAGE_RUNTIME point at copies of your own.
@@ -16,7 +16,16 @@ if [ -z "$version" ]; then
   exit 1
 fi
 
-stage="$repo/installer/staging/coreoflight-linux-amd64-release"
+case "$(uname -m)" in
+  x86_64|amd64) arch="amd64"; appimage_arch="x86_64" ;;
+  aarch64|arm64) arch="arm64"; appimage_arch="aarch64" ;;
+  *)
+    echo "Unsupported machine architecture: $(uname -m) (expected x86_64 or aarch64)" >&2
+    exit 1
+    ;;
+esac
+
+stage="$repo/installer/staging/coreoflight-linux-$arch-release"
 if [ ! -x "$stage/coreoflight" ]; then
   echo "$stage/coreoflight is missing: run bash tools/package_linux.sh first" >&2
   exit 1
@@ -100,10 +109,18 @@ pinned_asset() (
 
 tool="${APPIMAGETOOL:-}"
 if [ -z "$tool" ]; then
-  tool="$cache/appimagetool-1.9.1-x86_64.AppImage"
+  case "$appimage_arch" in
+    x86_64)
+      tool_sha="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+      ;;
+    aarch64)
+      tool_sha="f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158"
+      ;;
+  esac
+  tool="$cache/appimagetool-1.9.1-$appimage_arch.AppImage"
   if ! pinned_asset \
-      https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage \
-      ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 "$tool"; then
+      "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$appimage_arch.AppImage" \
+      "$tool_sha" "$tool"; then
     echo "Could not download or verify $tool" >&2
     exit 1
   fi
@@ -111,10 +128,18 @@ fi
 
 runtime="${APPIMAGE_RUNTIME:-}"
 if [ -z "$runtime" ]; then
-  runtime="$cache/type2-runtime-20251108-x86_64"
+  case "$appimage_arch" in
+    x86_64)
+      runtime_sha="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+      ;;
+    aarch64)
+      runtime_sha="00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444"
+      ;;
+  esac
+  runtime="$cache/type2-runtime-20251108-$appimage_arch"
   if ! pinned_asset \
-      https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 \
-      2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d "$runtime"; then
+      "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-$appimage_arch" \
+      "$runtime_sha" "$runtime"; then
     echo "Could not download or verify $runtime" >&2
     exit 1
   fi
@@ -126,8 +151,8 @@ fi
 
 out="$repo/installer/Output"
 mkdir -p "$out"
-appimage="$out/CoreOfLight-$version-x86_64.AppImage"
-ARCH=x86_64 VERSION="$version" APPIMAGE_EXTRACT_AND_RUN=1 \
+appimage="$out/CoreOfLight-$version-$appimage_arch.AppImage"
+ARCH="$appimage_arch" VERSION="$version" APPIMAGE_EXTRACT_AND_RUN=1 \
   "$tool" --no-appstream --runtime-file "$runtime" "$appdir" "$appimage"
 chmod 0755 "$appimage"
 ls -lh "$appimage"

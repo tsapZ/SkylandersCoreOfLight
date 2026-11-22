@@ -46,16 +46,22 @@ newer: Ubuntu 24.04's clang 18 with libstdc++ 13 hides the `std::expected` the S
 The release tool uses clang 19 or newer for the games and also accepts Ubuntu's versioned
 `clang-19` and `clang++-19` executables.
 
-Build the release on the oldest distribution you support (Ubuntu 24.04 here): the binaries and the
-bundled SDL3 link against its system libraries.
+Build the release on the oldest distribution you support for that architecture (Ubuntu 24.04 here
+for x86-64): the binaries and the bundled SDL3 link against its system libraries. For ARM64, build
+on the oldest arm64 distribution you support; on a Steam Frame, `sudo steamos-devmode enable` first
+and install the Arch equivalents of the packages above (`clang cmake ninja pkgconf libusb
+libarchive curl openssl mesa libglvnd vulkan-icd-loader`), plus SDL 3.4.20 from source if the
+distro has no 3.4 package.
 
-`build --recipe package-linux` writes the games' `dist/<Repo>-linux-amd64.tar.gz`, the launcher's
-`installer/Output/CoreOfLight-linux-amd64.tar.gz` (with `libSDL3.so.0` beside `coreoflight`), and
-`installer/Output/CoreOfLight-<version>-x86_64.AppImage`. appimagetool 1.9.1 and the Type 2
-runtime 20251108 are cached in `$SKYLANDERS_WORK/tools` and checked against fixed SHA-256 hashes.
-Use `APPIMAGETOOL` and `APPIMAGE_RUNTIME` to supply your own copies. An AppImage runs from a read-only mount and doesn't update itself: it
-opens the release page instead. `publish` uploads both files on Linux, and the release notes then
-describe the tarball and the AppImage.
+`build --recipe package-linux` writes the games' `dist/<Repo>-linux-<arch>.tar.gz`, the launcher's
+`installer/Output/CoreOfLight-linux-<arch>.tar.gz` (with `libSDL3.so.0` beside `coreoflight`), and
+`installer/Output/CoreOfLight-<version>-<x86_64|aarch64>.AppImage`, where the architecture comes from
+the build machine (`linux-amd64-release` or `linux-arm64-release`). appimagetool 1.9.1 and the Type 2
+runtime 20251108 are cached in `$SKYLANDERS_WORK/tools` and checked against fixed SHA-256 hashes for
+both architectures. Use `APPIMAGETOOL` and `APPIMAGE_RUNTIME` to supply your own copies. An AppImage
+runs from a read-only mount and doesn't update itself: it opens the release page instead. `publish`
+uploads every Linux asset built into the output folders, so one release can carry amd64 and arm64
+next to each other, and the release notes describe both tarballs and both AppImages.
 
 ## tools/
 

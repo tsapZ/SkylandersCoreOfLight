@@ -38,7 +38,7 @@ constexpr char kBuildDir[] = "out/build/win-amd64-release";
 constexpr char kRuntimeLibrary[] = "rexruntime.dll";
 #else
 #define COL_EXE_EXT ""
-constexpr char kBuildDir[] = "out/build/linux-amd64-release";
+constexpr char kBuildDir[] = "out/build/linux-" COREOFLIGHT_LINUX_ARCH "-release";
 constexpr char kRuntimeLibrary[] = "librexruntime.so";
 #endif
 
@@ -402,7 +402,7 @@ std::string SetupVersion(const Game& game, const fs::path& setup) {
   const std::string prefix = std::string(game.repo) + "Setup-";
   if (stem.starts_with(prefix)) return stem.substr(prefix.size());
 
-  constexpr std::string_view kTarSuffix = "-linux-amd64.tar.gz";
+  constexpr std::string_view kTarSuffix = "-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz";
   const std::string filename = PathUtf8(setup.filename());
   const std::string tar_prefix = std::string(game.repo) + "-";
   if (filename.ends_with(kTarSuffix) && filename.starts_with(tar_prefix) &&
@@ -500,7 +500,7 @@ fs::path FindSetup(const Game& game, const fs::path& launcher_dir) {
 #ifdef _WIN32
       if (!name.starts_with(prefix) || entry.path().extension() != ".exe") continue;
 #else
-      if (!name.starts_with(prefix) || !name.ends_with("-linux-amd64.tar.gz")) continue;
+      if (!name.starts_with(prefix) || !name.ends_with("-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz")) continue;
 #endif
       const std::string version = SetupVersion(game, entry.path());
       const auto t = entry.last_write_time(ec);

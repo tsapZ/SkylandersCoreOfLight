@@ -1010,9 +1010,9 @@ int main(int argc, char* argv[]) {
     char offset[32];
     std::snprintf(offset, sizeof(offset), "UTC%c%02ld:%02ld", off_s >= 0 ? '+' : '-', abs_s / 3600,
                   (abs_s % 3600) / 60);
-    coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION ", " + coreoflight::OsVersionSummary() +
-                        (start_fullscreen ? ", fullscreen" : ", window") + ", time zone " + offset + ", fonts " +
-                        g_fonts);
+    coreoflight::HubLog("launcher: start, " COREOFLIGHT_VERSION ", " + coreoflight::OsVersionSummary() + ", Linux " +
+                        COREOFLIGHT_LINUX_ARCH + (start_fullscreen ? ", fullscreen" : ", window") + ", time zone " +
+                        offset + ", fonts " + g_fonts);
     coreoflight::DetectGpu();
     LogDataFolderKind();
   }

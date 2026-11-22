@@ -223,8 +223,9 @@ drag that file in. After a crash the launcher offers it by itself.
 **Does my Wii or PS3 copy work?** No: these are the Xbox 360 games, set up from your own Xbox 360 discs (each game's page says which disc).
 
 **Does it run on Linux?** Yes: the launcher is native (a tarball that carries its SDL3, or an
-AppImage), and the six games build and run natively with clang 19 or newer. Linux is newer than the
-Windows path and less tested.
+AppImage) for x86-64 and ARM64, and the six games build and run natively with clang 19 or newer on
+both. ARM64 (a Steam Frame, for example) is the newest path, built and tested there, and less tested
+than x86-64.
 
 **Why do the screenshots look so plain?** The games' artwork belongs to Activision, so the
 pictures here leave it out. The banner at the top is our own drawing.
