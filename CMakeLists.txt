@@ -117,8 +117,11 @@ target_compile_definitions(coreoflight PRIVATE COREOFLIGHT_VERSION="${COREOFLIGH
 
 if(WIN32)
   # IMGUI_IMPL_WIN32_DISABLE_GAMEPAD: the launcher reads every XInput pad itself (pad_state.h).
+  # SetupVersion() and the update message use this on every platform; on Windows the releases are
+  # .exe setups, so the Linux suffix is only compiled and the message names the platform.
   target_compile_definitions(coreoflight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
-                                                 IMGUI_IMPL_WIN32_DISABLE_GAMEPAD)
+                                                 IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
+                                                 COREOFLIGHT_LINUX_ARCH="amd64")
   target_link_libraries(coreoflight PRIVATE skylanders_portal_figures skylanders_alchemy d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
 else()
   # The suffix in every Linux release asset's name (portable launcher, game setups and updates).

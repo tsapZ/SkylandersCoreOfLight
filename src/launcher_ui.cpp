@@ -2127,6 +2127,13 @@ bool LauncherUi::DrawUpdateConfirm(float width, float height) {
 
 namespace {
 
+// What a release without an asset for this machine is named in the log and the toast.
+#ifdef _WIN32
+constexpr char kReleasePlatform[] = "Windows";
+#else
+constexpr char kReleasePlatform[] = "Linux " COREOFLIGHT_LINUX_ARCH;
+#endif
+
 // A release asset's file name as a path (the names are ASCII).
 std::filesystem::path AssetPath(const std::string& name) { return std::filesystem::path(std::u8string(name.begin(), name.end())); }
 
@@ -2229,11 +2236,11 @@ void LauncherUi::UpdateReleases() {
                   8.0);
       }
     } else {
-      // GitHub answered, but no release has an asset for this machine's architecture (yet).
-      HubLog("updates: GitHub has no Linux " COREOFLIGHT_LINUX_ARCH " release asset");
+      // GitHub answered, but no release has an asset for this machine (yet).
+      HubLog("updates: GitHub has no " + std::string(kReleasePlatform) + " release asset");
       if (manual) {
-        ShowToast(german_ ? "F\xC3\xBCr Linux " COREOFLIGHT_LINUX_ARCH " gibt es noch keine Ver\xC3\xB6" "ffentlichung"
-                          : "There is no Linux " COREOFLIGHT_LINUX_ARCH " release yet",
+        ShowToast(german_ ? "F\xC3\xBCr " + std::string(kReleasePlatform) + " gibt es noch keine Ver\xC3\xB6" "ffentlichung"
+                          : "There is no " + std::string(kReleasePlatform) + " release yet",
                   8.0);
       }
     }
