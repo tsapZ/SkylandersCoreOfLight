@@ -29,11 +29,39 @@
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++"
       }
+    },
+    {
+      "name": "linux-arm64-release",
+      "displayName": "Linux ARM64 Release (Clang + Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/linux-arm64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_FLAGS": "-march=armv8-a",
+        "CMAKE_CXX_FLAGS": "-march=armv8-a"
+      }
+    },
+    {
+      "name": "linux-arm64-debug",
+      "displayName": "Linux ARM64 Debug (Clang + Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/linux-arm64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_FLAGS": "-march=armv8-a",
+        "CMAKE_CXX_FLAGS": "-march=armv8-a"
+      }
     }
   ],
   "buildPresets": [
     { "name": "release", "configurePreset": "release" },
     { "name": "linux-amd64-release", "configurePreset": "linux-amd64-release" },
-    { "name": "linux-amd64-debug", "configurePreset": "linux-amd64-debug" }
+    { "name": "linux-amd64-debug", "configurePreset": "linux-amd64-debug" },
+    { "name": "linux-arm64-release", "configurePreset": "linux-arm64-release" },
+    { "name": "linux-arm64-debug", "configurePreset": "linux-arm64-debug" }
   ]
 }
