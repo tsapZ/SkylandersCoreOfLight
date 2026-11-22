@@ -8,14 +8,38 @@ if [ -z "$version" ]; then
   exit 1
 fi
 
-bin="$repo/out/build/linux-amd64-release/coreoflight"
+case "$(uname -m)" in
+  x86_64|amd64) arch="amd64" ;;
+  aarch64|arm64) arch="arm64" ;;
+  *)
+    echo "Unsupported machine architecture: $(uname -m) (expected x86_64 or aarch64)" >&2
+    exit 1
+    ;;
+esac
+
+preset="linux-$arch-release"
+bin="$repo/out/build/$preset/coreoflight"
 if [ ! -x "$bin" ]; then
-  echo "$bin is missing: build the linux-amd64-release preset first" >&2
+  echo "$bin is missing: build the $preset preset first" >&2
   exit 1
+fi
+if command -v readelf >/dev/null 2>&1; then
+  machine="$(readelf -h "$bin" | awk -F: '/Machine:/ {gsub(/^[ \t]+/, "", $2); print $2; exit}')"
+  case "$arch" in
+    amd64) expected="X86-64" ;;
+    arm64) expected="AArch64" ;;
+  esac
+  case "$machine" in
+    *"$expected"*) ;;
+    *)
+      echo "$bin is $machine but the host is $arch: build the $preset preset on this machine" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 staging="$repo/installer/staging"
-pkg_dir="coreoflight-linux-amd64-release"
+pkg_dir="coreoflight-linux-$arch-release"
 stage="$staging/$pkg_dir"
 rm -rf "$staging"
 mkdir -p "$stage"
@@ -26,11 +50,12 @@ if command -v strip >/dev/null 2>&1; then
   strip --strip-unneeded "$stage/coreoflight"
 fi
 
-# SDL3 is not in Ubuntu 24.04 or Debian 12, so the launcher carries the one it was linked
-# against: the binary's RPATH is $ORIGIN (CMakeLists.txt), which finds it next to itself.
+# SDL3 is not in Ubuntu 24.04 or Debian 12, and SteamOS doesn't package the 3.4 line, so the
+# launcher carries the one it was linked against: the binary's RPATH is $ORIGIN (CMakeLists.txt),
+# which finds it next to itself.
 sdl3="$(ldd "$bin" 2>/dev/null | awk '/[[:space:]]libSDL3\.so\.0 => / {print $3; exit}')"
 if [ -z "$sdl3" ] || [ ! -f "$sdl3" ]; then
-  echo "libSDL3.so.0 not found: the launcher links it, and Ubuntu 24.04 has no SDL3 package." >&2
+  echo "libSDL3.so.0 not found: the launcher links it, and the base system may not package SDL3." >&2
   echo "Build and install SDL 3.4.20 first (or point CMAKE_PREFIX_PATH at it)." >&2
   exit 1
 fi
@@ -80,6 +105,6 @@ esac
 
 out="$repo/installer/Output"
 mkdir -p "$out"
-tarball="$out/CoreOfLight-linux-amd64.tar.gz"
+tarball="$out/CoreOfLight-linux-$arch.tar.gz"
 tar -C "$staging" -czf "$tarball" "$pkg_dir"
 ls -lh "$tarball"

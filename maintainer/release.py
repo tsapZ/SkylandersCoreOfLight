@@ -22,6 +22,7 @@ import glob
 import json
 import os
 import pathlib
+import platform
 import re
 import shutil
 import subprocess
@@ -224,6 +225,16 @@ def in_vs(command):
     return f'cmd /d /s /c "call "{vcvars()}" >nul && {command}"'
 
 
+def host_arch():
+    """The architecture in the Linux preset and package names: amd64 or arm64."""
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        return "amd64"
+    if machine in ("aarch64", "arm64"):
+        return "arm64"
+    raise SystemExit(f"unsupported Linux architecture: {machine or 'unknown'} (expected x86_64 or aarch64)")
+
+
 def linux_compilers(for_games):
     """Select the compiler pair passed to CMake. Ubuntu installs clang-19 under versioned names."""
     for suffix in ("", "-19"):
@@ -260,6 +271,7 @@ def cmd_build(a):
     logs = sk.WORK / "logs"
     failed = []
     linux = sys.platform.startswith("linux")
+    preset = f"linux-{host_arch()}-release" if linux else "win-amd64-release"
     repos = pick_repos(a.repos)
     if linux:
         for_games = any(repo != sk.HUB for repo in repos)
@@ -271,8 +283,8 @@ def cmd_build(a):
         steps = []
         if repo == sk.HUB:
             if linux:
-                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release", *compilers]))
-                steps.append(("build", ["cmake", "--build", "--preset", "linux-amd64-release"]))
+                steps.append(("configure", ["cmake", "--preset", preset, *compilers]))
+                steps.append(("build", ["cmake", "--build", "--preset", preset]))
                 if a.recipe in ("package-installer", "package-linux"):
                     steps.append(("package", ["bash", str(d / "tools" / "package_linux.sh")]))
                     steps.append(("package-appimage", ["bash", str(d / "tools" / "package_appimage.sh")]))
@@ -293,7 +305,7 @@ def cmd_build(a):
                   + (" (none made yet)" if a.pgo and not use else ""))
             if linux:
                 recipe = "package-linux" if a.recipe in ("package-installer", "package-linux") else a.recipe
-                steps.append(("configure", ["cmake", "--preset", "linux-amd64-release", *compilers,
+                steps.append(("configure", ["cmake", "--preset", preset, *compilers,
                                             f"-DSKYLANDERS_PGO_PROFILE={value}"]))
                 steps.append((recipe, ["just", recipe]))
                 if a.test:
@@ -303,7 +315,7 @@ def cmd_build(a):
                 steps.append((a.recipe, in_vs(f"just {a.recipe}")))
                 if a.test:
                     steps.append(("test", in_vs("just test-release")))
-        build_dir = d / "out" / "build" / ("linux-amd64-release" if linux else "win-amd64-release")
+        build_dir = d / "out" / "build" / preset
         for name, command in steps:
             log = logs / f"{repo}_{name}.log"
             started = datetime.datetime.now()
@@ -372,7 +384,7 @@ def check_repo(repo, history=False):
     if private:
         problems.append(f"commits with a non-noreply e-mail: {sorted(private)}")
     scan_roots = [d / "installer" / "staging"]
-    scan_roots += [p for p in (d / "dist").glob("*-linux-amd64-release") if p.is_dir()]
+    scan_roots += [p for p in (d / "dist").glob("*-linux-*-release") if p.is_dir()]
     if user:
         needles = [f"Users\\{user}", f"Users/{user}", f"/home/{user}"]
         for root in scan_roots:
@@ -401,7 +413,7 @@ def check_repo(repo, history=False):
                     problems.append(f"{f.name} holds the developer kit")
     # The private repositories (the developer kit, GiantsDecomp) must never be built into a
     # release: their CMake variables stay empty in the release build folder.
-    for preset in ("win-amd64-release", "linux-amd64-release"):
+    for preset in ("win-amd64-release", "linux-amd64-release", "linux-arm64-release"):
         cache = d / "out" / "build" / preset / "CMakeCache.txt"
         if cache.exists():
             for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -428,9 +440,11 @@ def footer(repo, version):
     if repo == sk.HUB:
         if linux:
             return (
-                f"**Install:** download `CoreOfLight-linux-amd64.tar.gz` and unpack it (the SDL3 it needs, which "
+                f"**Install:** download `CoreOfLight-linux-amd64.tar.gz` (x86-64) or "
+                f"`CoreOfLight-linux-arm64.tar.gz` (ARM64) and unpack it (the SDL3 it needs, which "
                 "Ubuntu 24.04 doesn't package, is inside), or take the AppImage: "
-                f"`chmod +x CoreOfLight-{version}-x86_64.AppImage` and run it. The tarball updates itself; an "
+                f"`chmod +x CoreOfLight-{version}-x86_64.AppImage` or "
+                f"`chmod +x CoreOfLight-{version}-aarch64.AppImage`, and run it. The tarball updates itself; an "
                 "AppImage doesn't, so download the new file for a newer version.\n\n"
                 "On first start it asks for your own Xbox 360 discs as ISO files and installs the games for them, "
                 "downloading each game's tarball from its repository. Nothing of the games comes with this project.\n\n"
@@ -452,7 +466,8 @@ def footer(repo, version):
         return (
             f"**The easy way:** install [Core of Light](https://github.com/{GH}/{sk.HUB}/releases), the launcher. It "
             "sets this game up from your disc and keeps it up to date by itself.\n\n"
-            f"**On its own:** download `{repo}-linux-amd64.tar.gz`, unpack it, and run "
+            f"**On its own:** download `{repo}-linux-amd64.tar.gz` (x86-64) or "
+            f"`{repo}-linux-arm64.tar.gz` (ARM64), unpack it, and run "
             "`./linux-setup.sh <your ISO>` (an ISO file or an extracted disc folder). It copies the disc into `rom/` "
             "next to the game and writes the settings file. The README says which disc version it needs.\n\n"
             "The game's data (graphics, sound, levels, movies) doesn't come with it: the setup takes it from your own "

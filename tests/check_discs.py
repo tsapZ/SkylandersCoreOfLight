@@ -11,16 +11,23 @@ ones in the manifest that aren't there are fine. Standard library only.
 import argparse
 import json
 import pathlib
+import platform
 import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 
 
+def default_exe() -> pathlib.Path:
+    """The launcher of this machine's release preset (linux-amd64 or linux-arm64)."""
+    machine = platform.machine().lower()
+    arch = "arm64" if machine in ("aarch64", "arm64") else "amd64"
+    return pathlib.Path(f"out/build/linux-{arch}-release") / "coreoflight"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--exe", default=str(pathlib.Path("out/build/linux-amd64-release") / "coreoflight"),
-                        help="the launcher (default: %(default)s)")
+    parser.add_argument("--exe", default=str(default_exe()), help="the launcher (default: %(default)s)")
     parser.add_argument("--dir", required=True, help="a folder of .iso files")
     parser.add_argument("--expect", default=str(HERE / "discs_expected.json"),
                         help="the expected results (default: %(default)s)")
