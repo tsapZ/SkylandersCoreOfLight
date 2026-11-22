@@ -12,15 +12,14 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"Wii U figures (new): from your own extracted Wii U SuperChargers or Imaginators, SkyP4tcher's converter adds "
-     "the Nintendo figures to your game (here in the launcher settings).",
-     "Wii-U-Figuren (neu): aus deinem eigenen entpackten Wii-U-SuperChargers oder -Imaginators bringt SkyP4tchers "
-     "Konverter die Nintendo-Figuren in dein Spiel (hier in den Launcher-Einstellungen)."},
-    {"The disc search finds unpacked discs too (a folder with default.xex), not only ISO files (mitch030504).",
-     "Die Disc-Suche findet auch entpackte Discs (ein Ordner mit default.xex), nicht nur ISO-Dateien (mitch030504)."},
-    {"The start screen: the bar at the bottom is sharp, and the cards' edges and the chosen card's light are clean.",
-     "Der Startbildschirm: die Leiste unten ist scharf, die Kartenr\xC3\xA4nder und das Licht der gew\xC3\xA4hlten "
-     "Karte sind sauber."},
+    {"The 3DS games (new): the five 3DS Skylanders, recompiled for Windows. 3 / R3 on the start screen; each one is set up from your own cartridge dump (the European editions for now).",
+     "Die 3DS-Spiele (neu): die f\xC3\xBCnf 3DS-Skylanders, f\xC3\xBCr Windows \xC3\xBC" "bersetzt. 3 / R3 auf dem Startbildschirm; jedes wird aus deinem eigenen Modul-Dump eingerichtet (vorerst die europ\xC3\xA4ischen Ausgaben)."},
+    {"A disc of another build of one of the games (the Russian Spyro's Adventure, for example) is named with its version instead of \"unknown\" (mitch030504).",
+     "Eine Disc eines anderen Builds eines der Spiele (etwa das russische Spyro's Adventure) wird mit ihrer Version genannt statt \"unbekannt\" (mitch030504)."},
+    {"Imaginators' Wii U figures take the language you imported: put them in again once and Bowser's and Donkey Kong's upgrades follow it.",
+     "Die Wii-U-Figuren von Imaginators \xC3\xBC" "bernehmen die importierte Sprache: einmal neu einbauen, dann folgen ihr die Verbesserungen von Bowser und Donkey Kong."},
+    {"Linux: the launcher comes back after a game on Wayland desktops.",
+     "Linux: der Launcher kommt nach einem Spiel auf Wayland-Desktops wieder."},
 };
 
 }  // namespace coreoflight

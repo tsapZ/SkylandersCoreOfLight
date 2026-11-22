@@ -171,6 +171,9 @@ the game.
 - **Wii U figures:** the Nintendo figures of the Wii U SuperChargers and Imaginators, from your own
   extracted Wii U game, with SkyP4tcher's converters (launcher settings). Your game's own files are
   kept, and the same button puts them back.
+- **The 3DS games:** the five 3DS Skylanders, recompiled for Windows
+  ([tsapZ/3dsrecomp](https://github.com/tsapZ/3dsrecomp/releases)). 3 or R3 on the start screen;
+  each is installed and set up from your own cartridge dump (the European editions for now).
 - **Controller, keyboard or mouse:** the button hints at the bottom follow what you use, and can be
   clicked.
 
