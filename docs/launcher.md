@@ -465,22 +465,29 @@ Dear ImGui (thirdparty/imgui, 1.92.5, the version the games' SDK uses), so it bu
 and needs neither the SDK nor the games' sources.
 
 On Linux it is SDL3 + OpenGL 3.3 instead. Needs clang, SDL3 3.4.20 (Ubuntu 24.04 and Debian 12
-don't package it), libusb, curl, OpenSSL, libarchive and OpenGL headers:
+don't package it; SteamOS doesn't package the 3.4 line), libusb, curl, OpenSSL, libarchive and
+OpenGL headers. The presets are per architecture: `linux-amd64-release` on x86-64,
+`linux-arm64-release` on ARM64 (CMake reads `CMAKE_SYSTEM_PROCESSOR` and the packaging scripts
+`uname -m`, so both sides always agree):
 
-    cmake --preset linux-amd64-release -DCMAKE_PREFIX_PATH=/path/to/sdl3
+    cmake --preset linux-amd64-release -DCMAKE_PREFIX_PATH=/path/to/sdl3   # or linux-arm64-release
     cmake --build --preset linux-amd64-release
-    bash tools/package_linux.sh      # installer/Output/CoreOfLight-linux-amd64.tar.gz
-    bash tools/package_appimage.sh   # installer/Output/CoreOfLight-<version>-x86_64.AppImage
+    bash tools/package_linux.sh      # installer/Output/CoreOfLight-linux-<arch>.tar.gz
+    bash tools/package_appimage.sh   # installer/Output/CoreOfLight-<version>-<x86_64|aarch64>.AppImage
 
 The tarball holds `coreoflight`, its fonts and the `libSDL3.so.0` it links (found through the
 binary's `$ORIGIN` rpath, so the target machine needs no SDL3). The AppImage has the same files in
 one file; it doesn't update itself, its update question opens the release page. appimagetool 1.9.1 and
 the Type 2 runtime 20251108 are cached in `$SKYLANDERS_WORK/tools` (default
-`~/SkylandersDev/tools`) and checked against their pinned SHA-256 hashes;
+`~/SkylandersDev/tools`) and checked against their pinned SHA-256 hashes (x86_64 and aarch64);
 `APPIMAGETOOL` and `APPIMAGE_RUNTIME` point at copies of your own. Packaging needs `file`
 and uses `curl` to fetch the two pinned assets. If FUSE is unavailable, start the AppImage with
 `--appimage-extract-and-run`. Both packages use the system's OpenGL libraries. On a minimal
 Ubuntu 24.04 install, add `libopengl0` if `libOpenGL.so.0` is missing.
+
+The launcher's own update and every game's setup are looked for under the machine's architecture
+(`-linux-amd64` or `-linux-arm64`), so an arm64 launcher never downloads an amd64 game or swaps
+itself for an amd64 binary.
 
 The installer (`installer/CoreOfLight.iss`, Inno Setup 6): `tools\package_installer.ps1 -Games`
 after the release build. It stages the exe, the Visual C++ runtime DLLs from the local Visual

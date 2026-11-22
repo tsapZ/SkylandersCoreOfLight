@@ -8,7 +8,7 @@ temporary folder: the SHA-256 and the code pin, exact and same-code matching, a 
 that are neither. No disc and no game data are needed.
 
 ```
-cmake --preset linux-amd64-release
+cmake --preset linux-amd64-release   # or linux-arm64-release on ARM64
 cmake --build --preset linux-amd64-release
 ctest --test-dir out/build/linux-amd64-release --output-on-failure
 ```
@@ -23,6 +23,9 @@ is unpacked and no user data is written. Standard library only.
 ```
 python3 tests/check_discs.py --exe out/build/linux-amd64-release/coreoflight --dir /path/to/isos
 ```
+
+Without `--exe`, the script takes this machine's preset (`linux-amd64-release` on x86-64,
+`linux-arm64-release` on ARM64).
 
 A collection that holds only some of the discs is fine: the ISOs that are there are checked, the
 others are not required. The Russian Spyro's Adventure disc is in the list as `other`: the
