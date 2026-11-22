@@ -8,7 +8,10 @@ if [ -z "$version" ]; then
   exit 1
 fi
 
-case "$(uname -m)" in
+# COREOFLIGHT_ARCH=arm64 (or amd64) packages a launcher cross-built for that architecture, e.g. ARM64 from an x86-64
+# machine with qemu-user (the library check runs the target's own loader); default: this machine.
+host_arch="$(uname -m)"
+case "${COREOFLIGHT_ARCH:-$host_arch}" in
   x86_64|amd64) arch="amd64" ;;
   aarch64|arm64) arch="arm64" ;;
   *)
@@ -44,16 +47,27 @@ stage="$staging/$pkg_dir"
 rm -rf "$staging"
 mkdir -p "$stage"
 
+# The libraries a binary resolves (ldd), through the target's loader under qemu when it is for another machine.
+list_deps() {
+  case "$arch:$host_arch" in
+    arm64:aarch64|arm64:arm64|amd64:x86_64|amd64:amd64) ldd "$1" 2>/dev/null ;;
+    arm64:*) qemu-aarch64-static -L / /lib/ld-linux-aarch64.so.1 --list "$1" 2>/dev/null ;;
+    amd64:*) qemu-x86_64-static -L / /lib64/ld-linux-x86-64.so.2 --list "$1" 2>/dev/null ;;
+  esac
+}
+
 cp "$bin" "$stage/coreoflight"
 chmod 0755 "$stage/coreoflight"
-if command -v strip >/dev/null 2>&1; then
+if [ -n "${COREOFLIGHT_ARCH:-}" ] && command -v llvm-strip-19 >/dev/null 2>&1; then
+  llvm-strip-19 --strip-unneeded "$stage/coreoflight"  # (a cross build: GNU strip knows only the host's format)
+elif command -v strip >/dev/null 2>&1; then
   strip --strip-unneeded "$stage/coreoflight"
 fi
 
 # SDL3 is not in Ubuntu 24.04 or Debian 12, and SteamOS doesn't package the 3.4 line, so the
 # launcher carries the one it was linked against: the binary's RPATH is $ORIGIN (CMakeLists.txt),
 # which finds it next to itself.
-sdl3="$(ldd "$bin" 2>/dev/null | awk '/[[:space:]]libSDL3\.so\.0 => / {print $3; exit}')"
+sdl3="$(list_deps "$bin" | awk '/[[:space:]]libSDL3\.so\.0 => / && !f {print $3; f = 1}')"
 if [ -z "$sdl3" ] || [ ! -f "$sdl3" ]; then
   echo "libSDL3.so.0 not found: the launcher links it, and the base system may not package SDL3." >&2
   echo "Build and install SDL 3.4.20 first (or point CMAKE_PREFIX_PATH at it)." >&2
@@ -94,7 +108,7 @@ if [ -f "$rules" ]; then
 fi
 
 # The staged copy has to find its own SDL3 (the build machine's would be gone on the target).
-resolved="$(ldd "$stage/coreoflight" 2>/dev/null | awk '/[[:space:]]libSDL3\.so\.0 => / {print $3; exit}')"
+resolved="$(list_deps "$stage/coreoflight" | awk '/[[:space:]]libSDL3\.so\.0 => / && !f {print $3; f = 1}')"
 case "$resolved" in
   "$stage"/*) ;;
   *)
