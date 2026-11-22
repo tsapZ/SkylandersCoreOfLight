@@ -19,6 +19,7 @@ struct Game {
   const char* name_en;    // "Spyro's Adventure"
   const char* name_de;
   int year;               // 2011
+  uint32_t title_id;      // 415608AB: its default.xex's title, for naming another build of it
   const char* exe;        // "ssarecompiled.exe"
   const char* repo;       // "SSARecomp", the folder of its repository
   const char* app_name;   // "Spyro's Adventure Recompiled", its installer's folder
@@ -41,13 +42,28 @@ struct XexId {
   std::string sha256;    // lower-case hex
   std::string code_pin;  // "<code address>:<SHA-256>", empty without an XEX2 header
   std::string header;    // "title 41560911, version 0.0.0.20, Europe and Australia (00FF0000), ..."
+  // The same facts, for a message about a build the ports don't know; 0/false without an XEX2
+  // header (a file that is no XEX at all, or cut short).
+  uint32_t title_id = 0;
+  uint32_t version = 0;  // major 4 bits, minor 4, build 16, qfe 8
+  uint32_t region = 0;   // 0xFF North America, 0xFF00 Japan and Asia, 0xFF0000 Europe and Australia
+  bool has_header = false;
 };
 XexId IdentifyXex(const void* data, size_t size);
-// Whether the xex is one of `list`'s (a Game's xex_sha256): its SHA-256, or its code pin (another
-// pressing with the same code).
+// How a default.xex is one of `list`'s (a Game's xex_sha256, comma separated): its SHA-256
+// (kExact), else its code pin (kSameCode, another pressing with the same code); kNone otherwise.
+enum class XexMatch {
+  kNone,
+  kExact,
+  kSameCode,
+};
+XexMatch MatchXex(std::string_view list, const XexId& xex);
+// Whether the xex is one of `list`'s (kExact or kSameCode).
 bool XexInList(std::string_view list, const XexId& xex);
 // Whether the xex is one of the game's discs.
 bool IsGameDisc(const Game& game, const XexId& xex);
+// The game whose title the xex names (another build of it), or -1; only when it has an XEX2 header.
+int GameForTitleId(uint32_t title_id);
 
 enum class DiscState {
   kUnknown,    // not checked yet

@@ -40,6 +40,8 @@ set(COREOFLIGHT_SOURCES
   src/main.cpp
   src/platform.cpp
   src/games.cpp
+  src/disc_id.cpp
+  src/disc_report.cpp
   src/game_settings.cpp
   src/hub_settings.cpp
   src/disc_import.cpp
@@ -134,4 +136,20 @@ if(MSVC)
   target_compile_options(coreoflight PRIVATE /W3 /utf-8)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(coreoflight PRIVATE -Wall -Wextra -Wno-unused-parameter -ffile-prefix-map=${CMAKE_SOURCE_DIR}/=)
+endif()
+
+# The disc check's own tests (disc_id.cpp, xiso.cpp; no window and no game data): a synthetic XEX2
+# header and a synthetic XDVDFS image. The game lists stay in games.cpp, which needs the launcher's
+# window; CheckDiscReport covers them against real discs (tests/README.md).
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(coreoflight_disc_id_test tests/disc_id_test.cpp src/disc_id.cpp src/xiso.cpp)
+  target_include_directories(coreoflight_disc_id_test PRIVATE src ${PORTAL_DIR}/src)
+  target_compile_features(coreoflight_disc_id_test PRIVATE cxx_std_20)
+  if(WIN32)
+    target_link_libraries(coreoflight_disc_id_test PRIVATE bcrypt)
+  else()
+    target_link_libraries(coreoflight_disc_id_test PRIVATE OpenSSL::Crypto Threads::Threads)
+  endif()
+  add_test(NAME disc_id COMMAND coreoflight_disc_id_test)
 endif()
