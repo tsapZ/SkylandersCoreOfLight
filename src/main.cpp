@@ -1057,7 +1057,12 @@ int main(int argc, char* argv[]) {
         game_shown = true;
         coreoflight::HubLog("game: launcher hidden while game runs");
         ui->GameWindowShown();
+#ifndef __linux__
         SDL_MinimizeWindow(window);
+#endif
+        // Linux: hidden only (Core of Light #130, KDE Plasma on Wayland): Wayland has no request to take a window
+        // out of its minimized state again, so SDL kept the flag after the game, the loop below drew nothing, and
+        // the launcher never came back.
         SDL_HideWindow(window);
       }
     }
@@ -1086,7 +1091,13 @@ int main(int argc, char* argv[]) {
       ImGui::GetIO().ClearInputKeys();
     }
 
+#ifdef __linux__
+    // Hidden only: a Wayland compositor doesn't tell a window whether it is minimized, so the flag can stay set
+    // after a restore (#130); drawing a minimized window costs little.
+    if (SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) {
+#else
     if (SDL_GetWindowFlags(window) & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN)) {
+#endif
       SDL_Delay(50);
       continue;
     }
