@@ -375,7 +375,8 @@ uint64_t Now() { return NowFileTimeTicks(); }
 }  // namespace
 
 std::optional<Release> FetchLatestRelease(const std::string& repo, const std::string& asset_prefix,
-                                          const std::string& extension, const std::string& tag_prefix) {
+                                          const std::string& extension, const std::string& tag_prefix, bool* answered) {
+  if (answered) *answered = false;
   // /releases rather than /releases/latest: that one leaves out pre-releases, and ours are betas.
   std::string body;
   const std::string url = "https://api.github.com/repos/" + std::string(kOwner) + "/" + repo + "/releases?per_page=10";
@@ -387,6 +388,7 @@ std::optional<Release> FetchLatestRelease(const std::string& repo, const std::st
                nullptr)) {
     return std::nullopt;
   }
+  if (answered) *answered = true;
   Json releases;
   if (!JsonParser(body).Parse(releases) || releases.kind != Json::Kind::kArray) return std::nullopt;
   // The highest version with its setup, not the first in the list: GitHub sorts the list by the

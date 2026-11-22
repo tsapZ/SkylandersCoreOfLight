@@ -20,7 +20,7 @@ inline constexpr char kPortablePrefix[] = "CoreOfLightPortable";
 inline constexpr char kPortableExtension[] = ".zip";
 #else
 inline constexpr char kPortablePrefix[] = "CoreOfLight";
-inline constexpr char kPortableExtension[] = "-linux-amd64.tar.gz";
+inline constexpr char kPortableExtension[] = "-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz";
 #endif
 
 // Whether the launcher in `launcher_dir` is the portable one (portable.txt next to it).
