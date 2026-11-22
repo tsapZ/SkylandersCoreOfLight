@@ -31,6 +31,9 @@ if(NOT WIN32)
     message(FATAL_ERROR "Unsupported Linux architecture: ${CMAKE_SYSTEM_PROCESSOR} (expected x86_64 or aarch64)")
   endif()
   message(STATUS "Linux architecture: ${COREOFLIGHT_LINUX_ARCH}")
+else()
+  # Windows builds are x64; code shared with Linux (SetupVersion's tarball names) keeps amd64 as before.
+  set(COREOFLIGHT_LINUX_ARCH "amd64")
 endif()
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui)
@@ -113,6 +116,8 @@ endif()
 
 # thirdparty/stb: stb_image's zlib decoder for Imaginators' archives (language_import.cpp) and PNG textures.
 target_include_directories(coreoflight PRIVATE src ${IMGUI_DIR} ${IMGUI_DIR}/backends thirdparty/stb)
+# The suffix in every Linux release asset's name (portable launcher, game setups and updates).
+target_compile_definitions(coreoflight PRIVATE COREOFLIGHT_LINUX_ARCH="${COREOFLIGHT_LINUX_ARCH}")
 target_compile_definitions(coreoflight PRIVATE COREOFLIGHT_VERSION="${COREOFLIGHT_VERSION}")
 
 if(WIN32)
@@ -121,8 +126,6 @@ if(WIN32)
                                                  IMGUI_IMPL_WIN32_DISABLE_GAMEPAD)
   target_link_libraries(coreoflight PRIVATE skylanders_portal_figures skylanders_alchemy d3d11 dxgi d3dcompiler bcrypt shell32 ole32 windowscodecs winmm winhttp)
 else()
-  # The suffix in every Linux release asset's name (portable launcher, game setups and updates).
-  target_compile_definitions(coreoflight PRIVATE COREOFLIGHT_LINUX_ARCH="${COREOFLIGHT_LINUX_ARCH}")
   find_package(OpenGL REQUIRED)
   find_package(SDL3 REQUIRED CONFIG)
   find_package(CURL REQUIRED)

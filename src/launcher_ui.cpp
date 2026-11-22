@@ -2130,6 +2130,13 @@ namespace {
 // A release asset's file name as a path (the names are ASCII).
 std::filesystem::path AssetPath(const std::string& name) { return std::filesystem::path(std::u8string(name.begin(), name.end())); }
 
+// The release assets' platform in the update messages (PR #134): "Windows", or "Linux amd64" / "Linux arm64".
+#ifdef _WIN32
+#define COL_ASSET_PLATFORM "Windows"
+#else
+#define COL_ASSET_PLATFORM "Linux " COREOFLIGHT_LINUX_ARCH
+#endif
+
 // Versioned local filename for downloaded release archives when the upstream asset omits version.
 std::filesystem::path LocalAssetPath(const Release& r) {
 #ifndef _WIN32
@@ -2230,10 +2237,10 @@ void LauncherUi::UpdateReleases() {
       }
     } else {
       // GitHub answered, but no release has an asset for this machine's architecture (yet).
-      HubLog("updates: GitHub has no Linux " COREOFLIGHT_LINUX_ARCH " release asset");
+      HubLog("updates: GitHub has no " COL_ASSET_PLATFORM " release asset");
       if (manual) {
-        ShowToast(german_ ? "F\xC3\xBCr Linux " COREOFLIGHT_LINUX_ARCH " gibt es noch keine Ver\xC3\xB6" "ffentlichung"
-                          : "There is no Linux " COREOFLIGHT_LINUX_ARCH " release yet",
+        ShowToast(german_ ? "F\xC3\xBCr " COL_ASSET_PLATFORM " gibt es noch keine Ver\xC3\xB6" "ffentlichung"
+                          : "There is no " COL_ASSET_PLATFORM " release yet",
                   8.0);
       }
     }
