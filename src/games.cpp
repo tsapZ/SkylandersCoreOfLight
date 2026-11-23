@@ -18,6 +18,7 @@
 
 #include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
+#include "portal/figure_file.h"
 #include "gpu_tier.h"
 #include "handheld.h"
 #include "hub_log.h"  // WineVersion
@@ -791,8 +792,7 @@ int CountFigures() {
   std::error_code ec;
   for (fs::recursive_directory_iterator it(FiguresDir(), ec), end; it != end; it.increment(ec)) {
     if (ec) break;
-    const auto ext = it->path().extension();
-    if (it->is_regular_file(ec) && (ext == ".dump" || ext == ".sky" || ext == ".bin")) ++count;
+    if (it->is_regular_file(ec) && skylanders::portal::IsFigureFileName(it->path())) ++count;
   }
   return count;
 }
