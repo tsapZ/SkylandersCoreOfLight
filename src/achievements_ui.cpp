@@ -291,12 +291,28 @@ void AchievementsScreen::DrawInfo(float width, float height, float u) {
   const Achievement& a = list_.items[size_t(selected_)];
   const bool got = a.unlocked != 0;
   dl->AddRectFilled({0, 0}, {width, height}, Rgba(0, 0, 0, 150));
-  const float w = std::min(760 * u, width - 96 * u), h = 360 * u;
+  const float w = std::min(760 * u, width - 96 * u);
+  const float icon = 168 * u;
+  // The text column right of the picture. ImDrawList::AddText takes the wrap width, not the right
+  // edge: with the edge's x a long description ran out of the box (SkylandersCoreOfLight #141).
+  const float tw = w - 72 * u - icon - 32 * u;
+  char score[16];
+  std::snprintf(score, sizeof(score), "%uG", a.gamerscore);
+  const float name_w = tw - TextWidth(bold_, 24 * u, score) - 16 * u;
+  const float name_h = std::max(52 * u, bold_->CalcTextSizeA(32 * u, FLT_MAX, name_w, a.name.c_str()).y + 12 * u);
+  const float about_h = regular_->CalcTextSizeA(21 * u, FLT_MAX, tw, a.description.c_str()).y + 14 * u;
+  std::string locked;
+  if (!a.locked_description.empty() && a.locked_description != a.description) {
+    locked = (german_ ? "Vor dem Freischalten: " : "Before it is unlocked: ") + a.locked_description;
+  }
+  const float locked_h = locked.empty() ? 0.0f : regular_->CalcTextSizeA(18 * u, FLT_MAX, tw, locked.c_str()).y + 14 * u;
+  // The box grows with a long text, so the unlock line stays above the bottom row (count, Close).
+  const float when_y = std::max(40 * u + name_h + about_h + locked_h, 230 * u);
+  const float h = std::min(std::max(360 * u, when_y + 130 * u), height - 48 * u);
   const ImVec2 p0{(width - w) * 0.5f, (height - h) * 0.5f}, p1{p0.x + w, p0.y + h};
   dl->AddRectFilled(p0, p1, Rgba(24, 30, 70, 250), 22 * u);
   dl->AddRect(p0, p1, got ? kGold : kEdge, 22 * u, 0, 3.0f * u);
   // The picture large, round as in the list.
-  const float icon = 168 * u;
   const ImVec2 c{p0.x + 40 * u + icon * 0.5f, p0.y + 40 * u + icon * 0.5f};
   dl->AddCircleFilled(c, icon * 0.5f, Rgba(18, 18, 22));
   if (const ImTextureID texture = a.picture.empty() ? ImTextureID{} : LoadTexture(a.picture)) {
@@ -304,20 +320,14 @@ void AchievementsScreen::DrawInfo(float width, float height, float u) {
                         {0, 0}, {1, 1}, got ? kWhite : Rgba(255, 255, 255, 90), icon * 0.5f);
   }
   if (got) dl->AddCircle(c, icon * 0.5f, kGreen, 64, 4.0f * u);
-  const float tx = p0.x + 72 * u + icon, tw = p1.x - tx - 32 * u;
+  const float tx = p0.x + 72 * u + icon;
   float ty = p0.y + 40 * u;
-  char score[16];
-  std::snprintf(score, sizeof(score), "%uG", a.gamerscore);
   Text(dl, bold_, 24 * u, {p1.x - 32 * u - TextWidth(bold_, 24 * u, score), ty}, got ? kGold : kDim, score);
-  dl->AddText(bold_, 32 * u, {tx, ty}, kWhite, a.name.c_str(), nullptr, tx + tw - TextWidth(bold_, 24 * u, score) - 16 * u);
-  ty += 52 * u;
-  dl->AddText(regular_, 21 * u, {tx, ty}, kDim, a.description.c_str(), nullptr, tx + tw);
-  ty += regular_->CalcTextSizeA(21 * u, FLT_MAX, tw, a.description.c_str()).y + 14 * u;
-  if (!a.locked_description.empty() && a.locked_description != a.description) {
-    const std::string locked = (german_ ? "Vor dem Freischalten: " : "Before it is unlocked: ") + a.locked_description;
-    dl->AddText(regular_, 18 * u, {tx, ty}, Rgba(140, 150, 180), locked.c_str(), nullptr, tx + tw);
-    ty += regular_->CalcTextSizeA(18 * u, FLT_MAX, tw, locked.c_str()).y + 14 * u;
-  }
+  dl->AddText(bold_, 32 * u, {tx, ty}, kWhite, a.name.c_str(), nullptr, name_w);
+  ty += name_h;
+  dl->AddText(regular_, 21 * u, {tx, ty}, kDim, a.description.c_str(), nullptr, tw);
+  ty += about_h;
+  if (!locked.empty()) dl->AddText(regular_, 18 * u, {tx, ty}, Rgba(140, 150, 180), locked.c_str(), nullptr, tw);
   std::string when;
   if (got) {
     const std::string date = FileTimeDate(a.unlocked, german_), clock = FileTimeClock(a.unlocked);
@@ -327,7 +337,7 @@ void AchievementsScreen::DrawInfo(float width, float height, float u) {
   } else {
     when = german_ ? "Noch nicht freigeschaltet" : "Not unlocked yet";
   }
-  Text(dl, bold_, 21 * u, {tx, std::max(ty, p0.y + 230 * u)}, got ? kGreen : kDim, when);
+  Text(dl, bold_, 21 * u, {tx, p0.y + when_y}, got ? kGreen : kDim, when);
   char count[96];
   std::snprintf(count, sizeof(count), german_ ? "%d von %zu Erfolgen dieses Spiels" : "%d of this game's %zu achievements",
                 list_.unlocked, list_.items.size());
