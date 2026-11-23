@@ -76,8 +76,7 @@ std::vector<fs::path> FigureFiles(const Profile& p) {
   std::error_code ec;
   for (fs::recursive_directory_iterator it(ProfileFiguresDir(p), ec), end; it != end; it.increment(ec)) {
     if (ec) break;
-    const auto ext = it->path().extension();
-    if (!it->is_regular_file(ec) || (ext != ".dump" && ext != ".sky" && ext != ".bin")) continue;
+    if (!it->is_regular_file(ec) || !skylanders::portal::IsFigureFileName(it->path())) continue;
     if (IsRealToySubpath(it->path())) continue;
     files.push_back(it->path());
   }

@@ -92,9 +92,9 @@ void FigureImport::Start(const fs::path& source, const Found& imaginators, const
       std::string ext = it->path().extension().string();
       std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
       const auto size = it->file_size(ec);
-      // Figure files only: a dump's 1024 bytes, or a .dump / .bin that isn't (said why).
+      // Figure files only: a dump's 1024 bytes, or a .dump / .bin / .dmp that isn't (said why).
       if (ec || size != 1024) {
-        if (ext == ".dump" || ext == ".bin") skip(it->path(), german ? "keine 1024 Bytes" : "not 1024 bytes");
+        if (ext == ".dump" || ext == ".bin" || ext == ".dmp") skip(it->path(), german ? "keine 1024 Bytes" : "not 1024 bytes");
         continue;
       }
       const auto data = sp::LoadFigureFile(it->path());

@@ -87,10 +87,8 @@ bool WriteIniValues(const fs::path& path, const std::vector<std::pair<std::strin
   return MoveReplaceFile(temp, path);
 }
 
-bool IsFigureFile(const fs::path& p) {
-  const auto ext = p.extension();
-  return ext == ".dump" || ext == ".sky" || ext == ".bin";
-}
+// The lib's list (.dump, .sky, .bin, .dmp; any case), the same files the games' portal menu reads.
+bool IsFigureFile(const fs::path& p) { return sp::IsFigureFileName(p); }
 
 }  // namespace
 
