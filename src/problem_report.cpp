@@ -230,13 +230,11 @@ std::vector<fs::path> Newest(const fs::path& dir, const std::string& extension, 
 
 fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& launcher_dir, bool german,
                             std::string& error) {
-  fs::path desktop = DesktopDir();
-  if (desktop.empty()) desktop = DocumentsDir();
   const LocalDateTime t = NowLocalDateTime();
   char name[96];
   std::snprintf(name, sizeof(name), "%s-%04d-%02d-%02d-%02d%02d.txt", "Skylanders-problem-report", t.year, t.month,
                 t.day, t.hour, t.minute);
-  const fs::path report_path = desktop / PathFromUtf8(name);
+  const fs::path filename = PathFromUtf8(name);
 
   const auto words = PrivateWords();
   auto clean = [&](std::string text) {
@@ -339,9 +337,15 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   // The launcher's own log (hub_log.h): discs, updates, games started and ended.
   if (std::string text = ReadTail(HubLogFile(), kLogTail); !text.empty()) report.Add("launcher/coreoflight.log", clean(text));
 
-  if (!report.Write(report_path)) {
-    error = german ? "Konnte den Bericht nicht auf den Desktop schreiben" : "Could not write the report to the desktop";
-    return {};
+  const fs::path desktop = DesktopDir();
+  const fs::path documents = DocumentsDir();
+  fs::path report_path = desktop / filename;
+  if (desktop.empty() || !report.Write(report_path)) {
+    report_path = documents / filename;
+    if (documents.empty() || documents == desktop || !report.Write(report_path)) {
+      error = german ? "Konnte den Problembericht nicht schreiben" : "Could not write the problem report";
+      return {};
+    }
   }
   // The notes' pictures beside it, <report>-1.png, -2.png, ...
   int picture = 0;

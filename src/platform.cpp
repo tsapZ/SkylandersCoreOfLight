@@ -505,9 +505,22 @@ bool MovePathToTrash(const fs::path& path) {
   return SHFileOperationW(&op) == 0 && !op.fAnyOperationsAborted;
 #else
   std::error_code ec;
-  const fs::path abs_path = fs::weakly_canonical(path, ec);
-  const fs::path src = abs_path.empty() ? fs::absolute(path, ec) : abs_path;
-  if (!fs::exists(src, ec)) return false;
+  // Move the link itself, not what it points at: resolving the last component would move the
+  // target out from under a link that stays behind dangling (Core of Light #104). Only the parent
+  // is resolved, so the trash info holds the entry's real absolute path.
+  fs::path parent = path.parent_path();
+  if (parent.empty()) parent = fs::path(".");
+  const fs::path canonical_parent = fs::weakly_canonical(parent, ec);
+  if (!ec) {
+    parent = canonical_parent;
+  } else {
+    ec.clear();
+    parent = fs::absolute(parent, ec);
+    if (ec) return false;
+  }
+  const fs::path src = parent / path.filename();
+  const fs::file_status entry_status = fs::symlink_status(src, ec);
+  if (ec || entry_status.type() == fs::file_type::not_found) return false;
 
   const fs::path trash = PathFromUtf8(XdgDataHome()) / "Trash";
   const fs::path files_dir = trash / "files";
@@ -545,13 +558,13 @@ bool MovePathToTrash(const fs::path& path) {
     }
   }
 
-  fs::rename(path, dest_file, ec);
+  fs::rename(src, dest_file, ec);
   if (!ec) return true;
   if (ec == std::errc::cross_device_link) {
     ec.clear();
-    fs::copy(path, dest_file, fs::copy_options::recursive | fs::copy_options::copy_symlinks, ec);
+    fs::copy(src, dest_file, fs::copy_options::recursive | fs::copy_options::copy_symlinks, ec);
     if (!ec) {
-      fs::remove_all(path, ec);
+      fs::remove_all(src, ec);
       return !ec;
     }
     fs::remove_all(dest_file, ec);
@@ -819,8 +832,10 @@ void* SpawnProcess(const fs::path& exe, const std::vector<std::string>& args, co
   SetErrorMode(error_mode | SEM_FAILCRITICALERRORS);
   const BOOL created = CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, flags, nullptr,
                                       cwd_w.empty() ? nullptr : cwd_w.c_str(), &startup, &info);
+  const DWORD create_error = created ? ERROR_SUCCESS : GetLastError();
   SetErrorMode(error_mode);
   if (!created) {
+    SetLastError(create_error);
     return nullptr;
   }
   CloseHandle(info.hThread);
@@ -862,14 +877,14 @@ void* SpawnProcess(const fs::path& exe, const std::vector<std::string>& args, co
 #endif
 }
 
-bool IsProcessRunning(void* handle, uint32_t wait_ms, int* exit_code) {
+bool IsProcessRunning(void* handle, uint32_t wait_ms, int64_t* exit_code) {
   if (!handle) return false;
 #ifdef _WIN32
   const HANDLE h = static_cast<HANDLE>(handle);
   if (WaitForSingleObject(h, wait_ms) == WAIT_TIMEOUT) return true;
   if (exit_code) {
     DWORD code = 0;
-    *exit_code = GetExitCodeProcess(h, &code) ? int(code) : -1;
+    *exit_code = GetExitCodeProcess(h, &code) ? int64_t(code) : -1;
   }
   return false;
 #else
@@ -910,7 +925,6 @@ void TerminateAndCloseProcess(void*& handle) {
 #ifdef _WIN32
   const HANDLE h = static_cast<HANDLE>(handle);
   TerminateProcess(h, 1);
-  WaitForSingleObject(h, 5000);
   CloseHandle(h);
   handle = nullptr;
 #else
@@ -919,7 +933,8 @@ void TerminateAndCloseProcess(void*& handle) {
     kill(proc->pid, SIGTERM);
     if (IsProcessRunning(handle, 200)) {
       kill(proc->pid, SIGKILL);
-      IsProcessRunning(handle, 0xFFFFFFFFu);
+      CloseProcessHandle(handle);
+      return;
     }
   }
   delete proc;
@@ -936,7 +951,10 @@ void CloseProcessHandle(void*& handle) {
   auto* proc = static_cast<PosixProcess*>(handle);
   if (!proc->exited && proc->pid > 0) {
     int status = 0;
-    const pid_t r = waitpid(proc->pid, &status, WNOHANG);
+    pid_t r;
+    do {
+      r = waitpid(proc->pid, &status, WNOHANG);
+    } while (r < 0 && errno == EINTR);
     if (r == 0) {
       std::lock_guard lock(g_orphan_mutex);
       g_orphan_pids.push_back(proc->pid);

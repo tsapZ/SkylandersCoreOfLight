@@ -8,8 +8,6 @@
 #else
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
-#include <dlfcn.h>
-#include <execinfo.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -775,7 +773,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 namespace {
 
 char g_crash_log_path[1024] = {};
-pthread_t g_main_pthread{};
 
 void AppendCrashBytes(int fd, const char* data, size_t len) {
   while (len > 0) {
@@ -820,18 +817,6 @@ void AppendCrashDec(int fd, unsigned long v) {
   AppendCrashBytes(fd, buf, size_t(len));
 }
 
-void AppendCrashAddress(int fd, void* addr) {
-  Dl_info info{};
-  if (dladdr(addr, &info) && info.dli_fname && info.dli_fbase) {
-    const char* slash = std::strrchr(info.dli_fname, '/');
-    AppendCrashStr(fd, slash ? slash + 1 : info.dli_fname);
-    AppendCrashStr(fd, "+");
-    AppendCrashHex(fd, uintptr_t(addr) - uintptr_t(info.dli_fbase));
-  } else {
-    AppendCrashHex(fd, uintptr_t(addr));
-  }
-}
-
 void SignalCrashHandler(int sig, siginfo_t* si, void*) {
   const int fd = g_crash_log_path[0] ? ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644) : STDERR_FILENO;
   if (fd >= 0) {
@@ -839,26 +824,15 @@ void SignalCrashHandler(int sig, siginfo_t* si, void*) {
     AppendCrashDec(fd, static_cast<unsigned long>(sig));
     if (si && si->si_addr) {
       AppendCrashStr(fd, " at ");
-      AppendCrashAddress(fd, si->si_addr);
+      AppendCrashHex(fd, uintptr_t(si->si_addr));
     }
-    AppendCrashStr(fd, pthread_equal(pthread_self(), g_main_pthread) ? ", main thread\n" : ", another thread\n");
-    void* frames[12]{};
-    const int nframes = ::backtrace(frames, 12);
-    if (nframes > 0) {
-      AppendCrashStr(fd, "ERROR: launcher: called from ");
-      for (int i = 0; i < nframes; ++i) {
-        if (i) AppendCrashStr(fd, ", ");
-        AppendCrashAddress(fd, frames[i]);
-      }
-      AppendCrashStr(fd, "\n");
-    }
+    AppendCrashStr(fd, "\n");
     if (fd != STDERR_FILENO) ::close(fd);
   }
   std::raise(sig);
 }
 
 void InstallCrashHandler() {
-  g_main_pthread = pthread_self();
   const std::filesystem::path log_file = coreoflight::HubLogFile();
   std::error_code ec;
   if (!log_file.empty()) std::filesystem::create_directories(log_file.parent_path(), ec);
@@ -1069,7 +1043,7 @@ int main(int argc, char* argv[]) {
       }
     }
     if (game && game_shown) {
-      int code = 0;
+      int64_t code = 0;
       if (coreoflight::IsProcessRunning(game, 100, &code)) {
         ui->GameRunning();
         continue;

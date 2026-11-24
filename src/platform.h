@@ -67,7 +67,7 @@ bool ExtractArchive(const std::filesystem::path& archive_path,
 // (HANDLE on Windows, heap PosixProcess* on POSIX).
 void* SpawnProcess(const std::filesystem::path& exe, const std::vector<std::string>& args,
                    const std::filesystem::path& cwd = {}, bool no_window = false);
-bool IsProcessRunning(void* handle, uint32_t wait_ms = 0, int* exit_code = nullptr);
+bool IsProcessRunning(void* handle, uint32_t wait_ms = 0, int64_t* exit_code = nullptr);
 void TerminateAndCloseProcess(void*& handle);
 void CloseProcessHandle(void*& handle);
 uint64_t ProcessHandleId(void* handle);

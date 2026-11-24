@@ -381,7 +381,7 @@ void Ds3Install::Start(size_t index, const Ds3Dump* dump_ptr, bool package, bool
       const fs::path exe = dest / game.exe, out = dest / "resources" / "game";
       void* p = SpawnProcess(exe, {"--setup", PathUtf8(dump->file), "--out", PathUtf8(out)}, dest, true);
       if (!p) return fail(german ? "Die Einrichtung lie\xC3\x9F sich nicht starten." : "The setup couldn't be started.");
-      int code = -1;
+      int64_t code = -1;
       while (IsProcessRunning(p, 200, &code)) {
         if (s->cancel) {
           TerminateAndCloseProcess(p);
