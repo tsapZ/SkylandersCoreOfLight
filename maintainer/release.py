@@ -404,10 +404,15 @@ MOJIBAKE = re.compile("[\u00c2-\u00f4][\u0080-\u00bf]+")
 MOJIBAKE_EXT = (".cpp", ".h", ".inc", ".md", ".toml", ".example", ".iss", ".txt", ".py", ".ps1", ".sh", ".cmake", ".json")
 
 
-def user_path_patterns(user):
-    """Where a user name identifies a machine rather than ordinary prose (a user called `root`)."""
+GENERIC_ACCOUNT_NAMES = {"admin", "administrator", "builder", "guest", "root", "runner", "user"}
+
+
+def user_name_patterns(user):
+    """Require a path only for account names that commonly occur in prose."""
     name = re.escape(user)
-    return [rf"Users[\\/]{name}", rf"/home/{name}"]
+    if user.casefold() in GENERIC_ACCOUNT_NAMES:
+        return [rf"Users[\\/]{name}([\\/]|$)", rf"/home/{name}(/|$)"]
+    return [rf"\b{name}\b"]
 
 
 def check_repo(repo, history=False):
@@ -422,22 +427,21 @@ def check_repo(repo, history=False):
     if bad:
         problems.append("game data or figure files tracked: " + ", ".join(bad[:5]))
     if user:
-        # Only machine-identity patterns: a user name that is a common word (`root`) would
-        # otherwise flag ordinary prose. Vendored third-party files are left out too.
-        patterns = user_path_patterns(user)
+        # Vendored source credits may contain a maintainer's name.
+        patterns = user_name_patterns(user)
         hits = []
         for pattern in patterns:
             hits += sk.git(repo, "grep", "-I", "-i", "-l", "-E", "-e", pattern, "--", ".",
                             ":!thirdparty", check=False).splitlines()
         if hits:
-            problems.append("a build machine path in tracked files: " + ", ".join(sorted(set(hits))[:5]))
+            problems.append("the maintainer account name in tracked files: " + ", ".join(sorted(set(hits))[:5]))
         if history:
             commits = []
             for pattern in patterns:
                 commits += sk.git(repo, "log", "--all", "--format=%h", "-i", "-G", pattern, "--", ".",
                                   ":!thirdparty", check=False).split()
             if commits:
-                problems.append("a build machine path in the history: commits " + str(commits[:5]))
+                problems.append("the maintainer account name in the history: commits " + str(commits[:5]))
     # Double-encoded UTF-8 ("\u00c3\u00bc" for "\u00fc", tools/find_mojibake.py): a German help text went out
     # that way in Core of Light 0.3.0-beta.3.
     garbled = []

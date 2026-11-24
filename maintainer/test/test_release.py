@@ -191,10 +191,20 @@ class Notes(unittest.TestCase):
 class LeakPatterns(unittest.TestCase):
     def test_paths_match_but_prose_does_not(self):
         import re
-        patterns = release.user_path_patterns("root")
+        patterns = release.user_name_patterns("root")
         for text in ("/home/root/project", r"C:\Users\root\project", "Users/root/x"):
             self.assertTrue(any(re.search(p, text) for p in patterns), text)
         self.assertFalse(any(re.search(p, "the root directory") for p in patterns))
+
+    def test_personal_name_matches_whole_words_in_prose(self):
+        import re
+        pattern, = release.user_name_patterns("FrostFixture")
+        self.assertIsNotNone(re.search(pattern, "A note by frostfixture.", re.I))
+        self.assertIsNone(re.search(pattern, "A note by FrostFixtureSuffix.", re.I))
+
+    def test_generic_names_are_case_insensitive(self):
+        self.assertEqual(release.user_name_patterns("ROOT"), [p.replace("root", "ROOT")
+                         for p in release.user_name_patterns("root")])
 
 
 class Compilers(unittest.TestCase):
