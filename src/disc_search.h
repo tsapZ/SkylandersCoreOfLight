@@ -25,6 +25,7 @@ struct FoundDisc {
   std::filesystem::path disc;
   bool languages = false;
   uint64_t bytes = 0;
+  bool unreadable = false;  // a disc chosen by hand that couldn't be read (no default.xex)
 };
 
 struct DiscSearch {
@@ -37,7 +38,11 @@ struct DiscSearch {
 // Starts a search; `stop` ends it early, `done` says it has finished.
 std::shared_ptr<DiscSearch> StartDiscSearch();
 // The same over the given folders only, each `depth` folder levels down (the setup's look next to
-// a disc chosen by hand: its folder and the one above).
+// a disc chosen by hand: its folder and the one above). `discs` are read first, before the
+// folders look at them, so a disc chosen by hand is inspected once, on this worker rather than the
+// UI's thread; one that can't be read comes back with `unreadable` set.
 std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<std::filesystem::path, int>> roots);
+std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<std::filesystem::path, int>> roots,
+                                            std::vector<std::filesystem::path> discs);
 
 }  // namespace coreoflight

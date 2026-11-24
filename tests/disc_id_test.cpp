@@ -220,6 +220,46 @@ int main() {
     CHECK(IdentifyXex(read.data(), read.size()).code_pin == id.code_pin);
   }
 
+  // The case-aware disc root: no file, another case of the name, and the plain one.
+  {
+    const fs::path folder = dir / "case_disc";
+    fs::create_directories(folder, ec);
+    CHECK(coreoflight::FindDiscXex(folder).empty());
+    std::vector<uint8_t> none_read;
+    CHECK(!ReadDiscXex(folder, none_read, nullptr));  // a folder without default.xex
+    std::ofstream(folder / "DEFAULT.XEX", std::ios::binary) << a;
+    const fs::path found = coreoflight::FindDiscXex(folder);
+    CHECK(!found.empty());
+    CHECK(found.filename().u8string() == std::u8string(u8"DEFAULT.XEX"));
+    std::vector<uint8_t> read;
+    CHECK(ReadDiscXex(folder, read, nullptr));
+    CHECK(std::string(read.begin(), read.end()) == a);
+  }
+
+  // A path that isn't there, or has no name: no disc, no hang, and the size left alone.
+  {
+    std::vector<uint8_t> read;
+    uint64_t bytes = 123;
+    CHECK(!ReadDiscXex(dir / "missing.iso", read, &bytes));
+    CHECK(bytes == 123);
+    CHECK(!ReadDiscXex(fs::path(), read, nullptr));
+    CHECK(coreoflight::FindDiscXex(dir / "missing").empty());
+  }
+
+  // One rule for naming a disc: an exact pressing wins over a same-code one earlier in the list.
+  {
+    const Game same{"same", "Same", "Same", 2011, 0x41560911, "same.exe", "SameRecomp", "Same", id.code_pin.c_str()};
+    const Game exact{"exact", "Exact", "Exact", 2011, 0x41560911, "exact.exe", "ExactRecomp", "Exact", id.sha256.c_str()};
+    const std::vector<Game> games = {same, exact};
+    CHECK(coreoflight::GameForDiscIn(games, id) == 1);  // exact, though same-code is first
+    CHECK(coreoflight::GameForDiscIn({same}, id) == 0);  // only a same-code pressing
+    CHECK(coreoflight::GameForDiscIn(games, IdentifyXex(c.data(), c.size())) == -1);
+    // The title route names another build of a known game (0 is no title).
+    CHECK(coreoflight::GameForTitleIdIn(games, 0x41560911) == 0);
+    CHECK(coreoflight::GameForTitleIdIn(games, 0) == -1);
+    CHECK(coreoflight::GameForTitleIdIn(games, 0x12345678) == -1);
+  }
+
   // A file that is no disc image.
   {
     const fs::path garbage = dir / "garbage.iso";

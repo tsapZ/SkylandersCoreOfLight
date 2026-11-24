@@ -271,11 +271,32 @@ std::string Sha256Hex(const void* data, size_t size) {
   return out;
 }
 
+fs::path FindDiscXex(const fs::path& folder) {
+  std::error_code ec;
+  if (!fs::is_directory(folder, ec)) return {};
+  // The plain name first (the usual case, no listing needed), then any other case of it. A link is
+  // declined here as in the scan below: a disc root is a real file, not one pointing elsewhere.
+  const fs::path plain = folder / "default.xex";
+  if (!fs::is_symlink(plain, ec) && !ec && fs::is_regular_file(plain, ec)) return plain;
+  ec.clear();
+  for (fs::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {
+    std::error_code type_ec;
+    if (it->is_symlink(type_ec) || !it->is_regular_file(type_ec)) continue;
+    std::u8string name = it->path().filename().u8string();
+    for (char8_t& c : name) {
+      if (c >= u8'A' && c <= u8'Z') c = char8_t(c - u8'A' + u8'a');
+    }
+    if (name == u8"default.xex") return it->path();
+  }
+  return {};
+}
+
 bool ReadDiscXex(const fs::path& disc, std::vector<uint8_t>& out, uint64_t* bytes) {
   std::error_code ec;
   if (fs::is_directory(disc, ec)) {
     // An unpacked disc: a folder with default.xex in it (the browser's "Diesen Ordner einlesen").
-    const fs::path xex = disc / "default.xex";
+    const fs::path xex = FindDiscXex(disc);
+    if (xex.empty()) return false;
     const uintmax_t size = fs::file_size(xex, ec);
     if (ec || size == 0 || size > (512ull << 20)) return false;
     std::ifstream in(xex, std::ios::binary);
@@ -283,14 +304,31 @@ bool ReadDiscXex(const fs::path& disc, std::vector<uint8_t>& out, uint64_t* byte
     out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     if (out.empty()) return false;
     if (bytes) {
-      *bytes = 0;
+      // Every file but the system update's; a walk that hit an error (a folder gone, no permission)
+      // leaves the total unknown (0) rather than a low guess.
+      uint64_t total = 0;
+      bool complete = true;
       for (fs::recursive_directory_iterator it(disc, ec), end; it != end; it.increment(ec)) {
-        if (ec) break;
-        if (!it->is_regular_file(ec)) continue;
+        if (ec) {
+          complete = false;
+          break;
+        }
+        if (!it->is_regular_file(ec)) {
+          if (ec) {
+            complete = false;
+            break;
+          }
+          continue;
+        }
         const std::u8string relative = it->path().lexically_relative(disc).generic_u8string();
         if (XisoImage::InFolder(std::string(relative.begin(), relative.end()), "$SystemUpdate")) continue;
-        *bytes += it->file_size(ec);
+        total += it->file_size(ec);
+        if (ec) {
+          complete = false;
+          break;
+        }
       }
+      *bytes = complete ? total : 0;
     }
     return true;
   }

@@ -91,6 +91,7 @@ class SetupScreen {
   int folder_ = 0;
   std::shared_ptr<DiscSearch> search_;
   size_t taken_ = 0;  // the search's results looked at so far
+  std::filesystem::path pending_disc_;  // chosen by hand, being read by the search's worker
   int current_ = -1;  // the game being set up (kWork)
   bool stopping_ = false;
   Job job_;

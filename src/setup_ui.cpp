@@ -18,7 +18,6 @@
 #include "imgui.h"
 #include "nxe_art.h"
 #include "platform.h"
-#include "xiso.h"
 
 namespace coreoflight {
 namespace {
@@ -130,6 +129,7 @@ void SetupScreen::Open() {
   rows_.assign(AllGames().size(), Row{});
   search_.reset();
   taken_ = 0;
+  pending_disc_.clear();
   current_ = -1;
   stopping_ = false;
   job_ = {};
@@ -203,9 +203,44 @@ void SetupScreen::TakeSearchResults() {
     for (; taken_ < search_->found.size(); ++taken_) found.push_back(search_->found[taken_]);
   }
   for (const FoundDisc& d : found) {
+    // A disc chosen by hand comes back first (StartDiscSearch's `discs`), once its worker has read it.
+    const bool picked = !pending_disc_.empty() && d.disc == pending_disc_;
+    if (picked) pending_disc_.clear();
+    if (d.unreadable) {
+      if (picked) {
+        message_ = german_ ? "Das ist keine Xbox-360-Disc (ISO oder entpackter Ordner)."
+                           : "That isn't an Xbox 360 disc (ISO or unpacked folder).";
+      }
+      continue;
+    }
     // Imaginators' PS3 disc isn't one to set up (its languages come later, in the settings).
-    if (d.game < 0 || d.languages || size_t(d.game) >= rows_.size()) continue;
+    if (d.game < 0 || d.languages || size_t(d.game) >= rows_.size()) {
+      if (picked) {
+        message_ = german_ ? "Diese Disc-Version unterst\xC3\xBCtzt keines der Spiele."
+                           : "None of the games supports this disc version.";
+      }
+      continue;
+    }
     Row& r = rows_[size_t(d.game)];
+    if (picked) {
+      r.disc = d.disc;
+      r.bytes = d.bytes;
+      r.automatic = false;
+      if (r.state != State::kReady) {
+        r.state = State::kFound;
+        r.chosen = true;
+      }
+      message_.clear();
+      if (pick_for_ >= 0 && size_t(pick_for_) != size_t(d.game)) {
+        const Game& g = AllGames()[size_t(d.game)];
+        message_ = (german_ ? "Das ist die Disc von " : "That is the disc of ") +
+                   std::string(german_ ? g.name_de : g.name_en) +
+                   (german_ ? ": dort eingetragen." : ": filled in there.");
+      }
+      selected_ = d.game;
+      pick_for_ = -1;
+      continue;
+    }
     if (!r.disc.empty() || r.state == State::kReady) continue;
     r.disc = d.disc;
     r.bytes = d.bytes;
@@ -218,45 +253,17 @@ void SetupScreen::TakeSearchResults() {
 void SetupScreen::AddDisc(const std::filesystem::path& disc) {
   if (page_ == Page::kWelcome) page_ = Page::kDiscs;  // dropped on the window before
   if (page_ != Page::kDiscs) return;
-  std::vector<uint8_t> data;
-  uint64_t bytes = 0;
-  if (!ReadDiscXex(disc, data, &bytes)) {
-    message_ = german_ ? "Das ist keine Xbox-360-Disc (ISO oder entpackter Ordner)."
-                       : "That isn't an Xbox 360 disc (ISO or unpacked folder).";
-    return;
-  }
-  const XexId id = IdentifyXex(data.data(), data.size());
-  for (size_t i = 0; i < AllGames().size() && i < rows_.size(); ++i) {
-    if (!IsGameDisc(AllGames()[i], id)) continue;
-    Row& r = rows_[i];
-    r.disc = disc;
-    r.bytes = bytes;
-    r.automatic = false;
-    if (r.state != State::kReady) {
-      r.state = State::kFound;
-      r.chosen = true;
-    }
-    message_.clear();
-    if (pick_for_ >= 0 && size_t(pick_for_) != i) {
-      const Game& g = AllGames()[i];
-      message_ = (german_ ? "Das ist die Disc von " : "That is the disc of ") + std::string(german_ ? g.name_de : g.name_en) +
-                 (german_ ? ": dort eingetragen." : ": filled in there.");
-    }
-    selected_ = int(i);
-    pick_for_ = -1;
-    // The other games' discs are often next to it: its folder and the one above, one level down.
-    if (!search_ || search_->done) {
-      const fs::path folder = disc.parent_path();
-      const fs::path above = folder.has_relative_path() ? folder.parent_path() : folder;
-      if (search_) search_->stop = true;
-      search_ = StartDiscSearch({{above, 1}});
-      taken_ = 0;
-      nearby_ = true;
-    }
-    return;
-  }
-  message_ = german_ ? "Diese Disc-Version unterst\xC3\xBCtzt keines der Spiele."
-                     : "None of the games supports this disc version.";
+  // Read by the search's worker, not here: its default.xex and whole tree can be large and slow, and
+  // the look in the folder beside it then reuses this result instead of reading the disc again.
+  message_.clear();
+  pending_disc_ = disc;
+  // The other games' discs are often next to it: its folder and the one above, one level down.
+  const fs::path folder = disc.parent_path();
+  const fs::path above = folder.has_relative_path() ? folder.parent_path() : folder;
+  if (search_) search_->stop = true;
+  search_ = StartDiscSearch({{above, 1}}, {disc});
+  taken_ = 0;
+  nearby_ = true;
 }
 
 uint64_t SetupScreen::NeededBytes() const {

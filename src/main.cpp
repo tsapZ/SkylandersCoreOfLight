@@ -85,6 +85,7 @@ void LogTerminate() {
 struct LaunchOptions {
   std::filesystem::path iso;
   std::filesystem::path check_disc;
+  bool check_disc_given = false;  // --check_disc was on the command line (an empty one is an error)
   std::filesystem::path portable_update;
   std::string sc_language;
   std::string im_language;
@@ -93,67 +94,126 @@ struct LaunchOptions {
   bool test_crash = false;
 };
 
-void ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts) {
+enum class ParseResult { kOk, kHelp, kError };
+
+constexpr const char* kUsage =
+    "Usage: coreoflight [options] [disc]\n"
+    "\n"
+    "  disc                      an ISO image or an unpacked disc folder to set up\n"
+    "\n"
+    "Options:\n"
+    "  --help                    show this help and exit\n"
+    "  --check_disc=<disc>       print one JSON line about a disc and exit (no window)\n"
+    "  --documents=<folder>      where the saves and figures go (a copy, to try)\n"
+    "  --install_dir=<folder>    where games installed from the launcher go\n"
+    "  --offline                 no release check, no download\n"
+    "  --fullscreen              start fullscreen\n"
+    "  --no_game_art             no game pictures (scripted screenshots)\n"
+    "  --own_font                the launcher's own font, as under Wine\n"
+    "  --start_backdrop=game     the first game's backdrop\n"
+    "  --hint_pad=playstation    controller hints as that pad's (or nintendo)\n"
+    "  --portable_update=<zip>   apply a portable update and start it (test)\n"
+    "  --sc_language=<spec>      SuperChargers language import (test)\n"
+    "  --im_language=<spec>      Imaginators language import (test)\n"
+    "  --wiiu_figures=<spec>     Wii U figures test\n"
+    "  --ds3_package_zip=<zip>   a 3DS screen game package from a local ZIP\n"
+    "  --test_crash              crash on purpose, to see the crash lines (test)\n"
+    "  --                        everything after it is a positional disc path\n";
+
+// The switches are the launcher's whole command line: an unknown one is an error rather than a
+// disc path, so a typo doesn't start the window on a folder called "--fullscren". `--` ends the
+// switches: a disc whose name starts with "--" can follow it. Returns kHelp for --help.
+ParseResult ParseArgs(const std::vector<std::string>& args, LaunchOptions& opts, std::string& error) {
+  bool positional_only = false;
   for (size_t i = 1; i < args.size(); ++i) {
     const std::string& arg = args[i];
-    if (arg.starts_with("--documents=")) {
-      coreoflight::SetDocumentsDir(coreoflight::PathFromUtf8(arg.substr(12)));
-    } else if (arg.starts_with("--check_disc=")) {
-      // The disc check without a window (disc_report.h); set up nothing.
-      opts.check_disc = coreoflight::PathFromUtf8(arg.substr(13));
-    } else if (arg.starts_with("--install_dir=")) {
-      // A library folder for games installed from the launcher (games.h StartGameInstall).
-      coreoflight::SetInstallDir(coreoflight::PathFromUtf8(arg.substr(14)));
-    } else if (arg == "--no_game_art") {
-      // Screenshots to show: none of the games' pictures (textures.h), and the hints stay the
-      // controller's while the screenshot script presses keys (hints.h).
-      coreoflight::SetNoGameArt(true);
-      coreoflight::KeepControllerHints();
-    } else if (arg == "--start_backdrop=game") {
-      coreoflight::SetStartBackdropFromGame(true);  // launcher_ui.h (#78: to compare the two)
-    } else if (arg == "--own_font") {
-      g_own_font = true;  // the fallback font (Noto Sans) as under Wine
-    } else if (arg == "--offline") {
-      // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
-      coreoflight::SetOffline(true);
-    } else if (arg == "--hint_pad=playstation" || arg == "--hint_pad=nintendo") {
-      // The hints as that controller's from the start, whatever pad is used (#29; to see them
-      // without such a pad).
-      coreoflight::ForceHintPad(arg.ends_with("playstation") ? coreoflight::HintPad::kPlayStation
-                                                           : coreoflight::HintPad::kNintendo);
-    } else if (arg.starts_with("--portable_update=")) {
-      // A test of the portable launcher's update without a release (portable.h): this archive's
-      // launcher in this one's place, then started, as the update dialog does after its download.
-      opts.portable_update = coreoflight::PathFromUtf8(arg.substr(18));
-    } else if (arg.starts_with("--sc_language=")) {
-      // A test of SuperChargers' language import without the window (language_import.h).
-      opts.sc_language = arg.substr(14);
-    } else if (arg.starts_with("--im_language=")) {
-      // The same for Imaginators' import from its PS3 disc.
-      opts.im_language = arg.substr(14);
-    } else if (arg.starts_with("--wiiu_figures=")) {
-      // A test of the Wii U figures (wiiu_figures.h) without the window: "<sc|im>|<Wii U folder>|<game folder>" or
-      // "<sc|im>|restore|<game folder>".
-      opts.wiiu_figures = arg.substr(15);
-    } else if (arg == "--fullscreen") {
-      // Fullscreen for this start, whatever the setting says (Steam's launch options on a
-      // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
-      opts.fullscreen_arg = true;
-    } else if (arg.starts_with("--ds3_package_zip=")) {
-      // The 3DS screen's game package from a local ZIP (ds3_games.h, read there through LaunchArgs).
-    } else if (arg == "--test_crash") {
-      opts.test_crash = true;
+    if (!positional_only && arg == "--") {
+      positional_only = true;
+    } else if (!positional_only && arg == "--help") {
+      return ParseResult::kHelp;
+    } else if (!positional_only && arg.starts_with("--")) {
+      if (arg.starts_with("--documents=")) {
+        coreoflight::SetDocumentsDir(coreoflight::PathFromUtf8(arg.substr(12)));
+      } else if (arg.starts_with("--check_disc=")) {
+        // The disc check without a window (disc_report.h); set up nothing.
+        opts.check_disc_given = true;
+        opts.check_disc = coreoflight::PathFromUtf8(arg.substr(13));
+      } else if (arg.starts_with("--install_dir=")) {
+        // A library folder for games installed from the launcher (games.h StartGameInstall).
+        coreoflight::SetInstallDir(coreoflight::PathFromUtf8(arg.substr(14)));
+      } else if (arg == "--no_game_art") {
+        // Screenshots to show: none of the games' pictures (textures.h), and the hints stay the
+        // controller's while the screenshot script presses keys (hints.h).
+        coreoflight::SetNoGameArt(true);
+        coreoflight::KeepControllerHints();
+      } else if (arg == "--start_backdrop=game") {
+        coreoflight::SetStartBackdropFromGame(true);  // launcher_ui.h (#78: to compare the two)
+      } else if (arg == "--own_font") {
+        g_own_font = true;  // the fallback font (Noto Sans) as under Wine
+      } else if (arg == "--offline") {
+        // No releases, no check, nothing downloaded or installed from GitHub (scripted tests).
+        coreoflight::SetOffline(true);
+      } else if (arg == "--hint_pad=playstation" || arg == "--hint_pad=nintendo") {
+        // The hints as that controller's from the start, whatever pad is used (#29; to see them
+        // without such a pad).
+        coreoflight::ForceHintPad(arg.ends_with("playstation") ? coreoflight::HintPad::kPlayStation
+                                                              : coreoflight::HintPad::kNintendo);
+      } else if (arg.starts_with("--portable_update=")) {
+        // A test of the portable launcher's update without a release (portable.h): this archive's
+        // launcher in this one's place, then started, as the update dialog does after its download.
+        opts.portable_update = coreoflight::PathFromUtf8(arg.substr(18));
+      } else if (arg.starts_with("--sc_language=")) {
+        // A test of SuperChargers' language import without the window (language_import.h).
+        opts.sc_language = arg.substr(14);
+      } else if (arg.starts_with("--im_language=")) {
+        // The same for Imaginators' import from its PS3 disc.
+        opts.im_language = arg.substr(14);
+      } else if (arg.starts_with("--wiiu_figures=")) {
+        // A test of the Wii U figures (wiiu_figures.h) without the window: "<sc|im>|<Wii U folder>|<game folder>" or
+        // "<sc|im>|restore|<game folder>".
+        opts.wiiu_figures = arg.substr(15);
+      } else if (arg == "--fullscreen") {
+        // Fullscreen for this start, whatever the setting says (Steam's launch options on a
+        // handheld or a TV setup such as Bazzite; a colleague's wish, 2026-10-23).
+        opts.fullscreen_arg = true;
+      } else if (arg.starts_with("--ds3_package_zip=")) {
+        // The 3DS screen's game package from a local ZIP (ds3_games.h, read there through LaunchArgs).
+      } else if (arg == "--test_crash") {
+        opts.test_crash = true;
+      } else {
+        error = "unknown option: " + arg;
+        return ParseResult::kError;
+      }
     } else if (opts.iso.empty()) {
       opts.iso = coreoflight::PathFromUtf8(arg);
     }
   }
+  return ParseResult::kOk;
+}
+
+// The part of a start that needs no window or device: --help, a bad command line, and the headless
+// disc check (before SDL and video on Linux: a machine without usable video can still check a
+// disc). -1 when the launcher goes on to its window.
+int HandleCli(const LaunchOptions& opts, ParseResult parsed, const std::string& error) {
+  if (parsed == ParseResult::kHelp) {
+    std::printf("%s", kUsage);
+    return 0;
+  }
+  if (parsed == ParseResult::kError) {
+    std::fprintf(stderr, "%s\n\n%s", error.c_str(), kUsage);
+    return 2;
+  }
+  if (opts.check_disc_given) {
+    if (opts.check_disc.empty()) {
+      std::fprintf(stderr, "--check_disc needs a path to an ISO image or an unpacked disc folder.\n\n%s", kUsage);
+      return 2;
+    }
+    return coreoflight::CheckDiscReport(opts.check_disc);
+  }
+  return -1;
 }
 
 int RunHeadlessTools(const LaunchOptions& opts) {
-  if (!opts.check_disc.empty()) {
-    // One JSON line on stdout; no window, no user data (disc_report.h).
-    return coreoflight::CheckDiscReport(opts.check_disc);
-  }
   if (!opts.portable_update.empty()) {
     const std::filesystem::path exe = coreoflight::SelfExePath();
 #ifdef _WIN32
@@ -544,6 +604,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                                              GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
   RegisterClassExW(&wc);
   LaunchOptions opts;
+  std::string arg_error;
+  ParseResult parsed = ParseResult::kOk;
   int argc = 0;
   if (LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
     std::vector<std::string> utf8_args;
@@ -553,8 +615,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     for (std::string& s : utf8_args) argv_ptrs.push_back(s.data());
     LocalFree(argv);
     coreoflight::SetLaunchArgs(argc, argv_ptrs.data());
-    ParseArgs(utf8_args, opts);
+    parsed = ParseArgs(utf8_args, opts, arg_error);
   }
+  if (const int code = HandleCli(opts, parsed, arg_error); code >= 0) return code;
   if (opts.test_crash) {
     // A fault inside ntdll.dll on purpose (a string at address 0x10), to see the crash lines
     // LogFault writes: the module and offset, the thread, the calls back into the launcher.
@@ -921,7 +984,11 @@ int main(int argc, char* argv[]) {
   args.reserve(size_t(argc));
   for (int i = 0; i < argc; ++i) args.emplace_back(argv[i] ? argv[i] : "");
   LaunchOptions opts;
-  ParseArgs(args, opts);
+  std::string arg_error;
+  const ParseResult parsed = ParseArgs(args, opts, arg_error);
+  // --help, a bad switch and --check_disc need no SDL or video (a machine without usable video can
+  // still check a disc); the disc check runs before device initialization here.
+  if (const int code = HandleCli(opts, parsed, arg_error); code >= 0) return code;
 
   InstallCrashHandler();
   if (opts.test_crash) TriggerTestCrash();
