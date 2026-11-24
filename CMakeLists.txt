@@ -178,4 +178,12 @@ if(BUILD_TESTING)
   target_include_directories(coreoflight_pe_imports_test PRIVATE src)
   target_compile_features(coreoflight_pe_imports_test PRIVATE cxx_std_20)
   add_test(NAME pe_imports COMMAND coreoflight_pe_imports_test)
+  # The Linux game install/update transaction (games.cpp, game_install.h): synthetic packages in a
+  # scratch folder, no game or user data.
+  if(NOT WIN32)
+    add_executable(coreoflight_game_install_test tests/game_install_test.cpp)
+    target_include_directories(coreoflight_game_install_test PRIVATE src)
+    target_compile_features(coreoflight_game_install_test PRIVATE cxx_std_20)
+    add_test(NAME game_install COMMAND coreoflight_game_install_test)
+  endif()
 endif()
