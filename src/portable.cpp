@@ -3,9 +3,14 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <vector>
+
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #include "crc32.h"
 #include "hub_log.h"
@@ -69,11 +74,12 @@ bool ReadZip(const fs::path& file, std::vector<Entry>& entries, bool german, std
     return false;
   }
   const uint32_t count = Get16(b + end + 10), dir_size = Get32(b + end + 12), dir_at = Get32(b + end + 16);
-  if (uint64_t(dir_at) + dir_size > end) {
+  if (count > kArchiveMaxEntries || uint64_t(dir_at) + dir_size > end) {
     error = broken;
     return false;
   }
   size_t at = dir_at;
+  uint64_t total_size = 0;
   for (uint32_t i = 0; i < count; ++i) {
     if (at + 46 > end || Get32(b + at) != 0x02014B50) {
       error = broken;
@@ -89,6 +95,12 @@ bool ReadZip(const fs::path& file, std::vector<Entry>& entries, bool german, std
     const std::string name(zip.data() + at + 46, name_len);
     at += 46 + name_len + extra_len + comment_len;
     if (name.empty() || name.back() == '/' || name.back() == '\\') continue;  // a folder
+    // The unpacked sizes are the archive's word: they are checked before anything is allocated.
+    if (usize > kArchiveMaxMemberBytes || total_size + usize > kArchiveMaxBytes) {
+      error = broken;
+      return false;
+    }
+    total_size += usize;
     Entry entry;
     if (!SafeRelative(name, entry.path) || uint64_t(offset) + 30 > zip.size() || Get32(b + offset) != 0x04034B50) {
       error = broken;
@@ -133,14 +145,31 @@ bool EndsWithNoCase(std::string_view text, std::string_view suffix) {
 bool ReadTarArchive(const fs::path& archive_file, std::vector<Entry>& entries, bool german, std::string& error) {
   const std::string broken =
       german ? "Das heruntergeladene Update ist besch\xC3\xA4" "digt." : "The downloaded update is damaged.";
+#ifdef _WIN32
+  // ExtractArchive is POSIX-only (the Linux tarball is the only tar update there is).
+  (void)archive_file;
+  (void)entries;
+  error = broken;
+  return false;
+#else
   std::error_code ec;
-  const fs::path stage = TempDir() / "CoreOfLight" / ("portable_stage_" + std::to_string(MonotonicMs()));
-  fs::remove_all(stage, ec);
-  fs::create_directories(stage, ec);
+  // A directory of this run, created exclusively: a second update never shares (or clears) it.
+  const fs::path base = TempDir() / "CoreOfLight";
+  fs::create_directories(base, ec);
+  if (ec) {
+    error = broken;
+    return false;
+  }
+  std::string pattern = PathUtf8(base / "portable_stage_XXXXXX");
+  if (::mkdtemp(pattern.data()) == nullptr) {
+    error = broken;
+    return false;
+  }
+  const fs::path stage = PathFromUtf8(pattern);
   std::string archive_error;
   std::vector<fs::path> raw_files;
   const bool ok = ExtractArchive(
-      archive_file,
+      archive_file, stage,
       [&](const std::string& rel) -> fs::path {
         fs::path clean;
         if (!SafeRelative(rel, clean)) return {};
@@ -154,8 +183,39 @@ bool ReadTarArchive(const fs::path& archive_file, std::vector<Entry>& entries, b
     return false;
   }
   std::vector<fs::path> files;
+  std::error_code root_ec;
+  const fs::path real_stage = fs::weakly_canonical(stage, root_ec);
+  if (root_ec) {
+    fs::remove_all(stage, ec);
+    error = broken;
+    return false;
+  }
   for (const fs::path& rel : raw_files) {
-    if (fs::is_regular_file(stage / rel, ec)) files.push_back(rel);
+    const fs::path disk = stage / rel;
+    std::error_code st_ec;
+    const fs::file_status st = fs::symlink_status(disk, st_ec);
+    if (st_ec) {
+      fs::remove_all(stage, ec);
+      error = broken;
+      return false;
+    }
+    if (fs::is_regular_file(st)) {
+      files.push_back(rel);
+      continue;
+    }
+    if (!fs::is_symlink(st)) continue;
+    // An alias the package links to another member: only where it resolves inside the stage to a
+    // regular file, so a link never reads from (or writes to) anywhere else.
+    std::error_code link_ec;
+    const fs::path target = fs::weakly_canonical(disk, link_ec);
+    if (link_ec || target.empty()) continue;
+    const fs::path rel_target = target.lexically_relative(real_stage);
+    if (rel_target.empty() || rel_target.is_absolute() ||
+        std::any_of(rel_target.begin(), rel_target.end(), [](const fs::path& p) { return p == ".."; }) ||
+        !fs::is_regular_file(fs::symlink_status(target, link_ec))) {
+      continue;
+    }
+    files.push_back(rel);
   }
   if (files.empty()) {
     fs::remove_all(stage, ec);
@@ -186,10 +246,16 @@ bool ReadTarArchive(const fs::path& archive_file, std::vector<Entry>& entries, b
       return false;
     }
     e.data.assign(std::istreambuf_iterator<char>(in), {});
+    if (in.bad() || !in.eof()) {
+      fs::remove_all(stage, ec);
+      error = broken;
+      return false;
+    }
     entries.push_back(std::move(e));
   }
   fs::remove_all(stage, ec);
   return !entries.empty();
+#endif
 }
 
 }  // namespace
@@ -227,6 +293,33 @@ bool ApplyPortableUpdate(const fs::path& archive, const fs::path& launcher_dir, 
   std::error_code ec;
   const std::string cant_write = german ? "In den Ordner von Core of Light l\xC3\xA4sst sich nicht schreiben."
                                         : "Can't write to the launcher's folder.";
+  // A member below the launcher's folder, and no folder on the way there is a link (an earlier
+  // update's file must never lead a write anywhere else).
+  uint64_t total = 0;
+  for (const Entry& e : entries) total += e.data.size();
+  if (total > kArchiveMaxBytes) {
+    error = german ? "Das Update ist zu gro\xC3\x9F." : "The update is too large.";
+    return false;
+  }
+  auto contained = [&](const fs::path& rel) {
+    const fs::path target = launcher_dir / rel;
+    const fs::path rest = target.lexically_relative(launcher_dir);
+    if (rest.empty() || rest.is_absolute()) return false;
+    for (const fs::path& part : rest) {
+      if (part == "..") return false;
+    }
+    fs::path at = launcher_dir;
+    const fs::path parent = rest.parent_path();
+    for (const fs::path& part : parent) {
+      if (part.empty() || part == ".") continue;
+      at /= part;
+      const fs::file_status st = fs::symlink_status(at, ec);
+      if (ec && ec != std::errc::no_such_file_or_directory) return false;
+      if (ec) break;  // not there yet; create_directories makes it below
+      if (fs::is_symlink(st) || !fs::is_directory(st)) return false;
+    }
+    return true;
+  };
   // 1. Every new file next to its place as <name>.new: a full disk or a read-only folder fails here,
   // before anything is replaced.
   std::vector<fs::path> fresh;
@@ -234,8 +327,19 @@ bool ApplyPortableUpdate(const fs::path& archive, const fs::path& launcher_dir, 
     for (const fs::path& f : fresh) fs::remove(f, ec);
   };
   for (const Entry& e : entries) {
+    if (!contained(e.path)) {
+      drop_fresh();
+      error = german ? "Das Update schreibt au\xC3\x9F" "erhalb des Ordners von Core of Light."
+                     : "The update would write outside the launcher's folder.";
+      return false;
+    }
     const fs::path target = launcher_dir / e.path;
     fs::create_directories(target.parent_path(), ec);
+    if (ec) {
+      drop_fresh();
+      error = cant_write;
+      return false;
+    }
     const fs::path f = WithSuffix(target, ".new");
     std::ofstream out(f, std::ios::binary | std::ios::trunc);
     out.write(e.data.data(), std::streamsize(e.data.size()));

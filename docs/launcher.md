@@ -516,9 +516,19 @@ the new files next to the old ones (`<name>.new`), renames the old ones to `<nam
 exe and its DLLs can be renamed, not overwritten), puts the new ones in place, starts the new
 launcher with the same arguments and quits; the next start deletes the `.old` files. A step that
 fails puts everything back. `coreoflight.exe --portable_update=<zip>` does the same with a local
-ZIP, for testing without a release. Checked 2026-10-27 on a scratch copy (`--offline`, a scratch
+ZIP, for testing without a release (only where the launcher is the portable one, or on Linux outside
+an AppImage and a developer's build: `portable.txt`, no `APPIMAGE`, no `CMakeCache.txt` next to it).
+Checked 2026-10-27 on a scratch copy (`--offline`, a scratch
 `--documents`): a newer ZIP with one more file swapped in, the new launcher started with the same
 arguments, no `.old` left; a cut-off ZIP refused with nothing touched.
+
+On Linux the release is the tarball. It is unpacked into a private folder of its own (a fresh
+`mkdtemp` name, never a shared one), and every member has to stay below it: a `..` or absolute name,
+a link that points out of it, a hard link or another special file refuses the whole update. Folders
+and files are created private (`0700` / `0600`) and an existing link on the way is never followed;
+an archive is taken up to `kArchiveMaxEntries` members, `kArchiveMaxMemberBytes` each and
+`kArchiveMaxBytes` in all. The ZIP reader takes the same limits. Downloads and their redirects stay
+on HTTPS (`CURLOPT_PROTOCOLS_STR` / `CURLOPT_REDIR_PROTOCOLS_STR`, libcurl 7.85 or newer).
 
 ## Checked (2026-10-22)
 

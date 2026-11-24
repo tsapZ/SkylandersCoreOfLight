@@ -59,7 +59,15 @@ bool OpenInFileManager(const std::filesystem::path& path, bool select_file = fal
 bool MakeExecutable(const std::filesystem::path& path);
 std::string Sha256FileHex(const std::filesystem::path& path);
 bool BinaryContainsString(const std::filesystem::path& file, std::string_view needle);
-bool ExtractArchive(const std::filesystem::path& archive_path,
+// Extracts `archive_path` below `root`; `map_dest` gives each member's place there (an empty path
+// skips it). Only regular files, folders and links that stay inside `root` are taken, the paths are
+// normalized below `root` (no absolute or ".." member), and folders and files are created private
+// (0700 / 0600). At most kArchiveMaxEntries members, kArchiveMaxMemberBytes each and
+// kArchiveMaxBytes in all. False with `error` set when the archive is damaged or unsafe.
+inline constexpr uint64_t kArchiveMaxEntries = 100000;
+inline constexpr uint64_t kArchiveMaxMemberBytes = 1ull << 30;
+inline constexpr uint64_t kArchiveMaxBytes = 4ull << 30;
+bool ExtractArchive(const std::filesystem::path& archive_path, const std::filesystem::path& root,
                     const std::function<std::filesystem::path(const std::string& rel_path)>& map_dest,
                     std::string& error);
 
