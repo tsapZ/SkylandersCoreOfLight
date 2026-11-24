@@ -297,10 +297,8 @@ void DiscImport::Start(const fs::path& iso, const std::vector<Found>& found, boo
     const XexId id = IdentifyXex(xex.data(), xex.size());
     const std::string& hash = id.sha256;
     const auto& games = AllGames();
-    int game = -1;
-    for (size_t i = 0; i < games.size(); ++i) {
-      if (IsGameDisc(games[i], id)) game = int(i);
-    }
+    // The same rule as the report and the search (games.h GameForDisc): exact pressing first.
+    const int game = GameForDisc(id);
     // What the disc is, for a report: a pressing the ports don't know yet can be added by its code.
     HubLog("disc import: default.xex " + (id.header.empty() ? std::string("without an XEX2 header") : id.header) +
            ", SHA-256 " + hash + (id.code_pin.empty() ? "" : ", code " + id.code_pin));

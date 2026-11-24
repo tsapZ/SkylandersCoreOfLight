@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace coreoflight {
@@ -53,9 +54,15 @@ class XisoImage {
 // SHA-256 of a buffer, lower-case hex (Windows' CNG).
 std::string Sha256Hex(const void* data, size_t size);
 
+// An unpacked disc's default.xex in `folder`: the plain file named default.xex, in any case (a
+// case-sensitive file system's DEFAULT.XEX is the same disc), or empty when there is none. A link
+// is not taken (the search skips linked entries), and only `folder`'s own children are looked at,
+// so the result never leaves it. The one place a disc root is recognised.
+std::filesystem::path FindDiscXex(const std::filesystem::path& folder);
+
 // The default.xex of a disc: an ISO image's, or an unpacked folder's (one with default.xex in it),
 // read into `out`; false if it has none. `bytes`, when given, is the disc's files without its
-// $SystemUpdate folder (what setting it up writes).
+// $SystemUpdate folder (what setting it up writes); 0 when they couldn't all be added up.
 bool ReadDiscXex(const std::filesystem::path& disc, std::vector<uint8_t>& out, uint64_t* bytes = nullptr);
 
 // The folders up to `dir` made one by one, an existing one (also a link) taken as it is; false

@@ -33,22 +33,17 @@ constexpr uintmax_t kSmallestIso = 100ull << 20;
 const char* const kSkipFolders[] = {"windows", "program files", "program files (x86)", "programdata",
                                     "appdata", "node_modules",  "recovery",            "perflogs"};
 
-bool IsFile(const fs::path& p) {
-  std::error_code ec;
-  return fs::is_regular_file(p, ec);
-}
-
 // Calls `on_disc` for every .iso file under `dir` and every folder with a default.xex (an
 // unpacked disc), `depth` folder levels down, until `stop`. A disc folder itself is one level
 // below the limit too: the setup's look next to a disc chosen by hand finds the others there.
 void FindDiscs(const fs::path& dir, int depth, const std::atomic<bool>& stop, std::atomic<int>& folders,
-               const std::function<void(const fs::path&)>& on_disc) {
+               const std::function<bool(const fs::path&)>& on_disc) {
   std::error_code ec;
   ++folders;
-  if (IsFile(dir / "default.xex")) {  // the search root itself is an unpacked disc
-    on_disc(dir);
-    return;
-  }
+  // The search root itself may be an unpacked disc. `on_disc` says whether it was taken; when the
+  // candidate is rejected (a folder of another game's files that happens to hold a stray xex, or a
+  // folder the reader can't use), the search goes on inside it instead of stopping at the root.
+  if (!FindDiscXex(dir).empty() && on_disc(dir)) return;
   for (fs::directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec), end; it != end;
        it.increment(ec)) {
     if (ec || stop) break;
@@ -68,10 +63,8 @@ void FindDiscs(const fs::path& dir, int depth, const std::atomic<bool>& stop, st
       }
 #endif
       // An unpacked disc: read it as one, whatever the depth; the files inside it are no discs.
-      if (IsFile(p / "default.xex")) {
-        on_disc(p);
-        continue;
-      }
+      // A candidate that is rejected doesn't end the look: the folders inside may hold one.
+      if (!FindDiscXex(p).empty() && on_disc(p)) continue;
       if (depth <= 0) continue;
       if (std::find(std::begin(kSkipFolders), std::end(kSkipFolders), name) != std::end(kSkipFolders)) continue;
       FindDiscs(p, depth - 1, stop, folders, on_disc);
@@ -114,43 +107,60 @@ std::shared_ptr<DiscSearch> StartDiscSearch() {
 }
 
 std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<fs::path, int>> roots) {
+  return StartDiscSearch(std::move(roots), {});
+}
+
+std::shared_ptr<DiscSearch> StartDiscSearch(std::vector<std::pair<fs::path, int>> roots,
+                                            std::vector<fs::path> discs) {
   auto search = std::make_shared<DiscSearch>();
-  std::thread([search, roots] {
-    std::set<std::string> seen;  // a disc under two of the roots once
-    for (const auto& [root, depth] : roots) {
-      FindDiscs(root, depth, search->stop, search->folders, [&](const fs::path& disc) {
-        std::error_code ec;
-        fs::path canon = fs::weakly_canonical(disc, ec);
-        std::string key = PathUtf8(ec ? disc : canon);
+  std::thread([search, roots = std::move(roots), discs = std::move(discs)] {
+    std::set<std::string> seen;  // a disc under two of the roots, or chosen and found, once
+    auto key = [](const fs::path& disc) {
+      std::error_code ec;
+      fs::path canon = fs::weakly_canonical(disc, ec);
+      std::string text = PathUtf8(ec ? disc : canon);
 #ifdef _WIN32
-        for (char& c : key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      for (char& c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 #endif
-        if (!seen.insert(key).second) return;
-        const bool folder = fs::is_directory(disc, ec);
-        if (folder) {
-          ++search->unpacked;
-        } else {
-          ++search->isos;
-        }
-        // Read like a disc being set up (disc_import.cpp): its default.xex, known by its SHA-256.
-        std::vector<uint8_t> data;
-        uint64_t bytes = 0;
-        if (!ReadDiscXex(disc, data, &bytes)) {
-          if (folder || !IsImaginatorsPs3Disc(disc)) return;
-          size_t im = 0;
-          while (im < AllGames().size() && std::string_view(AllGames()[im].name_en) != "Imaginators") ++im;
+      return text;
+    };
+    // Reads a disc like one being set up (disc_import.cpp): its default.xex, known by its SHA-256;
+    // true when the candidate was taken. A folder that can't be read is declined so the scan goes
+    // on inside it (FindDiscs).
+    auto inspect = [&](const fs::path& disc, bool chosen) -> bool {
+      std::error_code ec;
+      if (!seen.insert(key(disc)).second) return true;
+      const bool folder = fs::is_directory(disc, ec);
+      if (folder) {
+        ++search->unpacked;
+      } else {
+        ++search->isos;
+      }
+      std::vector<uint8_t> data;
+      uint64_t bytes = 0;
+      if (!ReadDiscXex(disc, data, &bytes)) {
+        if (chosen) {
           std::lock_guard lock(search->mutex);
-          if (im < AllGames().size()) search->found.push_back({int(im), disc, true});
-          return;
+          search->found.push_back({-1, disc, false, 0, true});
+          return false;
         }
-        const XexId id = IdentifyXex(data.data(), data.size());
-        int game = -1;
-        for (size_t i = 0; i < AllGames().size(); ++i) {
-          if (IsGameDisc(AllGames()[i], id)) game = int(i);
-        }
+        if (folder || !IsImaginatorsPs3Disc(disc)) return false;
+        size_t im = 0;
+        while (im < AllGames().size() && std::string_view(AllGames()[im].name_en) != "Imaginators") ++im;
         std::lock_guard lock(search->mutex);
-        search->found.push_back({game, disc, false, bytes});
-      });
+        if (im < AllGames().size()) search->found.push_back({int(im), disc, true});
+        return true;
+      }
+      const XexId id = IdentifyXex(data.data(), data.size());
+      const int game = GameForDisc(id);  // exact pressing first, then the same code
+      std::lock_guard lock(search->mutex);
+      search->found.push_back({game, disc, false, bytes});
+      return true;
+    };
+    for (const fs::path& disc : discs) inspect(disc, true);
+    for (const auto& [root, depth] : roots) {
+      FindDiscs(root, depth, search->stop, search->folders,
+                [&](const fs::path& disc) { return inspect(disc, false); });
       if (search->stop) break;
     }
     search->done = true;

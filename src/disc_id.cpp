@@ -47,4 +47,24 @@ bool XexInList(std::string_view list, const XexId& xex) { return MatchXex(list, 
 
 bool IsGameDisc(const Game& game, const XexId& xex) { return XexInList(game.xex_sha256, xex); }
 
+int GameForDiscIn(const std::vector<Game>& games, const XexId& xex) {
+  // An exact pressing wins over a same-code one anywhere in the list: a future entry that overlaps
+  // another game's code must not make the report, the import and the search name it differently.
+  int same_code = -1;
+  for (size_t i = 0; i < games.size(); ++i) {
+    const XexMatch found = MatchXex(games[i].xex_sha256, xex);
+    if (found == XexMatch::kExact) return int(i);
+    if (found == XexMatch::kSameCode && same_code < 0) same_code = int(i);
+  }
+  return same_code;
+}
+
+int GameForTitleIdIn(const std::vector<Game>& games, uint32_t title_id) {
+  if (title_id == 0) return -1;
+  for (size_t i = 0; i < games.size(); ++i) {
+    if (games[i].title_id == title_id) return static_cast<int>(i);
+  }
+  return -1;
+}
+
 }  // namespace coreoflight

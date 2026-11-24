@@ -287,14 +287,9 @@ fs::path FindExe(const Game& game, const fs::path& launcher_dir,
 
 const std::vector<Game>& AllGames() { return kGames; }
 
-int GameForTitleId(uint32_t title_id) {
-  if (title_id == 0) return -1;
-  const auto& games = AllGames();
-  for (size_t i = 0; i < games.size(); ++i) {
-    if (games[i].title_id == title_id) return static_cast<int>(i);
-  }
-  return -1;
-}
+int GameForDisc(const XexId& xex) { return GameForDiscIn(AllGames(), xex); }
+
+int GameForTitleId(uint32_t title_id) { return GameForTitleIdIn(AllGames(), title_id); }
 
 fs::path g_install_dir;  // --install_dir, or "library" in coreoflight.ini
 

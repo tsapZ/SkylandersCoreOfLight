@@ -62,8 +62,15 @@ XexMatch MatchXex(std::string_view list, const XexId& xex);
 bool XexInList(std::string_view list, const XexId& xex);
 // Whether the xex is one of the game's discs.
 bool IsGameDisc(const Game& game, const XexId& xex);
+// The game that takes this default.xex: its exact pressing first (the first game whose list holds
+// the SHA-256), else a pressing with the same code (the first such game); -1 for none. One rule for
+// the report, the import and the search, so they never name different games for the same disc.
+int GameForDisc(const XexId& xex);
 // The game whose title the xex names (another build of it), or -1; only when it has an XEX2 header.
 int GameForTitleId(uint32_t title_id);
+// The two above over a given list (the tests' synthetic games; games.cpp passes AllGames()).
+int GameForDiscIn(const std::vector<Game>& games, const XexId& xex);
+int GameForTitleIdIn(const std::vector<Game>& games, uint32_t title_id);
 
 enum class DiscState {
   kUnknown,    // not checked yet
