@@ -41,6 +41,16 @@ std::string Lower(std::string s) {
   return s;
 }
 
+// A name as the loader takes it: printable ASCII without a path in it. A damaged file gives garbage, which could
+// throw in std::filesystem's conversion (a UTF-8 code page) or point outside the game's folder.
+bool PlainName(const std::string& name) {
+  if (name.empty()) return false;
+  for (const unsigned char c : name) {
+    if (c < 0x20 || c > 0x7E || c == '/' || c == '\\' || c == ':') return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 std::vector<std::string> PeImports(const std::filesystem::path& file) {
@@ -94,7 +104,7 @@ std::vector<std::string> PeImports(const std::filesystem::path& file) {
     in.seekg(std::streamoff(name_at));
     in.read(buf, sizeof(buf) - 1);
     const std::string name(buf);  // up to its NUL
-    if (!name.empty()) names.push_back(name);
+    if (PlainName(name)) names.push_back(name);
   }
   return names;
 }

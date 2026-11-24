@@ -92,6 +92,11 @@ int main() {
   Write(root / "text.txt", "not a PE image at all");
   CHECK(PeImports(root / "text.txt").empty());
 
+  // A damaged file's garbage names (bytes outside ASCII, a path) are left out, the plain one stays.
+  Write(root / "damaged.dll", Image({"bad\xff\xfe.dll", "..\\up.dll", "C:x.dll", "rexruntime.dll"}));
+  const std::vector<std::string> damaged = PeImports(root / "damaged.dll");
+  CHECK(damaged.size() == 1 && damaged[0] == "rexruntime.dll");
+
   CHECK(MissingDlls(game / "game.exe", sys).empty());
 
   // Windows Security took rexruntime.dll (#146): only that one is named, its own imports can't be read.
