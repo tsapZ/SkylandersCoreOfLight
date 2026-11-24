@@ -142,7 +142,9 @@ settings stay.
 Your figures live in one folder, shared by all six games like real figures next to the portal. The
 **figure library** shows every one you have, by game, with its level, gold, hat, upgrade tree and
 nickname. Mark the ones on your real shelf with "I own it"; there's a leaderboard too. Start on a
-figure resets it to a new toy (the old file stays as a backup) or deletes it.
+figure resets it to a new toy (the old file stays as a backup) or deletes it. R3 (F on the
+keyboard) makes a figure a favourite, the same favourites as in the games' portal menu, with a
+Favourites tab of their own.
 
 ### Like a console's dashboard
 

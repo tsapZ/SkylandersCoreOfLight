@@ -41,6 +41,10 @@ class FiguresScreen {
  private:
   struct Figure {
     std::string name, game, category, badge;
+    // The character a favourite of it is kept under (skylanders-portal FavouriteName): all its
+    // versions are favourites together, as in the games' portal menu; empty for magic items and
+    // figures the catalog doesn't know.
+    std::string character;
     skylanders::portal::Element element = skylanders::portal::Element::kNone;
     uint16_t id = 0, variant = 0;
     bool owned = false;   // a figure file of it is in the folder, or the owner marked it
@@ -64,7 +68,11 @@ class FiguresScreen {
   bool open_ = false;
   std::vector<Figure> owned_;    // one per figure file
   std::vector<Figure> catalog_;  // every released Skylander, marked if owned
-  int tab_ = 0;                  // 0 = every game, then the games in release order, then items
+  // The tab: one of the kinds below, or a game's index in kGames. Tabs() lists the ones there are,
+  // in their order: every game, the favourites (once there is one), each game, the magic items.
+  static constexpr int kTabEvery = -1, kTabFavourites = -2, kTabItems = -3;
+  int tab_ = kTabEvery;
+  std::vector<int> Tabs() const;
   bool marks_enabled_ = true;    // "I own it" marks (hub_settings.h)
   bool progress_ = false;        // each tab shows how many of its figures are owned (#43)
   HintRowFit hint_row_;          // the hints at the bottom, smaller when they don't fit
@@ -154,6 +162,14 @@ class FiguresScreen {
   std::filesystem::path MarksFile() const;
   void ToggleMark(const Figure& f);
   std::set<std::pair<uint16_t, uint16_t>> marked_;
+
+  // R3 / F: the figure's character is a favourite, or no longer one (#93). The same file as the
+  // games' portal menu (player 1's, in the figure folder), so a mark made in one shows in the other;
+  // the Favourites tab shows them all, from every game.
+  std::filesystem::path FavouritesFile() const;
+  void ToggleFavourite(const Figure& f);
+  bool IsFavourite(const Figure& f) const;
+  std::vector<std::string> favourites_;
   std::string message_;
   double message_until_ = 0;
 };
