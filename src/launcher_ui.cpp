@@ -17,6 +17,7 @@
 #include "imgui_internal.h"
 #include "nxe_art.h"
 #include "pad_state.h"
+#include "pe_imports.h"
 #include "platform.h"
 #include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
@@ -585,6 +586,14 @@ void LauncherUi::GameExitCode(unsigned long code) {
     if (last_key_ == AllGames()[i].key) game = i;
   }
   const std::string name = game < AllGames().size() ? AllGames()[game].name_en : "the game";
+  // A DLL not found: which one, from the exe's imports and the files in its folder (Core of Light #146:
+  // Windows Security had taken every game's rexruntime.dll as a false "Trojan", and the box said nothing).
+  crash_missing_dlls_.clear();
+  if (code == 0xC0000135 && game < found_.size()) {
+    for (const std::string& dll : MissingDlls(found_[game].exe, SystemDllDir())) {
+      crash_missing_dlls_ += (crash_missing_dlls_.empty() ? "" : ", ") + dll;
+    }
+  }
   if (code == 2 && game < found_.size()) {
     const std::string message = GameErrorMessage(found_[game]);
     HubWarn("game: " + name + " stopped with a message: " + (message.empty() ? "(none in its log)" : message));
@@ -595,7 +604,8 @@ void LauncherUi::GameExitCode(unsigned long code) {
                   : code == 0xC0000409 ? ", a stack buffer overrun or fast fail"
                   : code == 0xC0000135 ? ", a DLL missing"
                                        : "");
-    HubError("game: " + name + line);
+    HubError("game: " + name + line +
+             (crash_missing_dlls_.empty() ? "" : "; missing in its folder: " + crash_missing_dlls_));
   }
   // A newer game may be out that fixes it, or that takes the disc (a refused pressing, 2026-10-31).
   RequestUpdateCheck(name + " ended with an error");
@@ -620,7 +630,17 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
     if (crash_key_ == AllGames()[i].key) index = i;
   }
   DrawBackdrop(dl, width, height, index < background_art_.size() ? background_art_[index] : std::filesystem::path());
-  const float bw = 680 * u, bh = 270 * u;
+  // A DLL gone from the game's folder (0xC0000135): its name and where Windows Security puts what it takes
+  // (#146), in place of the report line; the box grows to fit them.
+  std::string dll_line, av_line;
+  if (crash_code_ == 0xC0000135 && !crash_missing_dlls_.empty()) {
+    dll_line = (german_ ? "Fehlt im Spielordner: " : "Missing in the game's folder: ") + crash_missing_dlls_;
+    av_line = german_ ? "Windows-Sicherheit hat sie vielleicht entfernt: Schutzverlauf > Wiederherstellen."
+                      : "Windows Security may have taken it: Protection history > Restore.";
+  }
+  const float bw = std::min(width - 40 * u, std::max({680 * u, TextWidth(regular_, 19 * u, dll_line.c_str()) + 60 * u,
+                                                       TextWidth(regular_, 19 * u, av_line.c_str()) + 60 * u})),
+              bh = 270 * u;
   const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
   dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
   dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
@@ -634,7 +654,14 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
   Text(dl, regular_, 20 * u, {(width - TextWidth(regular_, 20 * u, code)) * 0.5f, a.y + 80 * u}, kDim, code);
   const char* line = german_ ? "Problem melden legt die Logs als Textdatei auf den Desktop, ohne deinen Benutzernamen."
                              : "Report a problem puts the logs on the desktop as a text file, without your user name.";
-  Text(dl, regular_, 19 * u, {(width - TextWidth(regular_, 19 * u, line)) * 0.5f, a.y + 118 * u}, kWhite, line);
+  if (dll_line.empty()) {
+    Text(dl, regular_, 19 * u, {(width - TextWidth(regular_, 19 * u, line)) * 0.5f, a.y + 118 * u}, kWhite, line);
+  } else {
+    Text(dl, regular_, 19 * u, {(width - TextWidth(regular_, 19 * u, dll_line.c_str())) * 0.5f, a.y + 112 * u}, kWhite,
+         dll_line.c_str());
+    Text(dl, regular_, 19 * u, {(width - TextWidth(regular_, 19 * u, av_line.c_str())) * 0.5f, a.y + 140 * u}, kWhite,
+         av_line.c_str());
+  }
   const ImGuiIO& io = ImGui::GetIO();
   auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
     const ImVec2 p{x, a.y + 180 * u}, q{x + 270 * u, a.y + 232 * u};

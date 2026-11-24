@@ -122,6 +122,8 @@ class LauncherUi {
   std::string last_key_;  // the game that ran last
   // A game that ended with an error code: "Problem melden?" (DrawCrashReport) until answered.
   unsigned long crash_code_ = 0;
+  // With 0xC0000135: the DLLs missing from the game's folder (pe_imports.h), comma-separated.
+  std::string crash_missing_dlls_;
   std::string crash_key_;
   bool DrawCrashReport(float width, float height);
   std::vector<uint64_t> play_seconds_;  // per game, the active profile's (PlaySeconds)

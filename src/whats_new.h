@@ -12,6 +12,8 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
+    {"A game that can't start because a file is missing: the box names the file and where to get it back.",
+     "Ein Spiel startet nicht, weil eine Datei fehlt: der Kasten nennt die Datei und wo man sie zur\xC3\xBC" "ckholt."},
     {"Achievements: a long description stays inside its info box.",
      "Erfolge: eine lange Beschreibung bleibt in ihrem Infokasten."},
     {"Figure files ending .dmp (the plain 1 KB dump some tools write) count in the profiles like .dump files.",

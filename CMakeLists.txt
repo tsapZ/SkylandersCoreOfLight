@@ -81,6 +81,7 @@ set(COREOFLIGHT_SOURCES
   src/achievements_ui.cpp
   src/ds3_games.cpp
   src/ds3_ui.cpp
+  src/pe_imports.cpp
   src/problem_report.cpp
   src/saves.cpp
   src/saves_ui.cpp
@@ -172,4 +173,9 @@ if(BUILD_TESTING)
     target_link_libraries(coreoflight_disc_id_test PRIVATE OpenSSL::Crypto Threads::Threads)
   endif()
   add_test(NAME disc_id COMMAND coreoflight_disc_id_test)
+  # Which DLLs a game's exe needs and which are gone (Core of Light #146): synthetic PE images.
+  add_executable(coreoflight_pe_imports_test tests/pe_imports_test.cpp src/pe_imports.cpp)
+  target_include_directories(coreoflight_pe_imports_test PRIVATE src)
+  target_compile_features(coreoflight_pe_imports_test PRIVATE cxx_std_20)
+  add_test(NAME pe_imports COMMAND coreoflight_pe_imports_test)
 endif()

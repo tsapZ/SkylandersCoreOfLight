@@ -809,8 +809,18 @@ void* SpawnProcess(const fs::path& exe, const std::vector<std::string>& args, co
   PROCESS_INFORMATION info = {};
   const DWORD flags = no_window ? CREATE_NO_WINDOW : 0;
   const std::wstring cwd_w = cwd.empty() ? std::wstring() : cwd.wstring();
-  if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, flags, nullptr,
-                      cwd_w.empty() ? nullptr : cwd_w.c_str(), &startup, &info)) {
+  // The child starts without Windows' own "... was not found" box (SEM_FAILCRITICALERRORS, inherited at
+  // creation): a game whose DLL is gone (Core of Light #146: Windows Security took every game's
+  // rexruntime.dll) then ends at once with 0xC0000135 and the launcher's box names the DLL and where to get
+  // it back. With Windows' box the game hung on it until OK was pressed ("is starting ..." meanwhile), a
+  // background run (the settings schema at the launcher's start) put it up unasked, and whether it came at
+  // all depended on how the launcher was started (from its setup: never).
+  const UINT error_mode = SetErrorMode(SEM_FAILCRITICALERRORS);
+  SetErrorMode(error_mode | SEM_FAILCRITICALERRORS);
+  const BOOL created = CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, flags, nullptr,
+                                      cwd_w.empty() ? nullptr : cwd_w.c_str(), &startup, &info);
+  SetErrorMode(error_mode);
+  if (!created) {
     return nullptr;
   }
   CloseHandle(info.hThread);
