@@ -1092,6 +1092,10 @@ void TerminateAndCloseProcess(void*& handle) {
 #ifdef _WIN32
   const HANDLE h = static_cast<HANDLE>(handle);
   TerminateProcess(h, 1);
+  // TerminateProcess only starts the end; the callers read the files the process wrote right after
+  // (game_settings.cpp's schema, figure_import.cpp's result), so wait for it to be gone. It takes
+  // milliseconds; the bound only guards against a process stuck in the kernel.
+  WaitForSingleObject(h, 5000);
   CloseHandle(h);
   handle = nullptr;
 #else
