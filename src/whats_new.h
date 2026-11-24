@@ -12,14 +12,10 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"Every Skylander: Series 2 Double Trouble is listed under Giants as \"Double Trouble (Series 2)\", not as a chase variant.",
-     "Alle Skylander: Double Trouble der Serie 2 steht unter Giants als \"Double Trouble (Series 2)\", nicht mehr bei den seltenen Varianten."},
-    {"SuperChargers: the French / Dutch and the Scandinavian disc are named as another build instead of being set up; the download can't run them (a port built from source with them can).",
-     "SuperChargers: die franz\xC3\xB6sisch-niederl\xC3\xA4ndische und die skandinavische Disc werden als anderer Build erkannt statt eingerichtet; der Download kann sie nicht starten (ein aus dem Quellcode gebauter Port schon)."},
-    {"Barrel Blaster and Clown Cruiser have their own elements, Tech and Air.",
-     "Barrel Blaster und Clown Cruiser haben ihre eigenen Elemente, Technik und Luft."},
-    {"Linux on ARM64 (a Steam Frame, for example): the launcher builds and packages there too and looks for the matching downloads (mitch030504).",
-     "Linux auf ARM64 (etwa ein Steam Frame): der Launcher l\xC3\xA4sst sich dort bauen und packen und sucht die passenden Downloads (mitch030504)."},
+    {"Achievements: a long description stays inside its info box.",
+     "Erfolge: eine lange Beschreibung bleibt in ihrem Infokasten."},
+    {"Figure files ending .dmp (the plain 1 KB dump some tools write) count in the profiles like .dump files.",
+     "Figurendateien mit der Endung .dmp (der reine 1-KB-Dump mancher Tools) z\xC3\xA4hlen in den Profilen wie .dump-Dateien."},
 };
 
 }  // namespace coreoflight
