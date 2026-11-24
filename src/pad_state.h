@@ -510,9 +510,14 @@ inline UsbPortalKind FindUsbPortal() {
   return result;
 }
 
+inline std::atomic<bool> g_pad_watch_stop{false};
+inline std::thread g_pad_watch_thread;
+
 inline void StartPadWatch() {
-  static const bool started = [] {
-    std::thread([] {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    g_pad_watch_stop.store(false);
+    g_pad_watch_thread = std::thread([] {
       for (;;) {
         const UsbPortalKind portal = FindUsbPortal();
         if (g_usb_portal.exchange(portal) != portal) {
@@ -521,12 +526,21 @@ inline void StartPadWatch() {
                   : portal == UsbPortalKind::kPs3WiiU ? "PS3/Wii/PC"
                                                       : "gone"));
         }
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // Short steps so a shutdown request is seen within a fraction of the two-second period.
+        for (int step = 0; step < 20 && !g_pad_watch_stop.load(); ++step) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        if (g_pad_watch_stop.load()) break;
       }
-    }).detach();
-    return true;
-  }();
-  (void)started;
+    });
+  });
+}
+
+// Stops the USB watch and joins it before the process tears down (main.cpp), so it never touches
+// the device list after the launcher's state is gone.
+inline void ShutdownPadWatch() {
+  g_pad_watch_stop.store(true);
+  if (g_pad_watch_thread.joinable()) g_pad_watch_thread.join();
 }
 
 inline void SyncSdlPads() {
@@ -726,6 +740,7 @@ inline size_t ExtraPadCount() { return 0; }
 
 // Closes SDL gamepad handles before SDL_Quit so teardown does not leave open devices.
 inline void ShutdownSdlPads() {
+  ShutdownPadWatch();  // before SDL_Quit: the watch must not run past teardown
   std::lock_guard lock(g_sdl_pad_mutex);
   for (size_t s = 0; s < kMaxPads; ++s) {
     if (g_sdl_pads[s].handle) {

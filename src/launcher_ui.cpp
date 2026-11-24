@@ -2442,11 +2442,9 @@ void LauncherUi::ApplyReleases() {
   for (size_t i = 0; i < AllGames().size() && i < setups_.size(); ++i) {
     const Game& game = AllGames()[i];
     for (const Release& r : releases_) {
-#ifndef _WIN32
-      // A release cached on x86 (or a Windows setup) never goes onto an arm64 machine, and the other
-      // way round.
-      if (!r.asset.ends_with("-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz")) continue;
-#endif
+      // A release cached on another platform or architecture (a Windows setup, or an amd64 tarball
+      // on arm64) never goes onto this machine.
+      if (!AssetFitsThisPlatform(r.asset)) continue;
       if (r.repo != game.repo) continue;
       // The release's setup when it's newer than the one here, or there is none here.
       if (setups_[i].empty() || VersionLess(SetupVersion(game, setups_[i]), r.version)) {

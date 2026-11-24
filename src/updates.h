@@ -26,6 +26,17 @@ struct Release {
                         // for a release from before GitHub gave one
 };
 
+// Whether a cached release asset belongs to this build's platform and architecture. releases.txt is
+// shared, so a launcher on Linux can read a Windows setup and an arm64 machine an amd64 tarball from
+// an earlier check; those must never be installed or offered (Core of Light #134).
+inline bool AssetFitsThisPlatform(const std::string& asset) {
+#ifdef _WIN32
+  return asset.ends_with(".exe") || asset.ends_with(".zip");
+#else
+  return asset.ends_with("-linux-" COREOFLIGHT_LINUX_ARCH ".tar.gz");
+#endif
+}
+
 // The newest release of tsapZ/<repo> (pre-releases too, drafts not) with an asset named
 // <asset_prefix>-<version><extension> (a setup's .exe, the portable launcher's .zip); nullopt
 // without network, release or such an asset. The version is the tag without `tag_prefix` ("v";

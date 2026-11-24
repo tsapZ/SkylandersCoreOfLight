@@ -140,15 +140,29 @@ GLuint TextureOf(const uint8_t* rgba, int w, int h) {
   return tex;
 }
 
+constexpr size_t kMaxTextureFileBytes = size_t(64) << 20;
+constexpr int kMaxTextureSide = 4096;
+
 stbi_uc* DecodeRgba(const std::filesystem::path& path, int& w, int& h) {
-  std::ifstream in(path, std::ios::binary);
+  std::ifstream in(path, std::ios::binary | std::ios::ate);
   if (!in) return nullptr;
-  std::vector<stbi_uc> file((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  if (file.empty() || file.size() > size_t(64) << 20) return nullptr;
+  const std::streamoff end = in.tellg();
+  if (end <= 0 || end > std::streamoff(kMaxTextureFileBytes)) return nullptr;
+  const auto size = size_t(end);
+  std::vector<stbi_uc> file(size);
+  in.seekg(0, std::ios::beg);
+  in.read(reinterpret_cast<char*>(file.data()), std::streamsize(size));
+  if (in.gcount() != std::streamsize(size)) return nullptr;
   int channels = 0;
+  // Check the dimensions in the header before the decoder allocates the RGBA pixels.
+  int info_w = 0, info_h = 0;
+  if (!stbi_info_from_memory(file.data(), int(file.size()), &info_w, &info_h, &channels) || info_w <= 0 ||
+      info_h <= 0 || info_w > kMaxTextureSide || info_h > kMaxTextureSide) {
+    return nullptr;
+  }
   stbi_uc* rgba = stbi_load_from_memory(file.data(), int(file.size()), &w, &h, &channels, 4);
   if (!rgba) return nullptr;
-  if (w <= 0 || h <= 0 || w > 4096 || h > 4096) {
+  if (w <= 0 || h <= 0 || w > kMaxTextureSide || h > kMaxTextureSide) {
     stbi_image_free(rgba);
     return nullptr;
   }

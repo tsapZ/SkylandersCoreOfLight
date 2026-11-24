@@ -147,9 +147,13 @@ void MusicPlayer::Update(float dt) {
   (void)since_check_;
   if (open_ && stream_ && !pcm_.empty()) {
     const int target_queued = std::max(4096, bytes_per_sec_ / 2);
-    while (SDL_GetAudioStreamQueued(stream_) < target_queued) {
+    for (;;) {
+      const int queued = SDL_GetAudioStreamQueued(stream_);
+      if (queued < 0) break;  // the stream is gone or errored: no refill to measure against
+      if (queued >= target_queued) break;
       const size_t avail = pcm_.size() - pcm_offset_;
       const size_t chunk = std::min(avail, size_t(bytes_per_sec_ / 4));
+      if (chunk == 0) break;  // a zero-byte write would queue nothing and loop forever
       if (!SDL_PutAudioStreamData(stream_, pcm_.data() + pcm_offset_, int(chunk))) break;
       pcm_offset_ = (pcm_offset_ + chunk) % pcm_.size();
     }
