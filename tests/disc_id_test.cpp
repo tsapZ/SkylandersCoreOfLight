@@ -230,7 +230,13 @@ int main() {
     std::ofstream(folder / "DEFAULT.XEX", std::ios::binary) << a;
     const fs::path found = coreoflight::FindDiscXex(folder);
     CHECK(!found.empty());
+#ifdef _WIN32
+    // Windows' file system ignores the case: the plain name finds the file at once and comes back
+    // as it was asked for.
+    CHECK(fs::equivalent(found, folder / "DEFAULT.XEX", ec));
+#else
     CHECK(found.filename().u8string() == std::u8string(u8"DEFAULT.XEX"));
+#endif
     std::vector<uint8_t> read;
     CHECK(ReadDiscXex(folder, read, nullptr));
     CHECK(std::string(read.begin(), read.end()) == a);
