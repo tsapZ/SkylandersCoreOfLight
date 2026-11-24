@@ -74,6 +74,10 @@ $gameArgs = @("--fullscreen=false", "--resolution=$Res", "--audio_mute=true", "-
 if ($Extra) { $gameArgs += $Extra.Split(" ") }
 # -WorkDir: another folder with a rom\ in it (a scratch copy of the disc).
 if (-not $WorkDir) { $WorkDir = $repoDir }
+# The graphics card claimed for the run (gpu_claim.ps1, through testkit.ps1); the finally below gives it back on
+# every exit (PowerShell runs it for `exit` inside the try too).
+$gpuClaim = Enter-GpuClaim "game_keys $Repo"
+try {
 $p = Start-Process -FilePath $exe -ArgumentList $gameArgs -WorkingDirectory $WorkDir -PassThru
 # The run's own log must name the scratch data folder within 15 s, else the game is stopped at once.
 $safe = $false
@@ -124,3 +128,6 @@ foreach ($k in $Keys.Split(",")) {
 }
 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
 "done $Out"
+} finally {
+  Exit-GpuClaim $gpuClaim
+}

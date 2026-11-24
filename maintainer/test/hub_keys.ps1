@@ -33,6 +33,10 @@ public static class W5 {
 }
 "@
 New-Item -ItemType Directory -Force $Out | Out-Null
+# The graphics card claimed for the run (gpu_claim.ps1): the launcher draws with it, and a test may start a game.
+. (Join-Path $PSScriptRoot "gpu_claim.ps1")
+$gpuClaim = Enter-GpuClaim "launcher test"
+try {
 $p = Start-Process -FilePath $exe -ArgumentList "--offline --documents=$Docs $Extra" -PassThru
 Start-Sleep -Seconds 3
 for ($i = 0; $i -lt 30; $i++) { $p.Refresh(); $h = $p.MainWindowHandle; if ($h -ne [IntPtr]::Zero) { break }; Start-Sleep -Milliseconds 500 }
@@ -87,3 +91,6 @@ foreach ($k in $Keys.Split(",")) {
 }
 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
 "done"
+} finally {
+  Exit-GpuClaim $gpuClaim
+}

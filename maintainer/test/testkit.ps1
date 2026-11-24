@@ -16,6 +16,8 @@ $script:Games = [ordered]@{
   SuperChargersRecomp = @{ Name = "SuperChargers"; Exe = "superchargersrecompiled" }
   ImaginatorsRecomp   = @{ Name = "Imaginators"; Exe = "imaginatorsrecompiled" }
 }
+# The graphics card's claim file (gpu_claim.ps1): every game run waits for another program's claim and writes its own.
+. (Join-Path $PSScriptRoot "gpu_claim.ps1")
 # The log lines that mean a crash, a hang or a broken start.
 $script:TroublePattern = "invalid or unregistered|Unhandled|Crash: |exception C0|Fatal|assert|Could not set"
 
@@ -170,9 +172,21 @@ public static class TestkitWindow {
 # The game started through its tools\run_scripted.ps1 (window shots on a timeline), muted (only the
 # samples are zeroed: SDL and the sound driver run as usual), then its newest log copied to the run.
 # -Build: the build folder's name after win-amd64- (release, or devkit for the developer kit's build).
+# The graphics card is claimed for the run (gpu_claim.ps1): it waits while another program's claim is there.
 function Invoke-Game([string]$Repo, [string]$Script, [string]$UserData, [string]$Run, [string]$Shots,
                      [string]$Extra = "", [int]$QuitTimeout = 180, [string]$Build = "release",
                      [switch]$ShotsFromLog, [string]$RenderDocCapture = "") {
+  $claim = Enter-GpuClaim "$Repo $(Split-Path $Run -Leaf)"
+  try {
+    Invoke-GameRun @PSBoundParameters
+  } finally {
+    Exit-GpuClaim $claim
+  }
+}
+
+function Invoke-GameRun([string]$Repo, [string]$Script, [string]$UserData, [string]$Run, [string]$Shots,
+                        [string]$Extra = "", [int]$QuitTimeout = 180, [string]$Build = "release",
+                        [switch]$ShotsFromLog, [string]$RenderDocCapture = "") {
   # The game of a run just before can still be closing (saving, its threads ending): up to 60 s for it
   # to go before calling it another run (2026-11-12: three runs of a chain were lost to this).
   for ($i = 0; $i -lt 120 -and (Get-Process *recompiled* -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
