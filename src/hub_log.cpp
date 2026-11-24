@@ -19,7 +19,13 @@ namespace coreoflight {
 namespace fs = std::filesystem;
 
 fs::path HubLogFile() {
-  const fs::path local = LocalAppDataDir();
+  fs::path local;
+#ifdef _WIN32
+  if (const auto override_path = EnvVarUtf8("LOCALAPPDATA"); !override_path.empty()) {
+    local = PathFromUtf8(override_path);
+  }
+#endif
+  if (local.empty()) local = LocalAppDataDir();
   return local.empty() ? fs::path() : local / "CoreOfLight" / "coreoflight.log";
 }
 

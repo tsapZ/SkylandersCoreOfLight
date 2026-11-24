@@ -492,7 +492,7 @@ void LauncherUi::UpdateImport() {
 // then asks for the disc ("Disc einlesen" on A). It copies about 100 MB, a few seconds.
 void LauncherUi::UpdateInstall() {
   if (!install_process_) return;
-  int code = 3;
+  int64_t code = 3;
   if (IsProcessRunning(install_process_, 0, &code)) {
     if (ImGui::GetTime() - install_since_ < 300.0) return;
     TerminateAndCloseProcess(install_process_);
