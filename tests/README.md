@@ -35,3 +35,15 @@ isn't set up.
 `--check_disc` prints one JSON line per disc (`path`, `game`, `name`, `match`, `sha256`,
 `code_pin`, `header`, `bytes`) and exits 0 for a disc a game takes, 1 otherwise. It opens no
 window and needs no disc set up.
+
+## The update extractor (Linux only)
+
+`coreoflight_archive_extract_test` builds small tarballs in a temporary folder and checks
+`platform.cpp`'s `ExtractArchive` policy, not a real update: safe members below the root (the
+regular files of a package and an internal library alias), private folders and files, and the
+refusals — a `..` name, a mapper that points outside the root, a link out of the root, a file
+written through a link, a hard link and a root that is a link or a file.
+
+`coreoflight_portable_zip_test` does the same for `portable.cpp`'s `ReadZipFiles`: the portable
+package (exe, `portable.txt`, fonts) with a folder entry, an unsafe `..` or absolute name, a wrong
+checksum and a file that isn't a ZIP.

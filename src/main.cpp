@@ -156,16 +156,35 @@ int RunHeadlessTools(const LaunchOptions& opts) {
   }
   if (!opts.portable_update.empty()) {
     const std::filesystem::path exe = coreoflight::SelfExePath();
-#ifdef _WIN32
-    std::string why = "not a portable launcher (no portable.txt next to it)";
-    const bool allowed = coreoflight::IsPortable(exe.parent_path());
-#else
+    const std::filesystem::path dir = exe.parent_path();
     std::string why;
-    const bool allowed = true;
+    std::error_code ec;
+    bool allowed = true;
+#ifdef _WIN32
+    // Only the portable launcher (portable.txt next to it) is overwritten by a local archive.
+    if (!coreoflight::IsPortable(dir)) {
+      allowed = false;
+      why = "not a portable launcher (no portable.txt next to it)";
+    }
+#else
+    // The same gate as the launcher's own update: an AppImage runs from a read-only mount that
+    // can't swap its files, and a developer's build (CMakeCache.txt next to it) is left alone.
+    if (std::getenv("APPIMAGE")) {
+      allowed = false;
+      why = "an AppImage doesn't update itself (a new file comes from the release page)";
+    } else if (std::filesystem::exists(dir / "CMakeCache.txt", ec)) {
+      allowed = false;
+      why = "a developer's build is left alone";
+    }
 #endif
+    if (allowed && (dir.empty() || std::filesystem::is_symlink(std::filesystem::symlink_status(dir, ec)) ||
+                    !std::filesystem::is_directory(std::filesystem::symlink_status(dir, ec)))) {
+      allowed = false;
+      why = "the launcher's folder is not a plain directory";
+    }
     const bool done =
         allowed &&
-        coreoflight::ApplyPortableUpdate(opts.portable_update, exe.parent_path(), exe.filename(), false, why) &&
+        coreoflight::ApplyPortableUpdate(opts.portable_update, dir, exe.filename(), false, why) &&
         coreoflight::StartLauncher(exe);
     coreoflight::HubLog(done ? "portable update test: done, the new launcher started"
                              : "portable update test: " + why);

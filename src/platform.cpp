@@ -140,24 +140,6 @@ std::string UrlEncodePath(const std::string& path) {
   return out;
 }
 
-std::string NormalizeArchiveRel(const char* raw) {
-  if (!raw) return {};
-  std::string rel = raw;
-  std::replace(rel.begin(), rel.end(), '\\', '/');
-  while (rel.starts_with("./") || rel.starts_with("/")) {
-    rel.erase(0, rel[0] == '.' ? 2 : 1);
-  }
-  while (!rel.empty() && rel.back() == '/') rel.pop_back();
-  if (rel.empty() || rel.find('\0') != std::string::npos) return {};
-  // Reject path traversal segments.
-  for (size_t i = 0; i <= rel.size();) {
-    const size_t slash = std::min(rel.find('/', i), rel.size());
-    const std::string_view part(rel.data() + i, slash - i);
-    if (part == "..") return {};
-    i = slash + 1;
-  }
-  return rel;
-}
 #endif
 
 constexpr uint64_t kWindowsEpochDiffSeconds = 11644473600ULL;
@@ -673,15 +655,86 @@ bool BinaryContainsString(const fs::path& file, std::string_view needle) {
   return false;
 }
 
-bool ExtractArchive(const fs::path& archive_path,
+bool ExtractArchive(const fs::path& archive_path, const fs::path& root,
                     const std::function<fs::path(const std::string& rel_path)>& map_dest,
                     std::string& error) {
 #ifdef _WIN32
   (void)archive_path;
+  (void)root;
   (void)map_dest;
   error = "ExtractArchive helper is only implemented on POSIX";
   return false;
 #else
+  // Everything written stays below `root`: the member's name is relative with no empty, "." or
+  // ".." part, and the destination the mapper returns is checked against the root as well.
+  auto member_rel = [](const char* raw, fs::path& out) {
+    if (!raw) return false;
+    std::string name = raw;
+    std::replace(name.begin(), name.end(), '\\', '/');
+    while (name.starts_with("./")) name.erase(0, 2);
+    if (name.empty() || name.front() == '/' || name.find('\0') != std::string::npos) return false;
+    fs::path p;
+    for (size_t start = 0; start <= name.size();) {
+      const size_t end = name.find('/', start);
+      const std::string part = name.substr(start, end == std::string::npos ? std::string::npos : end - start);
+      if (part.empty() || part == "." || part == "..") return false;
+      p /= PathFromUtf8(part);
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
+    out = p;
+    return !out.empty();
+  };
+  auto inside_root = [](const fs::path& base, const fs::path& p) {
+    if (p.empty()) return false;
+    const fs::path rel = p.lexically_relative(base);
+    if (rel.empty()) return p == base;
+    if (rel.is_absolute()) return false;
+    for (const fs::path& part : rel) {
+      if (part == "..") return false;
+    }
+    return true;
+  };
+  std::error_code dir_ec;
+  const fs::path abs_root = fs::absolute(root, dir_ec);
+  if (root.empty() || dir_ec || fs::is_symlink(fs::symlink_status(abs_root, dir_ec)) ||
+      !fs::is_directory(fs::symlink_status(abs_root, dir_ec))) {
+    error = "The archive's folder is not a private directory";
+    return false;
+  }
+  // Each parent below the root is made here, one component at a time with 0700, and an existing
+  // component has to be a real folder (a link an earlier member left must never be followed).
+  auto make_parents = [&](const fs::path& dest) {
+    const fs::path rel = dest.parent_path().lexically_relative(abs_root);
+    fs::path at = abs_root;
+    for (const fs::path& part : rel) {
+      if (part.empty() || part == ".") continue;
+      if (part == "..") {
+        error = "The archive's member would be written outside its folder";
+        return false;
+      }
+      at /= part;
+      std::error_code ec;
+      const fs::file_status st = fs::symlink_status(at, ec);
+      if (ec && ec != std::errc::no_such_file_or_directory) {
+        error = "Could not look at " + PathUtf8(at);
+        return false;
+      }
+      if (st.type() != fs::file_type::not_found) {
+        if (fs::is_symlink(st) || !fs::is_directory(st)) {
+          error = PathUtf8(at) + " is not a folder inside the archive's folder";
+          return false;
+        }
+        continue;
+      }
+      if (::mkdir(PathUtf8(at).c_str(), 0700) != 0 && errno != EEXIST) {
+        error = "Could not create " + PathUtf8(at) + " (" + std::strerror(errno) + ")";
+        return false;
+      }
+    }
+    return true;
+  };
+
   struct archive* a = archive_read_new();
   if (!a) {
     error = "Could not allocate archive reader";
@@ -696,6 +749,7 @@ bool ExtractArchive(const fs::path& archive_path,
   }
 
   bool ok = true;
+  uint64_t total_written = 0, members = 0;
   struct archive_entry* entry = nullptr;
   while (true) {
     const int r = archive_read_next_header(a, &entry);
@@ -705,46 +759,139 @@ bool ExtractArchive(const fs::path& archive_path,
       ok = false;
       break;
     }
+    if (++members > kArchiveMaxEntries) {
+      error = "The archive holds more members than an update may";
+      ok = false;
+      break;
+    }
     const char* raw_name = archive_entry_pathname_utf8(entry);
     if (!raw_name) raw_name = archive_entry_pathname(entry);
-    const std::string rel = NormalizeArchiveRel(raw_name);
-    if (rel.empty()) {
-      archive_read_data_skip(a);
-      continue;
+    const mode_t type = archive_entry_filetype(entry);
+    fs::path rel;
+    {
+      std::string name = raw_name ? raw_name : "";
+      while (!name.empty() && name.back() == '/') name.pop_back();
+      // "." or "./" is the archive's own root, nothing to write.
+      while (name.starts_with("./")) name.erase(0, 2);
+      if (name.empty() || name == ".") {
+        archive_read_data_skip(a);
+        continue;
+      }
+      if (!member_rel(name.c_str(), rel)) {
+        error = "The archive holds a member with an unsafe path";
+        ok = false;
+        break;
+      }
     }
-    const fs::path dest = map_dest(rel);
+    const fs::path dest = map_dest(GenericPathUtf8(rel));
     if (dest.empty()) {
       archive_read_data_skip(a);
       continue;
     }
-    std::error_code ec;
-    const mode_t type = archive_entry_filetype(entry);
-    if (type == AE_IFDIR) {
-      fs::create_directories(dest, ec);
+    if (!dest.is_absolute() || !inside_root(abs_root, dest)) {
+      error = "The archive's member would be written outside its folder";
+      ok = false;
+      break;
+    }
+    if (archive_entry_hardlink(entry)) {
+      // A hard link names another member's file: the package needs none, and one could reach out.
+      error = "The archive holds a member that is not a file or folder";
+      ok = false;
+      break;
+    }
+    if (type == AE_IFLNK) {
+      // A link only where it stays inside the root (a package's library alias next to its target).
+      const char* raw_target = archive_entry_symlink_utf8(entry);
+      if (!raw_target) raw_target = archive_entry_symlink(entry);
+      fs::path target;
+      if (!raw_target || !*raw_target) {
+        error = "The archive holds a member with an unsafe path";
+        ok = false;
+        break;
+      }
+      target = PathFromUtf8(raw_target);
+      const fs::path resolved = target.is_absolute() ? target : dest.parent_path() / target;
+      if (!inside_root(abs_root, resolved.lexically_normal())) {
+        error = "The archive holds a link that leaves its folder";
+        ok = false;
+        break;
+      }
+      if (!make_parents(dest)) {
+        ok = false;
+        break;
+      }
+      if (::symlink(PathUtf8(target).c_str(), PathUtf8(dest).c_str()) != 0) {
+        // A link can't replace an existing file here: the archive wrote a file of that name before.
+        if (errno == EEXIST && ::unlink(PathUtf8(dest).c_str()) == 0 &&
+            ::symlink(PathUtf8(target).c_str(), PathUtf8(dest).c_str()) == 0) {
+          archive_read_data_skip(a);
+          continue;
+        }
+        error = "Could not create " + PathUtf8(dest) + " (" + std::strerror(errno) + ")";
+        ok = false;
+        break;
+      }
       archive_read_data_skip(a);
       continue;
     }
-    fs::create_directories(dest.parent_path(), ec);
-    if (type == AE_IFLNK) {
-      const char* target = archive_entry_symlink_utf8(entry);
-      if (!target) target = archive_entry_symlink(entry);
-      if (target && *target) {
-        fs::remove(dest, ec);
-        fs::create_symlink(PathFromUtf8(target), dest, ec);
+    if (type == AE_IFSOCK || type == AE_IFIFO || type == AE_IFBLK || type == AE_IFCHR) {
+      error = "The archive holds a member that is not a file or folder";
+      ok = false;
+      break;
+    }
+    if (type == AE_IFDIR) {
+      if (!make_parents(dest)) {
+        ok = false;
+        break;
+      }
+      std::error_code ec;
+      if (::mkdir(PathUtf8(dest).c_str(), 0700) != 0 && errno != EEXIST) {
+        error = "Could not create " + PathUtf8(dest) + " (" + std::strerror(errno) + ")";
+        ok = false;
+        break;
+      }
+      const fs::file_status st = fs::symlink_status(dest, ec);
+      if (ec || !fs::is_directory(st) || fs::is_symlink(st)) {
+        error = PathUtf8(dest) + " is not a folder";
+        ok = false;
+        break;
       }
       archive_read_data_skip(a);
       continue;
     }
     if (type != AE_IFREG) {
-      archive_read_data_skip(a);
-      continue;
-    }
-    std::ofstream out(dest, std::ios::binary | std::ios::trunc);
-    if (!out) {
-      error = "Could not create " + PathUtf8(dest);
+      error = "The archive holds a member that is not a file or folder";
       ok = false;
       break;
     }
+    const la_int64_t declared = archive_entry_size(entry);
+    if (declared > la_int64_t(kArchiveMaxMemberBytes)) {
+      error = "A member of the archive is larger than an update may hold";
+      ok = false;
+      break;
+    }
+    if (!make_parents(dest)) {
+      ok = false;
+      break;
+    }
+    // O_NOFOLLOW and O_EXCL on a fresh file: a name that is a link here is refused, never written
+    // through, and a pre-existing file is replaced only when it is a plain one (a repeated member
+    // name in one archive replaces its own earlier file, a hard link to elsewhere never does).
+    const std::string dest_utf8 = PathUtf8(dest);
+    int fd = ::open(dest_utf8.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    if (fd < 0 && errno == EEXIST) {
+      struct stat existing {};
+      if (::lstat(dest_utf8.c_str(), &existing) == 0 && S_ISREG(existing.st_mode) &&
+          ::unlink(dest_utf8.c_str()) == 0) {
+        fd = ::open(dest_utf8.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+      }
+    }
+    if (fd < 0) {
+      error = "Could not create " + dest_utf8 + " (" + std::strerror(errno) + ")";
+      ok = false;
+      break;
+    }
+    uint64_t written = 0;
     const void* buf = nullptr;
     size_t len = 0;
     la_int64_t offset = 0;
@@ -756,13 +903,33 @@ bool ExtractArchive(const fs::path& archive_path,
         ok = false;
         break;
       }
-      if (len > 0 && !out.write(static_cast<const char*>(buf), std::streamsize(len))) {
-        error = "Could not write " + PathUtf8(dest);
-        ok = false;
-        break;
+      if (len > 0) {
+        if (written + len > kArchiveMaxMemberBytes || total_written + len > kArchiveMaxBytes) {
+          error = "The archive unpacks to more than an update may hold";
+          ok = false;
+          break;
+        }
+        const char* data = static_cast<const char*>(buf);
+        size_t left = len;
+        while (left > 0) {
+          const ssize_t n = ::write(fd, data, left);
+          if (n <= 0) break;
+          data += n;
+          left -= size_t(n);
+        }
+        if (left > 0) {
+          error = "Could not write " + PathUtf8(dest) + " (" + std::strerror(errno) + ")";
+          ok = false;
+          break;
+        }
+        written += len;
+        total_written += len;
       }
     }
-    out.close();
+    if (::close(fd) != 0 && ok) {
+      error = "Could not write " + PathUtf8(dest) + " (" + std::strerror(errno) + ")";
+      ok = false;
+    }
     if (!ok) break;
     if ((archive_entry_mode(entry) & 0111) != 0) MakeExecutable(dest);
   }

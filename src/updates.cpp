@@ -346,6 +346,12 @@ bool HttpGet(const std::string& url, const std::vector<std::string>& headers,
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "CoreOfLight/" COREOFLIGHT_VERSION);
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+  // A release URL is HTTPS: a redirect may only stay HTTPS (GitHub's asset download goes to its
+  // object store) and never drop to plain HTTP where the download could be swapped on the way.
+#if LIBCURL_VERSION_NUM >= 0x075500  /* 7.85.0, CURLOPT_REDIR_PROTOCOLS_STR */
+  curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https");
+  curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+#endif
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
   curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
   curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
