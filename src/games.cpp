@@ -19,6 +19,7 @@
 #include "portal/data_folder.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
+#include "game_install.h"
 #include "gpu_tier.h"
 #include "handheld.h"
 #include "hub_log.h"  // WineVersion
@@ -230,12 +231,16 @@ fs::path FindInGamesFolder(const Game& game, const fs::path& folder) {
     if (ec) break;
     std::error_code type_ec;
     if (!it->is_directory(type_ec)) continue;
+    // An update's staging and rollback folders (games.cpp StartGameInstall) hold a copy of the game.
+    if (PathUtf8(it->path().filename()).starts_with('.')) continue;
     if (IsFile(it->path() / game.exe)) return it->path() / game.exe;
     for (fs::directory_iterator inner(it->path(), fs::directory_options::skip_permission_denied, type_ec), stop;
          inner != stop; inner.increment(type_ec)) {
       if (type_ec) break;
       std::error_code inner_ec;
-      if (inner->is_directory(inner_ec) && IsFile(inner->path() / game.exe)) return inner->path() / game.exe;
+      if (!inner->is_directory(inner_ec)) continue;
+      if (PathUtf8(inner->path().filename()).starts_with('.')) continue;
+      if (IsFile(inner->path() / game.exe)) return inner->path() / game.exe;
     }
   }
   return {};
@@ -596,47 +601,9 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
   const std::string toml_name = UserDataName(fs::path(kGames[game].exe)) + ".toml";
   const std::string version = SetupVersion(kGames[game], setup);
   const std::string resolution = std::to_string(w) + "x" + std::to_string(h);
-  static constexpr const char kInstallScript[] =
-      "set -e\n"
-      "archive=\"$1\"; dest=\"$2\"; toml=\"$3\"; ver=\"$4\"; scale=\"$5\"; lang=\"$6\"; res=\"$7\"; log=\"$8\"\n"
-      "mkdir -p \"$dest\"\n"
-      "stage=\"$(mktemp -d \"${dest}/.extract.XXXXXX\")\"\n"
-      "cleanup() { rm -rf \"$stage\"; }\n"
-      "trap cleanup EXIT\n"
-      "mkdir -p \"$stage/files\"\n"
-      "had_toml=0\n"
-      "if [ -f \"$dest/$toml\" ]; then\n"
-      "  had_toml=1\n"
-      "  cp \"$dest/$toml\" \"$stage/$toml.keep\"\n"
-      "fi\n"
-      "tar -xzf \"$archive\" -C \"$stage/files\" >>\"$log\" 2>&1\n"
-      "src=\"$stage/files\"\n"
-      "entries=$(find \"$stage/files\" -mindepth 1 -maxdepth 1 | wc -l)\n"
-      "if [ \"$entries\" -eq 1 ]; then\n"
-      "  only=$(find \"$stage/files\" -mindepth 1 -maxdepth 1)\n"
-      "  if [ -d \"$only\" ]; then\n"
-      "    src=\"$only\"\n"
-      "  fi\n"
-      "fi\n"
-      "cp -a \"$src\"/. \"$dest\"/\n"
-      "if [ \"$had_toml\" -eq 1 ]; then\n"
-      "  mv -f \"$stage/$toml.keep\" \"$dest/$toml\"\n"
-      "elif [ -f \"$dest/$toml\" ]; then\n"
-      "  sed -i -E \"s|^portal_mode[[:space:]]*=.*|portal_mode = \\\"hybrid\\\"|\" \"$dest/$toml\"\n"
-      "  sed -i -E \"s|^resolution[[:space:]]*=.*|resolution = \\\"$res\\\"|\" \"$dest/$toml\"\n"
-      "  sed -i -E \"s|^resolution_scale[[:space:]]*=.*|resolution_scale = $scale|\" \"$dest/$toml\"\n"
-      "  if grep -qE \"^#?[[:space:]]*language[[:space:]]*=\" \"$dest/$toml\"; then\n"
-      "    sed -i -E \"s|^#?[[:space:]]*language[[:space:]]*=.*|language = \\\"$lang\\\"|\" \"$dest/$toml\"\n"
-      "  else\n"
-      "    printf \"\\n[\\\"Game\\\"]\\nlanguage = \\\"%s\\\"\\n\" \"$lang\" >> \"$dest/$toml\"\n"
-      "  fi\n"
-      "fi\n"
-      "if [ -n \"$ver\" ]; then\n"
-      "  printf \"%s\\n\" \"$ver\" > \"$dest/.coreoflight-version\"\n"
-      "fi\n";
   std::vector<std::string> args = {
       "-c",
-      kInstallScript,
+      kGameInstallScript,
       "coreoflight-install",
       PathUtf8(setup),
       PathUtf8(dest_dir),
@@ -646,6 +613,7 @@ bool StartGameInstall(size_t game, const fs::path& setup, bool german, void** pr
       german ? "german" : "english",
       resolution,
       PathUtf8(log),
+      kGames[game].exe,
   };
   void* spawned = SpawnProcess("/bin/sh", args, setup.parent_path(), true);
   if (!spawned) return false;
