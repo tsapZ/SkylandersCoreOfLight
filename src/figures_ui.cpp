@@ -20,6 +20,7 @@
 #include "platform.h"
 #include "portal/figure_catalog.h"
 #include "portal/figure_file.h"
+#include "portal/menu_favourites.h"
 #include "textures.h"
 
 namespace coreoflight {
@@ -38,6 +39,21 @@ const ImU32 kEdge = Rgba(90, 100, 150);
 
 constexpr std::string_view kGames[] = {"Spyro's Adventure", "Giants", "Swap Force", "Trap Team", "SuperChargers",
                                        "Imaginators"};
+
+// A favourite's mark: a gold star on a dark disc, as on the games' portal menu cards
+// (skylanders-portal portal_menu.cpp DrawFavouriteStar), so it reads the same in both.
+void DrawFavouriteStar(ImDrawList* dl, ImVec2 c, float r, float line) {
+  constexpr float kPi = 3.14159265f;
+  dl->AddCircleFilled(c, r * 1.3f, Rgba(10, 12, 30, 225), 32);
+  ImVec2 pts[10];
+  for (int i = 0; i < 10; ++i) {
+    const float a = -kPi / 2 + i * kPi / 5.0f;
+    const float rr = (i % 2) ? r * 0.42f : r;
+    pts[i] = {c.x + std::cos(a) * rr, c.y + std::sin(a) * rr};
+  }
+  dl->AddConcavePolyFilled(pts, 10, kGold);
+  dl->AddPolyline(pts, 10, Rgba(40, 25, 0), ImDrawFlags_Closed, line);
+}
 
 ImU32 ElementColor(sp::Element e) {
   switch (e) {
@@ -270,6 +286,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
       f.category = std::string(info->category);
       f.badge = sp::VersionBadge(*info);
       f.element = sp::FigureElement(*info);
+      f.character = sp::FavouriteName(*info);
     } else {
       f.name = stem;
       f.category = german_ ? "Unbekannt" : "Unknown";
@@ -277,6 +294,8 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     have.insert({f.id, f.variant});
     owned_.push_back(std::move(f));
   }
+  // The favourites, as the games' portal menu left them (or this screen).
+  favourites_ = sp::LoadFavourites(FavouritesFile());
   // The figures the owner marked as owned without a file of them.
   marked_.clear();
   if (marks_enabled_) {
@@ -302,6 +321,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.category = std::string(info->category);
     f.badge = sp::VersionBadge(*info);
     f.element = sp::FigureElement(*info);
+    f.character = sp::FavouriteName(*info);
     owned_.push_back(std::move(f));
   }
   for (const auto& [key, copy] : real_toys) {
@@ -324,6 +344,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.category = std::string(info->category);
     f.badge = sp::VersionBadge(*info);
     f.element = sp::FigureElement(*info);
+    f.character = sp::FavouriteName(*info);
     have.insert(plain);
     owned_.push_back(std::move(f));
   }
@@ -347,6 +368,7 @@ void FiguresScreen::Open(const fs::path& figures_dir) {
     f.category = std::string(info.category);
     f.badge = sp::VersionBadge(info);
     f.element = sp::FigureElement(info);
+    f.character = sp::FavouriteName(info);
     f.owned = have.contains({info.id, info.variant});
     f.marked = !f.owned && marked_.contains({info.id, info.variant});
     f.owned = f.owned || f.marked;
@@ -388,6 +410,32 @@ void FiguresScreen::ToggleMark(const Figure& f) {
   for (size_t i = 0; i < shown.size(); ++i) {
     if (shown[i]->id == key.first && shown[i]->variant == key.second) selected_ = int(i);
   }
+}
+
+// Player 1's file of the games' portal menu (skylanders-portal portal_menu.cpp FavouritesFile):
+// the launcher stands for the player at the keyboard or the first pad.
+fs::path FiguresScreen::FavouritesFile() const { return figures_dir_ / "portal_menu_favourites_p1.txt"; }
+
+bool FiguresScreen::IsFavourite(const Figure& f) const {
+  return !f.character.empty() && sp::HasFavourite(favourites_, f.character);
+}
+
+void FiguresScreen::ToggleFavourite(const Figure& f) {
+  if (f.character.empty()) return;
+  // Read again first: a game running meanwhile may have changed it (its portal menu does the same).
+  std::vector<std::string> names = sp::LoadFavourites(FavouritesFile());
+  const bool added = sp::ToggleFavourite(names, f.character);
+  std::error_code ec;
+  fs::create_directories(figures_dir_, ec);
+  sp::SaveFavourites(FavouritesFile(), names);
+  favourites_ = sp::LoadFavourites(FavouritesFile());
+  if (sp::HasFavourite(favourites_, f.character) != added) {
+    message_ = german_ ? "Die Favoriten lie\xC3\x9F" "en sich nicht speichern." : "Could not save the favourites.";
+  } else {
+    message_ = added ? (german_ ? f.character + " ist jetzt ein Favorit." : f.character + " is a favourite now.")
+                     : (german_ ? f.character + " ist kein Favorit mehr." : f.character + " is no favourite any more.");
+  }
+  message_until_ = ImGui::GetTime() + 4.0;
 }
 
 const fs::path* FiguresScreen::Picture(const Figure& f) {
@@ -622,14 +670,24 @@ void FiguresScreen::DrawTree(float width, float height, float u) {
   hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
 }
 
+std::vector<int> FiguresScreen::Tabs() const {
+  std::vector<int> tabs = {kTabEvery};
+  // The favourites' tab once there is one (as in the games' portal menu), whichever list is shown.
+  if (!favourites_.empty()) tabs.push_back(kTabFavourites);
+  for (int g = 0; g < int(std::size(kGames)); ++g) tabs.push_back(g);
+  tabs.push_back(kTabItems);
+  return tabs;
+}
+
 std::vector<const FiguresScreen::Figure*> FiguresScreen::Shown() const {
   std::vector<const Figure*> out;
   const auto& list = all_ ? catalog_ : owned_;
   // The last tab: the magic items (and adventure packs) of every game, by game, as the lists are.
-  const bool items_tab = tab_ == 1 + int(std::size(kGames));
+  const bool items_tab = tab_ == kTabItems;
   for (const Figure& f : list) {
     const bool item = f.category == "Items";
-    if (items_tab ? item : !item && (tab_ == 0 || f.game == kGames[tab_ - 1])) {
+    if (tab_ == kTabFavourites && !IsFavourite(f)) continue;
+    if (items_tab ? item : !item && (tab_ < 0 || f.game == kGames[tab_])) {
       // The chip: an element shows that element's characters, a kind chip (traps, vehicles,
       // crystals) that kind; "every" (0) all of them.
       const int kind = KindOf(f);
@@ -641,7 +699,7 @@ std::vector<const FiguresScreen::Figure*> FiguresScreen::Shown() const {
   // A game's figures by element, in the games' order (Magic first, Light and Dark last), the
   // characters without one after them, then the crystals, vehicles and traps; within each as the
   // lists are.
-  if (!items_tab && tab_ > 0) {
+  if (!items_tab && tab_ >= 0) {
     std::stable_sort(out.begin(), out.end(), [](const Figure* a, const Figure* b) {
       auto key = [](const Figure* f) {
         const int kind = KindOf(*f);
@@ -662,11 +720,11 @@ int FiguresScreen::KindOf(const Figure& f) {
 
 std::vector<int> FiguresScreen::Elements() const {
   std::vector<int> out;
-  const bool items_tab = tab_ == 1 + int(std::size(kGames));
-  if (items_tab) return out;
+  if (tab_ == kTabItems) return out;
   for (const Figure& f : all_ ? catalog_ : owned_) {
     if (f.category == "Items") continue;
-    if (tab_ != 0 && f.game != kGames[tab_ - 1]) continue;
+    if (tab_ >= 0 && f.game != kGames[tab_]) continue;
+    if (tab_ == kTabFavourites && !IsFavourite(f)) continue;
     const int kind = KindOf(f);
     const int chip = kind ? kind : f.element == sp::Element::kNone ? 0 : int(f.element);
     if (chip && std::find(out.begin(), out.end(), chip) == out.end()) out.push_back(chip);
@@ -686,19 +744,26 @@ void FiguresScreen::Draw(float width, float height) {
                    ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const float u = UiScale(width, height);
+  // The favourites' tab goes with the last favourite: back to every game then.
+  const std::vector<int> tab_list = Tabs();
+  if (std::find(tab_list.begin(), tab_list.end(), tab_) == tab_list.end()) {
+    tab_ = kTabEvery;
+    selected_ = 0;
+  }
   // A game's tab over that game's dashboard background (kGames is AllGames' order); every game's
   // over the plain blue.
-  DrawBackdrop(dl, width, height,
-               tab_ > 0 && tab_ <= int(std::size(kGames)) ? GameBackground(size_t(tab_ - 1)) : fs::path(), true);
+  DrawBackdrop(dl, width, height, tab_ >= 0 ? GameBackground(size_t(tab_)) : fs::path(), true);
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim,
        tree_ ? (german_ ? "UPGRADES" : "UPGRADES") : board_ ? (german_ ? "FIGUREN" : "FIGURES")
                                                         : (german_ ? "FIGUREN" : "FIGURES"));
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold,
        tree_ ? tree_figure_.name
        : board_ ? std::string(german_ ? "Rangliste" : "Leaderboard")
-       : tab_ == 1 + int(std::size(kGames))
+       : tab_ == kTabItems
            ? (all_ ? (german_ ? "Alle Magischen Objekte" : "Every magic item")
                    : (german_ ? "Meine Magischen Objekte" : "My magic items"))
+       : tab_ == kTabFavourites
+           ? (all_ ? (german_ ? "Alle Favoriten" : "Every favourite") : (german_ ? "Meine Favoriten" : "My favourites"))
        : all_ ? (german_ ? "Alle Skylander" : "Every Skylander") : (german_ ? "Meine Skylander" : "My Skylanders"));
   // Whose figures they are (profiles.h).
   const std::string whose = (german_ ? "Profil " : "Profile ") + ActiveProfile().name;
@@ -732,13 +797,15 @@ void FiguresScreen::Draw(float width, float height) {
   }
 
   auto pressed = [](ImGuiKey k) { return ImGui::IsKeyPressed(k, true); };
-  const int tabs = 2 + int(std::size(kGames));  // every game, each game, the magic items
+  // Every game, the favourites (once there is one), each game, the magic items.
+  const int tabs = int(tab_list.size());
+  const int tab_at = int(std::find(tab_list.begin(), tab_list.end(), tab_) - tab_list.begin());
   if (pressed(ImGuiKey_GamepadL1) || pressed(ImGuiKey_Q)) {
-    tab_ = (tab_ + tabs - 1) % tabs;
+    tab_ = tab_list[size_t((tab_at + tabs - 1) % tabs)];
     selected_ = 0;
   }
   if (pressed(ImGuiKey_GamepadR1) || pressed(ImGuiKey_E)) {
-    tab_ = (tab_ + 1) % tabs;
+    tab_ = tab_list[size_t((tab_at + 1) % tabs)];
     selected_ = 0;
   }
   if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || ImGui::IsKeyPressed(ImGuiKey_X, false) ||
@@ -750,21 +817,24 @@ void FiguresScreen::Draw(float width, float height) {
     open_ = false;
   }
 
-  // Tabs: every game, then each game.
+  // Tabs: every game, the favourites, each game, the magic items.
   const float left = 48 * u, top = 120 * u;
   float tx = left;
   std::vector<std::string> names, counts;
   for (int i = 0; i < tabs; ++i) {
-    names.push_back(i == 0                            ? (german_ ? "Alle Spiele" : "Every game")
-                    : i == 1 + int(std::size(kGames)) ? (german_ ? "Magische Objekte" : "Magic items")
-                                                      : std::string(kGames[i - 1]));
+    const int kind = tab_list[size_t(i)];
+    names.push_back(kind == kTabEvery        ? (german_ ? "Alle Spiele" : "Every game")
+                    : kind == kTabFavourites ? (german_ ? "Favoriten" : "Favourites")
+                    : kind == kTabItems      ? (german_ ? "Magische Objekte" : "Magic items")
+                                             : std::string(kGames[kind]));
     // The collection progress (#43, a launcher setting): how many of the tab's figures are owned.
     if (progress_) {
-      const bool items_tab = i == 1 + int(std::size(kGames));
+      const bool items_tab = kind == kTabItems;
       int have = 0, total = 0;
       for (const Figure& f : catalog_) {
         const bool item = f.category == "Items";
-        if (items_tab ? !item : item || (i != 0 && f.game != kGames[i - 1])) continue;
+        if (items_tab ? !item : item || (kind >= 0 && f.game != kGames[kind])) continue;
+        if (kind == kTabFavourites && !IsFavourite(f)) continue;
         ++total;
         have += f.owned ? 1 : 0;
       }
@@ -785,15 +855,16 @@ void FiguresScreen::Draw(float width, float height) {
     const ImVec2 a{tx, top}, b{tx + w, top + 40 * u};
     if (io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y &&
         ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-      tab_ = i;
+      tab_ = tab_list[size_t(i)];
       selected_ = 0;
     }
-    dl->AddRectFilled(a, b, i == tab_ ? kGold : Rgba(40, 50, 100, 230), 20 * u);
+    const bool on = tab_list[size_t(i)] == tab_;
+    dl->AddRectFilled(a, b, on ? kGold : Rgba(40, 50, 100, 230), 20 * u);
     const float ty = top + 20 * u - tab_size * 0.58f;
-    Text(dl, bold_, tab_size, {tx + 15 * u, ty}, i == tab_ ? Rgba(60, 35, 0) : kWhite, names[i]);
+    Text(dl, bold_, tab_size, {tx + 15 * u, ty}, on ? Rgba(60, 35, 0) : kWhite, names[i]);
     if (!counts.empty()) {
       Text(dl, regular_, tab_size * 0.85f, {tx + 23 * u + TextWidth(bold_, tab_size, names[i]), ty + tab_size * 0.1f},
-           i == tab_ ? Rgba(110, 75, 10) : Rgba(170, 180, 215), counts[i]);
+           on ? Rgba(110, 75, 10) : Rgba(170, 180, 215), counts[i]);
     }
     tx += w + 10 * u;
   }
@@ -888,7 +959,10 @@ void FiguresScreen::Draw(float width, float height) {
   const int first_row = grid_scroll_;
   if (!n) {
     Text(dl, regular_, 22 * u, {left, grid_top + 10 * u}, kDim,
-         all_ ? (german_ ? "Keine Skylander." : "No Skylanders.")
+         tab_ == kTabFavourites && !all_
+             ? (german_ ? "Von deinen Favoriten ist keine Figur da (X: alle Skylander)."
+                        : "None of your favourites is among your figures (X: every Skylander).")
+         : all_ ? (german_ ? "Keine Skylander." : "No Skylanders.")
               : (german_ ? "Hier sind noch keine Figuren (Ordner Dokumente\\Skylanders\\Figures)."
                          : "No figures here yet (folder Documents\\Skylanders\\Figures)."),
          grid_w);
@@ -933,6 +1007,8 @@ void FiguresScreen::Draw(float width, float height) {
       Text(dl, bold_, 24 * u, {c.x - TextWidth(bold_, 24 * u, initial) * 0.5f, c.y - 15 * u},
            Rgba(255, 255, 255, alpha), initial);
     }
+    // A favourite: the star on the picture's top-left corner, as on the portal menu's cards.
+    if (IsFavourite(f)) DrawFavouriteStar(dl, {c.x - 26 * u, c.y - 26 * u}, 10 * u, 1.5f * u);
     const float tx0 = a.x + 82 * u, tw = tile_w - 90 * u;
     Text(dl, bold_, 19 * u, {tx0, a.y + 12 * u}, Rgba(255, 255, 255, alpha), Fit(bold_, 19 * u, f.name, tw));
     Text(dl, regular_, 15 * u, {tx0, a.y + 38 * u}, Rgba(180, 190, 215, alpha),
@@ -955,6 +1031,12 @@ void FiguresScreen::Draw(float width, float height) {
     Text(dl, regular_, 15 * u, {tx0, a.y + 62 * u}, f.stats && !fresh ? kGold : Rgba(150, 160, 190, alpha), line);
   }
 
+  // R3 / F: the chosen figure's character a favourite, or no longer one (#93; R3 / F as in the
+  // games' portal menu). On the favourites' tab it leaves the list at once.
+  if (n && !shown[selected_]->character.empty() &&
+      (ImGui::IsKeyPressed(ImGuiKey_GamepadR3, false) || ImGui::IsKeyPressed(ImGuiKey_F, false))) {
+    ToggleFavourite(*shown[selected_]);
+  }
   // Y / C: the chosen figure of the owner's into another profile.
   if (n && !shown[selected_]->file.empty() &&
       (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceUp, false) || ImGui::IsKeyPressed(ImGuiKey_Y, false) ||
@@ -1221,6 +1303,12 @@ void FiguresScreen::Draw(float width, float height) {
               !f.file.empty() ? (german_ ? "In anderes Profil kopieren" : "Copy to another profile")
               : f.marked      ? (german_ ? "Hab ich nicht" : "I don't own it")
                               : (german_ ? "Hab ich" : "I own it"));
+  }
+  if (n && !shown[selected_]->character.empty()) {
+    hx = Hint(dl, bold_, hs, {hx, hy}, "R3", Rgba(80, 90, 140),
+              IsFavourite(*shown[selected_]) ? (german_ ? "Kein Favorit" : "Unfavourite")
+                                             : (german_ ? "Favorit" : "Favourite"),
+              "F");
   }
   if (n && !shown[selected_]->file.empty()) {
     hx = Hint(dl, bold_, hs, {hx, hy}, "Start", Rgba(80, 90, 140),

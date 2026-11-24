@@ -317,7 +317,14 @@ exe and gets out of the way while the game runs; no game needs it.
   Skylander without a file marks it **"Hab ich"** (I own it: on the shelf, not as a file); it then
   counts as owned and shows in "Meine Skylander" as "hab ich (ohne Datei)", and Y takes the mark
   back. The marks are the profile's, `Skylanders\owned.txt` next to its figure folder (one
-  `<id>\t<variant>` a line); the games never read it. An Imaginators creation crystal shows its
+  `<id>\t<variant>` a line); the games never read it. R3 (F) makes the chosen figure's character a
+  **favourite** (#93) or takes it back: the games' portal menu file, player 1's
+  (`Figures\portal_menu_favourites_p1.txt`, one character name a line, skylanders-portal
+  `FavouriteName`: all versions of a character together, a swapper's halves under the swapper), so a
+  mark made in a game shows here and the other way round; the file is read again before each change,
+  as the portal menu does. A gold star marks them on the cards, as on the portal menu's; once there
+  is one, a **"Favoriten"** tab after "Alle Spiele" shows them from every game (X: every version).
+  Magic items have none. An Imaginators creation crystal shows its
   Imaginator's name and battle class (kept on the figure, skylanders-portal
   `FigureStats::creation_class`); a Trap Team trap the villain caught in it ("Gefangen: Chompy
   Mage", skylanders-portal `ReadTrapVillain`); a figure with hero points has them ("64 / 100"),

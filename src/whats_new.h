@@ -12,12 +12,10 @@ struct WhatsNewLine {
 };
 
 inline constexpr WhatsNewLine kWhatsNew[] = {
-    {"A game that can't start because a file is missing: the box names the file and where to get it back.",
-     "Ein Spiel startet nicht, weil eine Datei fehlt: der Kasten nennt die Datei und wo man sie zur\xC3\xBC" "ckholt."},
-    {"Achievements: a long description stays inside its info box.",
-     "Erfolge: eine lange Beschreibung bleibt in ihrem Infokasten."},
-    {"Figure files ending .dmp (the plain 1 KB dump some tools write) count in the profiles like .dump files.",
-     "Figurendateien mit der Endung .dmp (der reine 1-KB-Dump mancher Tools) z\xC3\xA4hlen in den Profilen wie .dump-Dateien."},
+    {"Figure library: R3 (F) makes a figure a favourite, the same favourites as in the games' portal menu, with a "
+     "Favourites tab of their own.",
+     "Figurenbibliothek: R3 (F) macht eine Figur zum Favoriten, dieselben Favoriten wie im Portalmen\xC3\xBC der Spiele, "
+     "mit einem eigenen Favoriten-Tab."},
 };
 
 }  // namespace coreoflight
