@@ -634,6 +634,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     coreoflight::SetLaunchArgs(argc, argv_ptrs.data());
     parsed = ParseArgs(utf8_args, opts, arg_error);
   }
+  // A window program: nothing shows its stderr, so a typo in a shortcut or in Steam's launch options
+  // would end the launcher without a word. The help and the error come in a box as well.
+  if (parsed != ParseResult::kOk) {
+    const std::string text = parsed == ParseResult::kHelp ? std::string(kUsage) : arg_error + "\n\n" + kUsage;
+    MessageBoxW(nullptr, coreoflight::PathFromUtf8(text).wstring().c_str(), L"Core of Light",
+                MB_OK | (parsed == ParseResult::kError ? MB_ICONWARNING : MB_ICONINFORMATION));
+  }
   if (const int code = HandleCli(opts, parsed, arg_error); code >= 0) return code;
   if (opts.test_crash) {
     // A fault inside ntdll.dll on purpose (a string at address 0x10), to see the crash lines
