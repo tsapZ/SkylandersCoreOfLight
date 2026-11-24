@@ -13,9 +13,9 @@ are in [RULES.md](RULES.md).
 | `status` | per repository: branch, clean or not, ahead/behind origin, the version, the latest release, and the submodule commits (a `*` marks one that isn't the shared branch's tip) |
 | `bump --sdk <sha> --lib <sha> -m <msg file> [--status "<line>"] [--push]` | moves the shared submodules to those commits in every repository that has them, with a STATUS entry, commits (and pushes) |
 | `version <x.y.z-beta.N> [--repos ...] [--status "<line>"] [--push]` | sets the release version (a game's `installer/<Repo>.iss`, the launcher's `CMakeLists.txt`), commits (and pushes) |
-| `build [--recipe package-installer\|package-linux] [--test]` | builds: the games with `just`, the launcher with CMake and `tools/package_installer.ps1` (Windows) or `tools/package_linux.sh` and `tools/package_appimage.sh` (Linux); a log per repository. On Linux it checks clang 19 and the development packages before the first build |
-| `check [--history]` | what would stop a release: uncommitted changes, game data or figure files in git, the Windows user name in tracked files (or, with `--history`, in any commit), a private e-mail in a commit, a build machine path in a staged exe or DLL, the developer kit in a staged exe, or a private repository (the developer kit, GiantsDecomp) built into the release build folder |
-| `publish --notes <folder> [--dry-run]` | the GitHub releases, each with its setup (the launcher: setup and portable ZIP). The notes come from `<folder>\<Repo>.md` and `common.md`; the install, problem and disclaimer paragraphs are added. Refuses what fails `check`, isn't pushed or is already released |
+| `build [--recipe package-installer\|package-linux] [--test]` | builds: the games with `just`, the launcher with CMake and `tools/package_installer.ps1` (Windows) or `tools/package_linux.sh` and `tools/package_appimage.sh` (Linux); a log per repository. On Linux it checks clang 19 and the development packages before the first build, and the packaging step writes a `.provenance` sidecar (version and SHA-256) next to each unversioned tarball |
+| `check [--history]` | what would stop a release: uncommitted changes, game data or figure files in git, a build machine path (`Users\...` / `/home/...`) in tracked files (or, with `--history`, in any commit), a private e-mail in a commit, a build machine path in a staged exe or DLL, the developer kit in a staged exe, or a private repository (the developer kit, GiantsDecomp) built into the release build folder |
+| `publish --notes <folder> [--platforms windows linux\|all] [--dry-run]` | the GitHub releases, each with its setup (the launcher: setup and portable ZIP). `--platforms` chooses the assets to upload (default: this machine's OS); the notes and the architecture list are taken from the assets actually present. The notes come from `<folder>\<Repo>.md` and `common.md`; the install, problem and disclaimer paragraphs are added. Refuses what fails `check`, isn't pushed, is already released, or has no current version-matched assets (a Linux tarball must have a `.provenance` sidecar naming this version with a matching SHA-256) |
 
 `--repos` takes repository names, `games` or `all` (the default). A release then goes:
 
@@ -43,8 +43,8 @@ newer: Ubuntu 24.04's clang 18 with libstdc++ 13 hides the `std::expected` the S
         libssl-dev libarchive-dev libgl1-mesa-dev libudev-dev pkg-config cmake ninja-build
     python3 maintainer/release.py build --repos SkylandersCoreOfLight --recipe package-linux
 
-The release tool uses clang 19 or newer for the games and also accepts Ubuntu's versioned
-`clang-19` and `clang++-19` executables.
+The release tool uses clang 19 or newer for the games and also accepts versioned executables such
+as `clang-19`/`clang++-19` or `clang-20`/`clang++-20`.
 
 Build the release on the oldest distribution you support for that architecture (Ubuntu 24.04 here
 for x86-64): the binaries and the bundled SDL3 link against its system libraries. For ARM64, build
@@ -60,8 +60,21 @@ the build machine (`linux-amd64-release` or `linux-arm64-release`). appimagetool
 runtime 20251108 are cached in `$SKYLANDERS_WORK/tools` and checked against fixed SHA-256 hashes for
 both architectures. Use `APPIMAGETOOL` and `APPIMAGE_RUNTIME` to supply your own copies. An AppImage
 runs from a read-only mount and doesn't update itself: it opens the release page instead. `publish`
-uploads every Linux asset built into the output folders, so one release can carry amd64 and arm64
-next to each other, and the release notes describe both tarballs and both AppImages.
+uploads the Linux assets for the architectures built into the output folders; `--platforms all` adds
+the Windows set. The notes describe only the tarballs and AppImages actually present, so one release
+can carry amd64 and arm64 next to each other.
+
+The tarballs have no version in their name, so the packaging step writes a small sidecar next to each:
+`CoreOfLight-linux-<arch>.tar.gz.provenance` or `<Repo>-linux-<arch>.tar.gz.provenance`, holding the
+version and the archive's SHA-256. Before packaging it removes this machine's architecture's old
+tarball and sidecar, so a failed or skipped step cannot leave an earlier file to be published, and a
+rebuilt one is always freshly stamped. `publish` checks the sidecar rather than file times, so a
+copied or mixed-OS bundle can't pass for another version: it refuses a tarball whose sidecar is
+missing, names a different version, or whose digest no longer matches. Move a tarball together with
+its sidecar when it was built on another machine. A manual package run outside `release.py` leaves no
+sidecar; run the packaging through `python maintainer/release.py build --recipe package-linux` (add
+`--repos` for a game) so the tool writes it. The Windows setups and the AppImages carry the version
+in their name and need no sidecar.
 
 ## tools/
 

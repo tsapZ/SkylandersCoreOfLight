@@ -18,11 +18,20 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 
 
+def host_arch() -> str:
+    """This machine's release preset architecture; an unknown one is an error, not amd64."""
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        return "amd64"
+    if machine in ("aarch64", "arm64"):
+        return "arm64"
+    raise SystemExit(f"unsupported architecture: {machine or 'unknown'} "
+                     "(expected x86_64 or aarch64; pass --exe)")
+
+
 def default_exe() -> pathlib.Path:
     """The launcher of this machine's release preset (linux-amd64 or linux-arm64)."""
-    machine = platform.machine().lower()
-    arch = "arm64" if machine in ("aarch64", "arm64") else "amd64"
-    return pathlib.Path(f"out/build/linux-{arch}-release") / "coreoflight"
+    return pathlib.Path(f"out/build/linux-{host_arch()}-release") / "coreoflight"
 
 
 def main() -> int:
