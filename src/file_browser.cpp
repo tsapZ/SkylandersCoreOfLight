@@ -201,14 +201,17 @@ void FileBrowser::List(const fs::path& folder) {
     add_place("Desktop", DesktopDir());
     add_place(german_ ? "Dokumente" : "Documents", skylanders::DocumentsFolder());
     for (const fs::path& mount_root : {fs::path("/run/media"), fs::path("/media"), fs::path("/mnt")}) {
-      std::error_code ec;
-      for (fs::directory_iterator it(mount_root, fs::directory_options::skip_permission_denied, ec), end;
-           !ec && it != end; it.increment(ec)) {
-        if (!it->is_directory(ec)) continue;
+      std::error_code outer_ec;
+      for (fs::directory_iterator it(mount_root, fs::directory_options::skip_permission_denied, outer_ec), end;
+           !outer_ec && it != end; it.increment(outer_ec)) {
+        std::error_code type_ec;
+        if (!it->is_directory(type_ec)) continue;
         if (mount_root == "/run/media") {
-          for (fs::directory_iterator sub(it->path(), fs::directory_options::skip_permission_denied, ec), sub_end;
-               !ec && sub != sub_end; sub.increment(ec)) {
-            if (sub->is_directory(ec)) add_place(PathUtf8(sub->path()), sub->path());
+          std::error_code inner_ec;
+          for (fs::directory_iterator sub(it->path(), fs::directory_options::skip_permission_denied, inner_ec), sub_end;
+               !inner_ec && sub != sub_end; sub.increment(inner_ec)) {
+            std::error_code sub_type_ec;
+            if (sub->is_directory(sub_type_ec)) add_place(PathUtf8(sub->path()), sub->path());
           }
         } else {
           add_place(PathUtf8(it->path()), it->path());
