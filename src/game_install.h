@@ -6,12 +6,15 @@
 // It never extracts over the live install: the folder is copied into a staging folder next to it
 // with independent data (cp -a --reflink=auto, an ordinary copy where the filesystem has no
 // reflinks, so a staged write can never reach the live files) and the package is extracted there.
-// The package may not ship the game's own data (rom, saves), and every folder it writes into is a
-// real directory in the stage, never a link, so no write can leave the staged tree. The folder is
-// swapped in with two renames only after the staged package was checked; the old folder stays as
-// <folder>.rollback until the swap succeeded, so an interrupted update is put back on the next
-// run, and a stale private staging folder from a killed run is cleared first. A per-target flock
-// keeps two runs of the same folder from sharing that rollback folder.
+// The game's own data, the top-level rom and saves folders, is never copied: it is renamed into the
+// staged install at commit time, so a sparse or large ROM and the saves keep their device and
+// inode and a link stays a link. The package may not ship rom or saves, and every folder it writes
+// into is a real directory in the stage, never a link, so no write can leave the staged tree. The
+// folder is swapped in with same-filesystem renames only after the staged package was checked; the
+// old folder stays as <folder>.rollback until the swap succeeded. The staging folder has a fixed
+// name so the next run can find one a killed run left behind, put its rom and saves back into the
+// install, and only then clear it; a failed rollback keeps every backup. A per-target flock keeps
+// two runs of the same folder from sharing that rollback folder.
 //
 // The game's settings file is copied out to the private work folder (not into the staged package
 // tree) before the swap and put back afterwards, so a package entry with the copy's name cannot
@@ -30,6 +33,7 @@ mkdir -p "$parent"
 
 step=starting
 reported=0
+preserve=0
 fail() {
   printf "ROM: %s\n" "$1" >>"$log"
   reported=1
@@ -49,41 +53,60 @@ if ! flock -n 9; then
 fi
 
 backup="$parent/.$base.rollback"
-step=preparing
-# A run killed earlier left only its private staging folder behind (its lock went with it); the
-# files in it are copies, so a retry clears it before making its own.
-rm -rf "$parent/.$base.extract."* 2>/dev/null || true
-work=
+# A fixed name so the next run can find a staging folder left by a killed one: the live rom and
+# saves are renamed into it during the commit, so they must be put back before it is cleared.
+work="$parent/.$base.extract"
+stage="$work/stage"
+
+recover_install() {
+  restore_into="$dest"
+  if [ -d "$backup" ] && [ ! -d "$dest" ]; then
+    restore_into="$backup"
+  fi
+  for data in rom saves; do
+    if [ -e "$stage/$data" ] || [ -L "$stage/$data" ]; then
+      if [ ! -d "$restore_into" ] || [ -e "$restore_into/$data" ] ||
+         [ -L "$restore_into/$data" ] || ! mv -T "$stage/$data" "$restore_into/$data"; then
+        printf "ROM: could not safely restore %s from %s\n" "$data" "$stage" >>"$log"
+        return 1
+      fi
+    fi
+  done
+  if [ "$restore_into" = "$backup" ] && ! mv -T "$backup" "$dest"; then
+    printf "ROM: the old install is at %s and could not be put back\n" "$backup" >>"$log"
+    return 1
+  fi
+}
+
 cleanup() {
   status=$?
-  # A run killed between moving the old folder aside and the new one in: put it back.
-  if [ -d "$backup" ] && [ ! -d "$dest" ]; then
-    if ! mv "$backup" "$dest"; then
-      printf "ROM: the old install is at %s and could not be put back\n" "$backup" >>"$log"
-    fi
-  fi
+  if [ "$preserve" -eq 0 ] && ! recover_install; then preserve=1; fi
   if [ "$status" -ne 0 ] && [ "$reported" -eq 0 ]; then
     printf "ROM: installation stopped while %s\n" "$step" >>"$log"
   fi
-  if [ -n "$work" ]; then rm -rf "$work"; fi
+  if [ "$preserve" -eq 0 ]; then rm -rf "$work" 2>/dev/null || true; fi
   exit "$status"
 }
 trap cleanup EXIT
-# Recovery from a killed run, or the old copy of a commit that got no further than its last rename.
+
+# Restore live data before clearing a staging folder left by an interrupted update.
 step=recovering
-if [ -d "$backup" ]; then
-  if [ -d "$dest" ]; then
-    rm -rf "$backup"
-  else
-    mv "$backup" "$dest"
-  fi
+if ! recover_install; then
+  preserve=1
+  fail "the interrupted install needs recovery from $backup and $stage"
 fi
+if [ -d "$backup" ]; then
+  rm -rf "$backup" || { preserve=1; fail "the old copy at $backup could not be removed"; }
+fi
+rm -rf "$work" 2>/dev/null || { preserve=1; fail "the interrupted update's staging folder could not be removed"; }
+# Older runs used a random suffix; those folders hold copies only.
+rm -rf "$parent/.$base.extract."* 2>/dev/null || true
+
 step=preparing
-work=$(mktemp -d "$parent/.$base.extract.XXXXXX")
-stage="$work/stage"
+mkdir -m 700 "$work"
+mkdir "$stage" "$work/pkg"
 pkg="$work/pkg"
 keep="$work/settings.keep"
-mkdir -p "$stage" "$pkg"
 
 # Reject package paths that would leave the extraction folder before handing them to tar.
 step=reading_the_package
@@ -133,11 +156,13 @@ fi
 step=copying_the_install
 had_toml=0
 if [ -d "$dest" ]; then
-  mkdir -p "$stage"
   # Independent staged data: a reflink clone or a real copy, never a hardlink that a staged write
-  # would carry into the live install.
-  if ! cp -a --reflink=auto "$dest"/. "$stage"/ 2>>"$log"; then
-    if ! cp -a "$dest"/. "$stage"/ 2>>"$log"; then
+  # would carry into the live install. The game's own data is not copied: renaming it at commit
+  # time keeps a large or sparse ROM and the saves on the same device and inode.
+  if ! find "$dest" -mindepth 1 -maxdepth 1 ! -name rom ! -name saves \
+        -exec cp -a --reflink=auto -t "$stage" -- {} + 2>>"$log"; then
+    if ! find "$dest" -mindepth 1 -maxdepth 1 ! -name rom ! -name saves \
+          -exec cp -a -t "$stage" -- {} + 2>>"$log"; then
       fail "the installed folder could not be copied for the update"
     fi
   fi
@@ -246,14 +271,23 @@ if [ -n "$ver" ]; then
   rm -f "$stage/.coreoflight-version"
   printf "%s\n" "$ver" >"$stage/.coreoflight-version"
 fi
-# Commit: the old folder aside, the staged one in (both renames in the same folder), then the old
-# folder goes. A failure before that leaves the install as it was; cleanup puts the old folder back
-# if the second rename fails.
+# Commit: the game's own data goes into the staged install with same-filesystem renames to exactly
+# where it was in the folder, then the old folder aside, the staged one in, and the old folder goes.
+# A failure before that leaves the install as it was; cleanup puts the old folder and data back.
 step=committing_the_install
+for protected in rom saves; do
+  if [ -e "$dest/$protected" ] || [ -L "$dest/$protected" ]; then
+    if [ "$(stat -c %d -- "$dest/$protected")" != "$(stat -c %d -- "$stage")" ]; then
+      fail "the game's $protected cannot be renamed across filesystems"
+    fi
+    mv -T "$dest/$protected" "$stage/$protected" ||
+      fail "the game's $protected could not be moved into the new install"
+  fi
+done
 if [ -d "$dest" ]; then
-  mv "$dest" "$backup" || fail "the old install could not be moved aside"
+  mv -T "$dest" "$backup" || fail "the old install could not be moved aside"
 fi
-if ! mv "$stage" "$dest"; then
+if ! mv -T "$stage" "$dest"; then
   fail "the new install could not be put in place"
 fi
 rm -rf "$backup" || fail "the old install could not be removed"

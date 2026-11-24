@@ -3,6 +3,7 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -46,6 +47,9 @@ static int Count(const std::string& text, std::string_view needle) {
   for (size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + needle.size())) ++count;
   return count;
 }
+
+static bool StatFile(const fs::path& p, struct stat& st) { return stat(p.c_str(), &st) == 0; }
+static bool StatLink(const fs::path& p, struct stat& st) { return lstat(p.c_str(), &st) == 0; }
 
 static void MakePackage(const fs::path& archive, const fs::path& root) {
   std::error_code ec;
@@ -234,18 +238,107 @@ int main() {
   CHECK(ReadFile(guarded / "rom" / "default.xex") == "ROM-REAL");
   CHECK(Contains(ReadFile(log), "rom"));
 
-  // A legitimately symlinked rom survives an update (the package has no rom).
+  // Legitimately symlinked rom and saves survive an update as the same links (the package has
+  // neither); moving them into the stage must rename the links, not copy their targets.
   const fs::path external_rom = root / "external-rom";
   WriteFile(external_rom / "default.xex", "LINKED-ROM");
+  const fs::path external_saves = root / "external-saves";
+  WriteFile(external_saves / "slot.sav", "LINKED-SAVE");
   const fs::path symlinked = games / "symlinked";
   CHECK(RunInstall(archive1, symlinked, "coreoflight.toml", "1.0.0", "2", "german", "1920x1080", log) == 0);
   fs::remove_all(symlinked / "rom", ec);
   fs::create_directory_symlink(external_rom, symlinked / "rom");
-  CHECK(fs::is_symlink(symlinked / "rom"));
+  fs::remove_all(symlinked / "saves", ec);
+  fs::create_directory_symlink(external_saves, symlinked / "saves");
+  struct stat rom_link_before{}, saves_link_before{};
+  CHECK(StatLink(symlinked / "rom", rom_link_before));
+  CHECK(StatLink(symlinked / "saves", saves_link_before));
   CHECK(RunInstall(archive2, symlinked, "coreoflight.toml", "2.1.0", "2", "german", "1920x1080", log) == 0);
+  struct stat rom_link_after{}, saves_link_after{};
+  CHECK(StatLink(symlinked / "rom", rom_link_after));
+  CHECK(StatLink(symlinked / "saves", saves_link_after));
   CHECK(fs::is_symlink(symlinked / "rom"));
+  CHECK(fs::is_symlink(symlinked / "saves"));
+  CHECK(rom_link_after.st_dev == rom_link_before.st_dev && rom_link_after.st_ino == rom_link_before.st_ino);
+  CHECK(saves_link_after.st_dev == saves_link_before.st_dev && saves_link_after.st_ino == saves_link_before.st_ino);
   CHECK(ReadFile(external_rom / "default.xex") == "LINKED-ROM");
+  CHECK(ReadFile(external_saves / "slot.sav") == "LINKED-SAVE");
   CHECK(ReadFile(symlinked / "game") == "exe-2");
+
+  // The game's own data is not copied: a sparse ROM and a save keep their device and inode across
+  // an update, and the ROM stays sparse.
+  const fs::path kept = games / "kept";
+  CHECK(RunInstall(archive1, kept, "coreoflight.toml", "1.0.0", "2", "german", "1920x1080", log) == 0);
+  WriteFile(kept / "saves" / "slot1.sav", "SAVE-KEEP");
+  fs::create_directories(kept / "rom");
+  {
+    const int fd = open((kept / "rom" / "default.xex").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    CHECK(fd >= 0);
+    CHECK(ftruncate(fd, 512 * 1024 * 1024) == 0);
+    CHECK(close(fd) == 0);
+  }
+  struct stat rom_before{}, save_before{};
+  CHECK(StatFile(kept / "rom" / "default.xex", rom_before));
+  CHECK(StatFile(kept / "saves" / "slot1.sav", save_before));
+  CHECK(rom_before.st_blocks * 512 < rom_before.st_size);
+  CHECK(RunInstall(archive2, kept, "coreoflight.toml", "2.0.0", "2", "german", "1920x1080", log) == 0);
+  struct stat rom_after{}, save_after{};
+  CHECK(StatFile(kept / "rom" / "default.xex", rom_after));
+  CHECK(StatFile(kept / "saves" / "slot1.sav", save_after));
+  CHECK(rom_after.st_dev == rom_before.st_dev && rom_after.st_ino == rom_before.st_ino);
+  CHECK(save_after.st_dev == save_before.st_dev && save_after.st_ino == save_before.st_ino);
+  CHECK(rom_after.st_size == rom_before.st_size);
+  CHECK(ReadFile(kept / "saves" / "slot1.sav") == "SAVE-KEEP");
+  CHECK(ReadFile(kept / "game") == "exe-2");
+  CHECK(!fs::exists(games / ".kept.extract"));
+  CHECK(!fs::exists(games / ".kept.rollback"));
+
+  // A commit killed after moving the old install aside and its rom and saves into the staging
+  // folder: the next run restores the old install and its data (same device and inode) before it
+  // updates, and clears the staging folder only after that.
+  const fs::path crashed = games / "crashed";
+  CHECK(RunInstall(archive1, crashed, "coreoflight.toml", "1.0.0", "2", "german", "1920x1080", log) == 0);
+  WriteFile(crashed / "saves" / "keep.sav", "OLD-SAVE");
+  WriteFile(crashed / "rom" / "default.xex", "OLD-ROM");
+  struct stat crashed_rom{}, crashed_save{};
+  CHECK(StatFile(crashed / "rom" / "default.xex", crashed_rom));
+  CHECK(StatFile(crashed / "saves" / "keep.sav", crashed_save));
+  const fs::path crashed_work = games / ".crashed.extract";
+  const fs::path crashed_backup = games / ".crashed.rollback";
+  fs::create_directories(crashed_work / "stage");
+  fs::rename(crashed / "rom", crashed_work / "stage" / "rom", ec);
+  CHECK(!ec);
+  fs::rename(crashed / "saves", crashed_work / "stage" / "saves", ec);
+  CHECK(!ec);
+  fs::rename(crashed, crashed_backup, ec);
+  CHECK(!ec);
+  // A failing run right after the interruption still restores the old install, data included.
+  fs::remove(log, ec);
+  CHECK(RunInstall(archive3, crashed, "coreoflight.toml", "2.1.0", "2", "german", "1920x1080", log) != 0);
+  CHECK(ReadFile(crashed / "game") == "exe-1");
+  CHECK(ReadFile(crashed / "rom" / "default.xex") == "OLD-ROM");
+  CHECK(ReadFile(crashed / "saves" / "keep.sav") == "OLD-SAVE");
+  struct stat crashed_restored_rom{}, crashed_restored_save{};
+  CHECK(StatFile(crashed / "rom" / "default.xex", crashed_restored_rom));
+  CHECK(StatFile(crashed / "saves" / "keep.sav", crashed_restored_save));
+  CHECK(crashed_restored_rom.st_dev == crashed_rom.st_dev && crashed_restored_rom.st_ino == crashed_rom.st_ino);
+  CHECK(crashed_restored_save.st_dev == crashed_save.st_dev && crashed_restored_save.st_ino == crashed_save.st_ino);
+  CHECK(!fs::exists(crashed_backup));
+  CHECK(!fs::exists(crashed_work));
+  // The same recovery, then a good update: the old data moves through with its device and inode.
+  CHECK(RunInstall(archive2, crashed, "coreoflight.toml", "2.2.0", "2", "german", "1920x1080", log) == 0);
+  CHECK(ReadFile(crashed / "game") == "exe-2");
+  CHECK(ReadFile(crashed / "rom" / "default.xex") == "OLD-ROM");
+  CHECK(ReadFile(crashed / "saves" / "keep.sav") == "OLD-SAVE");
+  struct stat crashed_rom_after{}, crashed_save_after{};
+  CHECK(StatFile(crashed / "rom" / "default.xex", crashed_rom_after));
+  CHECK(StatFile(crashed / "saves" / "keep.sav", crashed_save_after));
+  CHECK(crashed_rom_after.st_dev == crashed_rom.st_dev && crashed_rom_after.st_ino == crashed_rom.st_ino);
+  CHECK(crashed_save_after.st_dev == crashed_save.st_dev && crashed_save_after.st_ino == crashed_save.st_ino);
+  CHECK(!fs::exists(crashed_backup));
+  CHECK(!fs::exists(crashed_work));
+  CHECK(!fs::exists(games / ".crashed.extract"));
+  CHECK(!fs::exists(games / ".crashed.rollback"));
 
   fs::remove_all(root, ec);
   if (g_failures == 0) std::printf("game_install: all tests passed\n");
