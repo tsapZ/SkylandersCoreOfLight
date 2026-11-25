@@ -19,6 +19,7 @@
 #include "hub_log.h"
 #include "hub_settings.h"
 #include "platform.h"
+#include "private_words.h"
 #include "xiso.h"
 
 namespace coreoflight {
@@ -46,26 +47,6 @@ class TextReport {
 
 // A log's end is enough (a long session's log runs to many MB).
 constexpr size_t kLogTail = 512u << 10;
-
-// Replaces every `from` (ASCII letters in any case) with `to`.
-void ReplaceAll(std::string& text, const std::string& from, const std::string& to) {
-  if (from.empty()) return;
-  auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? char(c - 'A' + 'a') : c; };
-  std::string out;
-  out.reserve(text.size());
-  size_t i = 0;
-  while (i < text.size()) {
-    bool match = i + from.size() <= text.size();
-    for (size_t k = 0; match && k < from.size(); ++k) match = lower(text[i + k]) == lower(from[k]);
-    if (match) {
-      out += to;
-      i += from.size();
-    } else {
-      out += text[i++];
-    }
-  }
-  text = std::move(out);
-}
 
 // The user's home/profile folder (both slash directions), the user name and the computer's name.
 std::vector<std::pair<std::string, std::string>> PrivateWords() {
@@ -238,7 +219,7 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
 
   const auto words = PrivateWords();
   auto clean = [&](std::string text) {
-    for (const auto& [from, to] : words) ReplaceAll(text, from, to);
+    for (const auto& [from, to] : words) ReplacePrivateWord(text, from, to);
     return text;
   };
 

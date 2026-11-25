@@ -178,6 +178,11 @@ if(BUILD_TESTING)
   target_include_directories(coreoflight_pe_imports_test PRIVATE src)
   target_compile_features(coreoflight_pe_imports_test PRIVATE cxx_std_20)
   add_test(NAME pe_imports COMMAND coreoflight_pe_imports_test)
+  # The problem report's private words (private_words.h): a name only where it stands alone.
+  add_executable(coreoflight_private_words_test tests/private_words_test.cpp)
+  target_include_directories(coreoflight_private_words_test PRIVATE src)
+  target_compile_features(coreoflight_private_words_test PRIVATE cxx_std_20)
+  add_test(NAME private_words COMMAND coreoflight_private_words_test)
   # Which cached release assets belong to this build's platform and architecture (#134).
   add_executable(coreoflight_asset_platform_test tests/asset_platform_test.cpp)
   target_include_directories(coreoflight_asset_platform_test PRIVATE src)
