@@ -87,7 +87,10 @@ What you need:
   disc it runs
 - a controller (Xbox or compatible); keyboard and mouse work too. A real Portal of Power is optional.
 
-If Windows flags your download, see [Antivirus warnings](#antivirus-warnings).
+For an unsigned setup from the official Releases page, Windows SmartScreen may say "Windows
+protected your PC". If it does, click **More info**, then **Run anyway**.
+
+If an antivirus flags a file, see [Antivirus warnings](#antivirus-warnings).
 
 **No setup wanted?** Each release also has `CoreOfLightPortable-<version>.zip`: unzip it anywhere
 and run `coreoflight.exe`. It updates itself from the next release's ZIP (keep `portable.txt` next
@@ -233,9 +236,10 @@ pictures here leave it out. The banner at the top is our own drawing.
 
 ### Antivirus warnings
 
-If an antivirus quarantines a file, leave it quarantined while the detection is reviewed. Report
-the release tag, file name, antivirus name and detection label, and the SHA-256 or VirusTotal
-report link if you have it. [Open an issue](https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose).
+Check for an existing detection and what to do about it in [Known issues](https://github.com/tsapZ/SkylandersCoreOfLight/issues/81).
+
+For a new detection, report the release tag, file name, antivirus name and detection label, and
+the SHA-256 or VirusTotal report link if you have it. [Open an issue](https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose).
 
 <br>
 
