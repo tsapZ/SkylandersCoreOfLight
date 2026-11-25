@@ -454,8 +454,8 @@ def footer(repo, version):
                 "Not affiliated with Activision, Toys for Bob or Vicarious Visions. Skylanders is a trademark of its owners.\n")
         return (
             f"**Install:** either download `CoreOfLightSetup-{version}.exe` and run it (no admin rights needed), "
-            "or take the ZIP above. Neither is signed, so Windows may show \"Windows protected your PC\": click "
-            "\"More info\" > \"Run anyway\".\n\n"
+            "or take the portable ZIP. If Windows flags a download, see "
+            f"[Antivirus warnings](https://github.com/{GH}/{repo}#antivirus-warnings).\n\n"
             "On first start it asks for your own Xbox 360 discs as ISO files and installs the games for them, "
             "downloading each game's setup from its repository. Nothing of the games comes with this project.\n\n"
             "This is a beta: expect bugs. Please report them with Launcher settings (LB / Q) > \"Report a problem\" "

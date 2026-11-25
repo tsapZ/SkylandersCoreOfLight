@@ -35,6 +35,9 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+#ifdef SignRelease
+SignTool=CoreOfLight
+#endif
 ; The launcher may be running when an update comes: Inno asks to close it.
 CloseApplications=yes
 
@@ -59,7 +62,7 @@ german.UninstallData=Bilder, HD-Texturen, Sicherungen der Spielstände und die H
 german.UninstallKeep=Was nicht angehakt ist, bleibt.
 
 [Files]
-Source: "staging\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "staging\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion sign
 ; The Visual C++ runtime next to the exe (copied from the maintainer's Visual Studio install by
 ; the packaging script, redistributable under Microsoft's VC++ Redistributable license).
 Source: "staging\*.dll"; DestDir: "{app}"; Flags: ignoreversion

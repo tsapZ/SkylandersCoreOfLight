@@ -9,8 +9,9 @@ Stages into installer\staging (not in the repository):
 - with -Games, the newest <Repo>Setup-*.exe of each game from the repositories next to this one
   (<Tools>\<Repo>\<Repo>\installer\Output, the developer layout FindSetup knows too), so the
   installed launcher can set the games up without a "games" folder of its own.
-Then packs the portable launcher, installer\Output\CoreOfLightPortable-<version>.zip (#46), and runs
-Inno Setup's ISCC with the version from CMakeLists.txt (COREOFLIGHT_VERSION).
+Then runs Inno Setup's ISCC with the version from CMakeLists.txt (COREOFLIGHT_VERSION) and packs
+installer\Output\CoreOfLightPortable-<version>.zip (#46) from the same staged files.
+Set COREOFLIGHT_SIGNING_THUMBPRINT to sign with a certificate in the current user's Personal store.
 #>
 param([switch]$Games)
 $ErrorActionPreference = "Stop"
@@ -23,6 +24,19 @@ $version = $Matches[1]
 
 $exe = Join-Path $repo "out\build\release\coreoflight.exe"
 if (-not (Test-Path $exe)) { throw "$exe is missing: build the release first" }
+
+$iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if (-not (Test-Path $iscc)) { $iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe" }
+if (-not (Test-Path $iscc)) { throw "ISCC.exe not found: install Inno Setup 6 (winget install JRSoftware.InnoSetup)" }
+$compilerArgs = @("/DMyAppVersion=$version")
+$thumbprint = $env:COREOFLIGHT_SIGNING_THUMBPRINT
+if ($thumbprint) {
+  if ($thumbprint -notmatch '\A[0-9a-f]{40}\z') { throw "Expected a 40-digit COREOFLIGHT_SIGNING_THUMBPRINT" }
+  $signTool = (Get-Command signtool.exe -CommandType Application -ErrorAction Stop).Source
+  $compilerArgs += '/DSignRelease'
+  $compilerArgs += ('/sCoreOfLight=$q{0}$q sign /sha1 {1} /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $f' -f
+    $signTool.Replace('$', '$$'), $thumbprint)
+}
 
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 New-Item -ItemType Directory -Force (Join-Path $staging "games") | Out-Null
@@ -47,12 +61,22 @@ if ($Games) {
   }
 }
 
+$output = Join-Path $repo "installer\Output"
+$setupPath = Join-Path $output "CoreOfLightSetup-$version.exe"
+& $iscc @compilerArgs (Join-Path $repo "installer\CoreOfLight.iss") | Select-Object -Last 3
+if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+if ($thumbprint) {
+  foreach ($file in $setupPath, (Join-Path $staging "coreoflight.exe")) {
+    & $signTool verify /pa /tw $file
+    if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $file" }
+  }
+}
+Get-Item $setupPath | Select-Object Name, Length
+
 # The portable launcher (#46, src/portable.h): the same files without the games' setups, with
 # portable.txt next to the exe, as installer\Output\CoreOfLightPortable-<version>.zip. Entry names
 # with forward slashes (Compress-Archive of Windows PowerShell 5 writes backslashes).
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
-$output = Join-Path $repo "installer\Output"
-New-Item -ItemType Directory -Force $output | Out-Null
 $zipPath = Join-Path $output "CoreOfLightPortable-$version.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath }
 $zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
@@ -72,10 +96,3 @@ try {
   $zip.Dispose()
 }
 Get-Item $zipPath | Select-Object Name, Length
-
-$iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-if (-not (Test-Path $iscc)) { $iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe" }
-if (-not (Test-Path $iscc)) { throw "ISCC.exe not found: install Inno Setup 6 (winget install JRSoftware.InnoSetup)" }
-& $iscc "/DMyAppVersion=$version" (Join-Path $repo "installer\CoreOfLight.iss") | Select-Object -Last 3
-if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
-Get-Item (Join-Path $repo "installer\Output\CoreOfLightSetup-$version.exe") | Select-Object Name, Length

@@ -30,6 +30,27 @@ Test after the packaging build, not before it: every `build` runs the CMake conf
 writes the SDK's `rex/version.h` with a new time, so the game relinks and the tested exe isn't the
 one that ships.
 
+### Windows launcher signing and antivirus reports
+
+On the Windows build machine, make the Windows SDK's `signtool.exe` available on `PATH`. Use a
+trusted code-signing certificate with an accessible private key in the current user's Personal
+certificate store. In the build PowerShell session, set its thumbprint and package the launcher:
+
+```powershell
+$env:COREOFLIGHT_SIGNING_THUMBPRINT = '<40 hexadecimal digits from the certificate thumbprint>'
+python maintainer/release.py build --repos SkylandersCoreOfLight --recipe package-installer
+```
+
+Inno Setup timestamps and signs the setup, uninstaller and staged `coreoflight.exe`. The portable
+ZIP uses that same signed executable. The build stops if signing or signature verification fails.
+With the thumbprint unset, packaging produces an unsigned build.
+
+For a reported detection, match the SHA-256 against the exact release asset or the extracted file
+named in the report. After checking that file against the release build, submit it to each detecting
+vendor for review with the release URL, hash and detection name. Reanalyse the same hash once the
+vendor responds. [VirusTotal guidance](https://docs.virustotal.com/docs/false-positive) and
+[Microsoft's file submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission) explain the process.
+
 ## Linux
 
 The same commands run on Linux; `SKYLANDERS_WORK` then defaults to `~/SkylandersDev`. The launcher
