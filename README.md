@@ -232,6 +232,13 @@ than x86-64.
 **Why do the screenshots look so plain?** The games' artwork belongs to Activision, so the
 pictures here leave it out. The banner at the top is our own drawing.
 
+### Antivirus warnings
+
+Check for the detection and any steps to resolve it in [Known issues](https://github.com/tsapZ/SkylandersCoreOfLight/issues/81).
+
+For a new detection, include the release tag, file name, antivirus name and exact detection label.
+Add the SHA-256 or VirusTotal report link if you have it. [Open an issue](https://github.com/tsapZ/SkylandersCoreOfLight/issues/new/choose).
+
 <br>
 
 ## How you can help
