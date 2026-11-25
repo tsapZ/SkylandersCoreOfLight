@@ -251,7 +251,10 @@ function Invoke-GameRun([string]$Repo, [string]$Script, [string]$UserData, [stri
         if ($line -match 'Input script: shot (\S+)( full)?' -and -not $Matches[1].EndsWith(".png")) {
           $name = $Matches[1]; $full = [bool]$Matches[2]
           Start-Sleep -Milliseconds 1000
-          $game = Get-Process $exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          # The one with a window: a game started with its other build's disc runs that build's exe ("<exe>_...",
+          # skylanders-portal sibling_build.h, 2026-11-26) and has none itself.
+          $game = Get-Process "$exe*" -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
           if ($game) { Save-GameWindow $game (Join-Path $Run "$name.png") -Full:$full }
         }
       }
@@ -259,7 +262,7 @@ function Invoke-GameRun([string]$Repo, [string]$Script, [string]$UserData, [stri
   } finally {
     if ($reader) { $reader.Dispose() }
   }
-  Get-Process $exe -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
+  Get-Process "$exe*" -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
   Start-Sleep -Milliseconds 500
   $log = Get-ChildItem $logDir -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt $before } |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
