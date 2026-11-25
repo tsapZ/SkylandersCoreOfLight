@@ -3,6 +3,9 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <dxgi.h>
+#else
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 #endif
 
 #include <algorithm>
@@ -176,6 +179,32 @@ uint64_t TotalPhysicalMemoryMb() {
 #endif
 }
 
+#ifndef _WIN32
+// How full /dev/shm is and how much of it the games' guest memory holds: game versions before
+// 2026-11-26 left their 4.5 GB object there after every run, and a full /dev/shm stopped the next
+// start with a bus error (#135). "" where there is no /dev/shm (macOS).
+std::string SharedMemoryLine() {
+  struct statvfs vfs {};
+  if (statvfs("/dev/shm", &vfs) != 0 || vfs.f_blocks == 0) return {};
+  const uint64_t total = uint64_t(vfs.f_blocks) * vfs.f_frsize >> 20;
+  const uint64_t used = uint64_t(vfs.f_blocks - vfs.f_bfree) * vfs.f_frsize >> 20;
+  int files = 0;
+  uint64_t held = 0;
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator("/dev/shm", ec)) {
+    if (entry.path().filename().string().rfind("xenia_memory_", 0) != 0) continue;
+    struct stat st {};
+    if (::stat(entry.path().c_str(), &st) == 0) held += uint64_t(st.st_blocks) * 512;
+    ++files;
+  }
+  char line[160];
+  std::snprintf(line, sizeof(line), "/dev/shm: %llu of %llu MB used, %d game memory file(s) holding %llu MB\n",
+                static_cast<unsigned long long>(used), static_cast<unsigned long long>(total), files,
+                static_cast<unsigned long long>(held >> 20));
+  return line;
+}
+#endif
+
 const char* DiscText(DiscState state) {
   switch (state) {
     case DiscState::kMatches:
@@ -239,6 +268,9 @@ fs::path WriteProblemReport(const std::vector<Found>& found, const fs::path& lau
   info += "Processor: " + ProcessorName() + "\n";
   std::snprintf(line, sizeof(line), "Memory: %llu MB\n", static_cast<unsigned long long>(TotalPhysicalMemoryMb()));
   info += line;
+#ifndef _WIN32
+  info += SharedMemoryLine();
+#endif
   info += "Graphics cards:\n" + GraphicsCards();
   info += "Launcher: " + PathUtf8(SelfExePath()) + "\n";
   // Where the saves and figures are (the one data folder since 0.2.0-beta.3, data_move.h).
