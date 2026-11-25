@@ -183,6 +183,11 @@ if(BUILD_TESTING)
   target_include_directories(coreoflight_private_words_test PRIVATE src)
   target_compile_features(coreoflight_private_words_test PRIVATE cxx_std_20)
   add_test(NAME private_words COMMAND coreoflight_private_words_test)
+  # What a game's exit code means: a Linux signal's name (#135: 0x87, a bus error).
+  add_executable(coreoflight_exit_code_text_test tests/exit_code_text_test.cpp)
+  target_include_directories(coreoflight_exit_code_text_test PRIVATE src)
+  target_compile_features(coreoflight_exit_code_text_test PRIVATE cxx_std_20)
+  add_test(NAME exit_code_text COMMAND coreoflight_exit_code_text_test)
   # Which cached release assets belong to this build's platform and architecture (#134).
   add_executable(coreoflight_asset_platform_test tests/asset_platform_test.cpp)
   target_include_directories(coreoflight_asset_platform_test PRIVATE src)

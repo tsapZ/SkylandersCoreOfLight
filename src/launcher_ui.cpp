@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "exit_code_text.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "nxe_art.h"
@@ -520,8 +521,9 @@ void LauncherUi::UpdateInstall() {
     HubWarn("install: " + std::string(AllGames()[game].name_en) + (update ? " update" : " install") +
             " stopped, code " + std::to_string(code) + (why.empty() ? std::string() : ": " + why));
     char text[256];
-    std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %d)%s%s" : "%s: installation stopped (code %d)%s%s",
-                  name.c_str(), code, why.empty() ? "" : ": ", why.c_str());
+    // code is an int64_t: %lld (a %d took 32 bits of it, the Linux build warned).
+    std::snprintf(text, sizeof(text), german_ ? "%s: Installation abgebrochen (Code %lld)%s%s" : "%s: installation stopped (code %lld)%s%s",
+                  name.c_str(), static_cast<long long>(code), why.empty() ? "" : ": ", why.c_str());
     error_ = text;
   }
   error_until_ = ImGui::GetTime() + 8.0;
@@ -598,12 +600,9 @@ void LauncherUi::GameExitCode(unsigned long code) {
     const std::string message = GameErrorMessage(found_[game]);
     HubWarn("game: " + name + " stopped with a message: " + (message.empty() ? "(none in its log)" : message));
   } else {
-    char line[96];
+    char line[128];
     std::snprintf(line, sizeof(line), " ended with an error (exit code 0x%08lX%s)", code,
-                  code == 0xC0000005 ? ", an access violation"
-                  : code == 0xC0000409 ? ", a stack buffer overrun or fast fail"
-                  : code == 0xC0000135 ? ", a DLL missing"
-                                       : "");
+                  coreoflight::ExitCodeKind(code, coreoflight::kLinuxBuild));
     HubError("game: " + name + line +
              (crash_missing_dlls_.empty() ? "" : "; missing in its folder: " + crash_missing_dlls_));
   }
@@ -637,6 +636,13 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
     dll_line = (german_ ? "Fehlt im Spielordner: " : "Missing in the game's folder: ") + crash_missing_dlls_;
     av_line = german_ ? "Windows-Sicherheit hat sie vielleicht entfernt: Schutzverlauf > Wiederherstellen."
                       : "Windows Security may have taken it: Protection history > Restore.";
+  } else if (coreoflight::ExitCodeIsBusError(crash_code_, coreoflight::kLinuxBuild)) {
+    // Linux, a bus error: older game versions left their memory in /dev/shm after every run, and a full
+    // /dev/shm stops the next start at once (#135). The report line stays below it.
+    dll_line = german_ ? "Oft ist /dev/shm voll: Ein Neustart des Rechners leert es."
+                       : "Often /dev/shm is full: restarting the computer empties it.";
+    av_line = german_ ? "Problem melden legt die Logs als Textdatei ab, ohne deinen Benutzernamen."
+                      : "Report a problem saves the logs as a text file, without your user name.";
   }
   const float bw = std::min(width - 40 * u, std::max({680 * u, TextWidth(regular_, 19 * u, dll_line.c_str()) + 60 * u,
                                                        TextWidth(regular_, 19 * u, av_line.c_str()) + 60 * u})),
@@ -649,8 +655,12 @@ bool LauncherUi::DrawCrashReport(float width, float height) {
                                : std::string(german_ ? "Das Spiel" : "The game");
   const std::string title = name + (german_ ? " wurde unerwartet beendet" : " ended unexpectedly");
   Text(dl, bold_, 30 * u, {(width - TextWidth(bold_, 30 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
-  char code[48];
-  std::snprintf(code, sizeof(code), german_ ? "Fehlercode 0x%08lX" : "Error code 0x%08lX", crash_code_);
+  // On Linux the signal's name after the code ("Error code 0x00000087 (SIGBUS)").
+  const std::string sig = coreoflight::ExitCodeSignal(crash_code_, coreoflight::kLinuxBuild);
+  const std::string sig_text = sig.empty() ? std::string() : " (" + sig + ")";
+  char code[64];
+  std::snprintf(code, sizeof(code), german_ ? "Fehlercode 0x%08lX%s" : "Error code 0x%08lX%s", crash_code_,
+                sig_text.c_str());
   Text(dl, regular_, 20 * u, {(width - TextWidth(regular_, 20 * u, code)) * 0.5f, a.y + 80 * u}, kDim, code);
   const char* line = german_ ? "Problem melden legt die Logs als Textdatei auf den Desktop, ohne deinen Benutzernamen."
                              : "Report a problem puts the logs on the desktop as a text file, without your user name.";
