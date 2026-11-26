@@ -287,7 +287,9 @@ def sync_sibling(main, sib):
 def build_siblings(repo, d, value, logs, preset):
     """The exes of the game's other builds (sk.SIBLINGS) into out/siblings/<triple>/ for the package recipes. A listed
     one whose checkout isn't set up stops the build: the game would ship naming an exe that isn't there."""
-    out = d / "out" / "siblings" / preset.removesuffix("-release")
+    # Not str.removesuffix: bundle.ps1 runs this with the PATH's Python 3.8 (2026-11-26).
+    triple = preset[:-len("-release")] if preset.endswith("-release") else preset
+    out = d / "out" / "siblings" / triple
     if out.exists():
         shutil.rmtree(out)  # never a stale exe from an earlier build
     for name in sk.SIBLINGS.get(repo, []):
