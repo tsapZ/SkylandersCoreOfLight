@@ -229,9 +229,16 @@ function Invoke-GameRun([string]$Repo, [string]$Script, [string]$UserData, [stri
   # "renderdoc <frames>" line can take a capture (the SDK only talks to a RenderDoc that is already loaded).
   $more = @{}
   if ($RenderDocCapture) { $more.RenderDocCapture = $RenderDocCapture }
-  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $timeline -Config $Build -KeepRunning @more 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
-  finally { Pop-Location }
   $exe = $script:Games[$Repo].Exe
+  try { & $runner -OutDir $Run -GameArgs $gameArgs -Shots $timeline -Config $Build -KeepRunning @more 2>&1 | Out-File -Encoding utf8 (Join-Path $Run "run.txt") }
+  catch {
+    # The runner gave up (2026-11-26: "the game has no window" for a game that ran its other build's exe): the game
+    # goes too, so it doesn't run on after this run's turn and claim on the graphics card are given back (the GPU watch
+    # had to claim the card for it, 00:37).
+    Get-Process "$exe*" -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
+    throw
+  }
+  finally { Pop-Location }
   $limit = 2 * $QuitTimeout
   if ($ShotsFromLog) { $limit += 2 * [int](Get-ScriptLength $Script) }
   $reader = $null
