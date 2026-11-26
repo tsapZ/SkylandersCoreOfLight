@@ -387,8 +387,14 @@ void TakeForeground(HWND hwnd) {
 
 // The game's process and the ones it started itself: SuperChargers started with a French / Dutch or Scandinavian disc
 // starts the exe made from that build and waits for it (skylanders-portal sibling_build.h, 2026-11-26), so the window
-// belongs to the child. Looked up again on every call: the child comes a moment after the game.
+// belongs to the child. Looked up again, as the child comes a moment after the game, but at most twice a second: the
+// launch screen asks every frame, and a snapshot of every process on the PC costs a few milliseconds.
 std::vector<DWORD> GameProcessIds(DWORD pid) {
+  static DWORD cached_pid = 0;
+  static ULONGLONG cached_at = 0;
+  static std::vector<DWORD> cached;
+  const ULONGLONG now = GetTickCount64();
+  if (pid == cached_pid && now - cached_at < 500) return cached;
   std::vector<DWORD> ids{pid};
   HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
   if (snap == INVALID_HANDLE_VALUE) return ids;
@@ -398,6 +404,9 @@ std::vector<DWORD> GameProcessIds(DWORD pid) {
     if (entry.th32ParentProcessID == pid && entry.th32ProcessID != pid) ids.push_back(entry.th32ProcessID);
   }
   CloseHandle(snap);
+  cached_pid = pid;
+  cached_at = now;
+  cached = ids;
   return ids;
 }
 
