@@ -45,6 +45,13 @@ GAMES = [
 ]
 REPOS = [g.repo for g in GAMES] + [HUB]
 
+# Other builds of a game whose exes ship next to its own (skylanders-portal src/xex/sibling_build.h): the exe names per
+# repository. Each is built from a checkout of the game at WORK\siblings\<name> whose rom\ holds a disc of that build
+# (set up once: a clone or worktree of the game with its submodules); `release.py build` brings it to the main
+# checkout's commits, builds it and puts the exe in out\siblings\<triple>\, where the package recipes take it.
+# 2026-11-26: SuperChargers' French / Dutch and Scandinavian discs (Core of Light #135, #118).
+SIBLINGS = {"SuperChargersRecomp": ["superchargersrecompiled_fr_nl_nordic"]}
+
 # The shared submodules and the branch each repository follows.
 SUBMODULES = {
     "thirdparty/rexglue-sdk": ("tsapZ/rexglue-sdk", "skylanders"),
