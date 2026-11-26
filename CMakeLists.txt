@@ -188,6 +188,11 @@ if(BUILD_TESTING)
   target_include_directories(coreoflight_exit_code_text_test PRIVATE src)
   target_compile_features(coreoflight_exit_code_text_test PRIVATE cxx_std_20)
   add_test(NAME exit_code_text COMMAND coreoflight_exit_code_text_test)
+  # Which Linux graphics card is the games' one: an NVIDIA card over a Ryzen's graphics (#163).
+  add_executable(coreoflight_gpu_card_pick_test tests/gpu_card_pick_test.cpp)
+  target_include_directories(coreoflight_gpu_card_pick_test PRIVATE src)
+  target_compile_features(coreoflight_gpu_card_pick_test PRIVATE cxx_std_20)
+  add_test(NAME gpu_card_pick COMMAND coreoflight_gpu_card_pick_test)
   # Which cached release assets belong to this build's platform and architecture (#134).
   add_executable(coreoflight_asset_platform_test tests/asset_platform_test.cpp)
   target_include_directories(coreoflight_asset_platform_test PRIVATE src)

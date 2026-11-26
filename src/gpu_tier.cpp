@@ -13,7 +13,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string_view>
+#include <vector>
 
+#include "gpu_card_pick.h"
 #include "hub_log.h"
 
 namespace coreoflight {
@@ -105,6 +107,9 @@ GpuInfo Detect() {
     const auto* v = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
     return v ? std::string(v) : std::string();
   }();
+  std::string up = gl_vendor + " " + gpu.name;
+  std::transform(up.begin(), up.end(), up.begin(), [](unsigned char c) { return char(std::toupper(c)); });
+  std::vector<DrmCard> cards;
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator("/sys/class/drm", ec)) {
     if (ec) break;
@@ -114,17 +119,16 @@ GpuInfo Detect() {
     std::ifstream vf(dev / "vendor");
     std::string vs;
     if (!std::getline(vf, vs)) continue;
-    const uint32_t vendor = uint32_t(std::strtoul(vs.c_str(), nullptr, 0));
-    uint64_t vram = 0;
-    if (std::ifstream mf(dev / "mem_info_vram_total"); mf >> vram) vram >>= 20;
-    if (gpu.vendor == 0 || vram > gpu.vram_mb) {
-      gpu.vendor = vendor;
-      if (vram > 0) gpu.vram_mb = vram;
-    }
+    DrmCard card;
+    card.vendor = uint32_t(std::strtoul(vs.c_str(), nullptr, 0));
+    if (std::ifstream mf(dev / "mem_info_vram_total"); mf >> card.vram_mb) card.vram_mb >>= 20;
+    cards.push_back(card);
   }
+  // The games' card among them (gpu_card_pick.h: an NVIDIA card over a Ryzen's graphics, Core of Light #163).
+  const DrmCard card = PickGameCard(cards, up.find("NVIDIA") != std::string::npos);
+  gpu.vendor = card.vendor;
+  gpu.vram_mb = card.vram_mb;
   if (gpu.vendor == 0) {
-    std::string up = gl_vendor + " " + gpu.name;
-    std::transform(up.begin(), up.end(), up.begin(), [](unsigned char c) { return char(std::toupper(c)); });
     if (up.find("NVIDIA") != std::string::npos) gpu.vendor = 0x10DE;
     else if (up.find("AMD") != std::string::npos || up.find("RADEON") != std::string::npos) gpu.vendor = 0x1002;
     else if (up.find("INTEL") != std::string::npos) gpu.vendor = 0x8086;
