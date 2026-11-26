@@ -12,6 +12,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"  // GetKeyData: how long a key is held (the slider speeds up)
+#include "key_names.h"
 #include "nxe_art.h"
 
 namespace coreoflight {
@@ -130,6 +131,11 @@ bool SettingsScreen::SetActionLabel(const std::string& cvar, const std::string& 
 }
 
 std::string SettingsScreen::ValueLabel(const GameSetting& s) const {
+  if (s.type == "key") {
+    if (listen_cvar_ == s.cvar) return german_ ? "Taste dr\xC3\xBC" "cken ..." : "Press a key ...";
+    if (s.value.empty()) return german_ ? "je Spiel anders" : "differs per game";
+    return KeysLabel(s.value, german_);
+  }
   for (const SettingChoice& o : s.options) {
     if (SameValue(o.value, s.value)) return german_ ? o.de : o.en;
   }
@@ -160,6 +166,11 @@ void SettingsScreen::Step(int step) {
   // A button row (type "action", the launcher's "Problem melden"): A runs it, left / right nothing.
   if (s.type == "action") {
     if (step > 0) action_ = s.cvar;
+    return;
+  }
+  // A key row (#156): A, left / right or a click wait for the key.
+  if (s.type == "key") {
+    listen_cvar_ = s.cvar;
     return;
   }
   if (s.slider_max > s.slider_min) {
@@ -243,6 +254,38 @@ std::string SettingsScreen::EditedValue(const std::string& cvar) const {
   return {};
 }
 
+void SettingsScreen::ListenForKey() {
+  GameSetting* row = nullptr;
+  for (GameSettingsPage& page : edit_->pages) {
+    for (GameSetting& s : page.settings) {
+      if (s.cvar == listen_cvar_) row = &s;
+    }
+  }
+  if (!row) {
+    listen_cvar_.clear();
+    return;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)) {
+    listen_cvar_.clear();
+    return;
+  }
+  for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+    const ImGuiKey key = ImGuiKey(k);
+    if (!ImGui::IsKeyPressed(key, false)) continue;
+    if (key == ImGuiKey_Escape) {
+      listen_cvar_.clear();
+      return;
+    }
+    std::string name = key == ImGuiKey_Delete ? row->key_default : SdkKeyName(key);
+    if (name.empty()) continue;  // a controller's or the mouse's, or one the games can't bind
+    row->value = name;
+    NoteChange(row->cvar, row->category, row->type == "key" ? "string" : row->type, name);
+    confirm_discard_ = false;
+    listen_cvar_.clear();
+    return;
+  }
+}
+
 void SettingsScreen::Save() {
   if (!edit_) return;
   bool ok = true;
@@ -295,10 +338,14 @@ void SettingsScreen::Draw(float width, float height) {
   Text(dl, bold_, 22 * u, {48 * u, 30 * u}, kDim, german_ ? "EINSTELLUNGEN" : "SETTINGS");
   Text(dl, bold_, 44 * u, {46 * u, 52 * u}, kGold, title_);
 
-  // While the "save the changes?" question is up (confirm_discard_), only it takes input.
-  const bool asking = confirm_discard_;
+  // While the "save the changes?" question is up (confirm_discard_), only it takes input; while a key row
+  // waits for its key (#156), only the key does (Q, Esc or the arrows are keys a player may want).
+  const bool listening = edit_ && !listen_cvar_.empty();
+  if (listening) ListenForKey();
+  const bool asking = confirm_discard_ || listening;
   auto pressed = [asking](ImGuiKey k) { return !asking && ImGui::IsKeyPressed(k, true); };
-  const bool back = ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+  const bool back = !listening &&
+                    (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false));
   const float left = 48 * u, top = 120 * u, bottom = height - 80 * u;
   if (!edit_) {
     const int state = loader_ ? loader_->state() : -1;
@@ -508,7 +555,12 @@ void SettingsScreen::Draw(float width, float height) {
   // changes away and closes, B goes on editing (a double B used to lose them).
   float hx = left;
   const float hy = height - 52 * u;
-  if (!asking) {
+  if (listening) {
+    // A key row waits (#156): the footer says how to leave it; the save question below is not this.
+    Text(dl, regular_, 20 * u, {hx, hy + 2 * u}, kDim,
+         german_ ? "Die gew\xC3\xBCnschte Taste dr\xC3\xBC" "cken. Esc: die alte behalten, Entf: Standard."
+                 : "Press the key you want. Esc: keep the old one, Delete: the default.");
+  } else if (!confirm_discard_) {
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "A", Rgba(70, 170, 70), german_ ? "\xC3\x84ndern" : "Change");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "Y", Rgba(220, 180, 40), german_ ? "Speichern" : "Save");

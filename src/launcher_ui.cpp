@@ -27,6 +27,7 @@
 #include "game_files.h"
 #include "handheld.h"
 #include "hub_log.h"
+#include "key_names.h"
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
@@ -1186,7 +1187,26 @@ void LauncherUi::OpenHubSettings(int page) {
       break;
     }
   }
-  hub_loader_.SetReady(HubSettingsPages(shown));
+  // The keyboard page (#156): each key as every set-up game has it (its settings file, else the default);
+  // empty when the games differ.
+  std::map<std::string, std::string> keys;
+  for (const KeyBinding& k : KeyBindings()) {
+    bool first = true;
+    std::string common;
+    for (const Found& f : found_) {
+      if (f.exe.empty()) continue;
+      std::string value = k.sdk_default;
+      if (auto it = f.settings.find(k.cvar); it != f.settings.end()) {
+        value = it->second;
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') value = value.substr(1, value.size() - 2);
+      }
+      if (first) common = value;
+      else if (value != common) common.clear();
+      first = false;
+    }
+    if (!first) keys[k.cvar] = common;
+  }
+  hub_loader_.SetReady(HubSettingsPages(shown, keys));
   // What's new in this version, at the bottom right (#44).
   std::vector<std::pair<std::string, std::string>> news;
   for (const WhatsNewLine& line : kWhatsNew) news.emplace_back(line.en, line.de);
@@ -3242,6 +3262,23 @@ bool LauncherUi::DrawScreens(float width, float height) {
                    std::string(reinterpret_cast<const char*>(toml.u8string().c_str())));
           }
         }
+      }
+      // The keyboard page's keys (#156) go into every set-up game's settings file the same way, where
+      // each game's F4 > Keyboard keeps them (["Input/Keybinds/Controller"]).
+      for (const KeyBinding& k : KeyBindings()) {
+        auto it = saved.find(k.cvar);
+        if (it == saved.end() || it->second.empty()) continue;
+        for (Found& f : found_) {
+          if (f.exe.empty()) continue;
+          const std::filesystem::path toml = f.exe.parent_path() / (UserDataName(f.exe) + ".toml");
+          if (WriteGameSetting(toml, kKeyBindingCategory, k.cvar, "string", it->second)) {
+            f.settings[k.cvar] = "\"" + it->second + "\"";
+          } else {
+            HubWarn("keyboard page: could not write " + std::string(k.cvar) + " into " +
+                    std::string(reinterpret_cast<const char*>(toml.u8string().c_str())));
+          }
+        }
+        HubLog("keyboard page: " + std::string(k.cvar) + " = " + it->second + " for every game");
       }
     }
     // "Problem melden": the report on the desktop, shown in Explorer.

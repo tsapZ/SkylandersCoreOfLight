@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "games.h"
+#include "key_names.h"
 #include "portal/data_folder.h"
 
 namespace coreoflight {
@@ -130,7 +131,8 @@ void PortableDataLabels(std::string& en, std::string& de) {
   de = "An: " + path;
 }
 
-std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
+std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings,
+                                               const std::map<std::string, std::string>& keys) {
   auto out = std::make_shared<GameSettings>();
   out->config_file = HubSettingsFile();
   GameSettingsPage page{"Core of Light", "Core of Light", {}};
@@ -477,6 +479,30 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     pads.settings.push_back(std::move(rumble));
   }
   out->pages.push_back(std::move(pads));
+  // The keyboard's keys for all six games at once (#156, plotylty): the rows of each game's F4 > Keyboard,
+  // saving writes them into every set-up game's settings file (LauncherUi). Each game's own page stays for
+  // keys of its own.
+  GameSettingsPage keyboard{"Keyboard", "Tastatur", {}};
+  for (const KeyBinding& k : KeyBindings()) {
+    GameSetting row;
+    row.cvar = k.cvar;
+    row.en = k.en;
+    row.de = k.de;
+    row.help_en = "The key that plays this controller button, in all your games (each game's F4 > Keyboard "
+                  "is the same setting, for keys of its own).\n\nA (or a click), then the key you want. Esc keeps "
+                  "the old one, Delete puts the default back. Saving writes it into every game.";
+    row.help_de = "Die Taste, die diese Controller-Taste spielt, in allen deinen Spielen (F4 > Tastatur im Spiel "
+                  "ist dieselbe Einstellung, f\xC3\xBCr eigene Tasten eines Spiels).\n\nA (oder ein Klick), dann "
+                  "die gew\xC3\xBCnschte Taste. Esc l\xC3\xA4sst die alte, Entf holt die Standardtaste. Speichern "
+                  "tr\xC3\xA4gt sie in jedes Spiel ein.";
+    row.type = "key";
+    row.category = kKeyBindingCategory;
+    row.key_default = k.sdk_default;
+    const auto it = keys.find(k.cvar);
+    row.value = it == keys.end() ? std::string(k.sdk_default) : it->second;
+    keyboard.settings.push_back(std::move(row));
+  }
+  out->pages.push_back(std::move(keyboard));
   return out;
 }
 

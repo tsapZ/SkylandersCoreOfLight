@@ -52,6 +52,10 @@ class SettingsScreen {
   void NoteChange(const std::string& cvar, const std::string& category, const std::string& type,
                   const std::string& value);
   void Save();
+  // A key row waiting for its key (#156, as the games' F4 > Keyboard): the first key pressed becomes
+  // its value, Esc (or a controller's B) keeps the old one, Delete puts the default back.
+  void ListenForKey();
+  std::string listen_cvar_;
   std::string ValueLabel(const GameSetting& s) const;
   // Whether a row can be changed: its enabled_by setting is on (as edited so far), or it has none.
   // `needs`: that setting, for the explanation.

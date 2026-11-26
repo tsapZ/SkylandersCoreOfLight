@@ -23,7 +23,7 @@ struct SettingChoice {
 struct GameSetting {
   std::string cvar;  // empty for a preset
   std::string en, de, help_en, help_de;
-  std::string type;      // "bool", "int", "float", "string"
+  std::string type;      // "bool", "int", "float", "string"; "key": a keyboard key row (key_names.h, #156)
   std::string category;  // the settings file's [header]
   std::string value;     // as the game would start with it
   bool restart = false;
@@ -36,6 +36,8 @@ struct GameSetting {
   // the music volume) when slider_max > slider_min; its value shows with slider_unit (" %").
   int slider_min = 0, slider_max = 0;
   std::string slider_unit;
+  // A key row's default keys (Delete puts them back); its value empty while the games differ.
+  std::string key_default;
   // A preset: what each option sets, (cvar, value, category, type).
   struct Assignment {
     std::string cvar, value, category, type;
