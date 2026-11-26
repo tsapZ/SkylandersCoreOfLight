@@ -33,6 +33,20 @@ public static class W5 {
 }
 "@
 New-Item -ItemType Directory -Force $Out | Out-Null
+# The settings files of the games this PC has installed (their uninstall entries): kept here and put back if the run
+# changed them. A launcher older than the fix (games.cpp InstalledByEntry, skipped with --documents) finds an installed
+# game by its entry even on stand-in data, and on 2026-11-26 a keyboard page test wrote keys into the owner's real
+# Trap Team settings (put back from an export copy).
+$ownSettings = @{}
+foreach ($root in "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall") {
+  Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath } |
+    Where-Object { $_.DisplayName -match 'Recompiled' -and $_.InstallLocation -and (Test-Path -LiteralPath $_.InstallLocation) } |
+    ForEach-Object {
+      Get-ChildItem -LiteralPath $_.InstallLocation -Filter *.toml -File | ForEach-Object {
+        $ownSettings[$_.FullName] = @{ Bytes = [IO.File]::ReadAllBytes($_.FullName); Time = $_.LastWriteTimeUtc }
+      }
+    }
+}
 # The graphics card claimed for the run (gpu_claim.ps1): the launcher draws with it, and a test may start a game.
 . (Join-Path $PSScriptRoot "gpu_claim.ps1")
 $gpuClaim = Enter-GpuClaim "launcher test"
@@ -93,4 +107,15 @@ Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
 "done"
 } finally {
   Exit-GpuClaim $gpuClaim
+  if ($p) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }
+  foreach ($file in $ownSettings.Keys) {
+    $kept = $ownSettings[$file]
+    $now = if (Test-Path -LiteralPath $file) { [IO.File]::ReadAllBytes($file) } else { $null }
+    if ($null -eq $now -or [Convert]::ToBase64String($now) -ne [Convert]::ToBase64String($kept.Bytes)) {
+      [IO.File]::WriteAllBytes($file, $kept.Bytes)
+      (Get-Item -LiteralPath $file).LastWriteTimeUtc = $kept.Time
+      Write-Warning "hub_keys: the run changed this PC's own $file; put back as it was"
+      "RESTORED $file"
+    }
+  }
 }
