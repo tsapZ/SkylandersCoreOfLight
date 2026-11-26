@@ -241,7 +241,10 @@ pictures here leave it out. The banner at the top is our own drawing.
   That tells me whether it works or what is missing. Wanted most: Imaginators with English or German, and the
   title updates a console downloaded (SuperChargers 1.06, Imaginators 1.1.0).
 - **A Traptanium portal:** how its speaker and trap light behave in Trap Team (I don't have one to test with).
-- **Problems:** a report from *Report a problem* in an issue, as above. Ideas are welcome there too.
+- **Problems:** a report from *Report a problem* in an issue, as above. Ideas are welcome there too. A report has
+  the game's last four sessions (the end of each log), not everything since you installed it. So on a long
+  playthrough, press F12 right where something looks or sounds wrong (it saves the spot and your settings), and make
+  the report on the day it happened.
 
 <br>
 
