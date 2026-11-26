@@ -524,9 +524,12 @@ bool DataTransfer::PlanImport(const fs::path& file, const std::vector<Found>& ga
       one_game_ = -1;
       return false;
     }
-  } else {
-    // A whole export has no "Save/" files; any such name is left out.
-    items_.erase(std::remove_if(items_.begin(), items_.end(), [](const Item& item) { return item.save; }), items_.end());
+  } else if (std::any_of(items_.begin(), items_.end(), [](const Item& item) { return item.save; })) {
+    // "Save/" files without the game line (only a one-game file has them): not taken as a whole export,
+    // which would leave the saves out and bring the figures in without the question (code review t18).
+    error = not_ours;
+    items_.clear();
+    return false;
   }
   // The games whose settings file is there and differs (the question before the import).
   for (const Item& item : items_) {
@@ -557,59 +560,130 @@ void DataTransfer::StartImport(bool replace_settings) {
     std::vector<char> zip;
     size_t added = 0, same = 0, replaced = 0, waiting = 0, backed_up = 0, save_files = 0;
     std::vector<std::string> kept, broken;
-    // A one-game file (#161): each of that game's saves here goes into the backups first, then they make
-    // room for the file's. A backup that fails stops it before anything changed.
+    auto stop = [&](const std::string& log, const char* en, const char* de) {
+      HubWarn("data import of one game: " + log + ", nothing changed");
+      std::lock_guard lock(shared->mutex);
+      shared->summary = german ? de : en;
+      shared->done = true;
+    };
+    // A one-game file (#161): its saves replace that game's saves here, all or nothing (code review t18,
+    // 2026-11-26: removing the old ones first and writing after could leave the game with none). In turn:
+    //  1. every entry of the file read and its CRC checked (a damaged file changes nothing);
+    //  2. each save here copied into the backups (one that fails stops it; RT on the card puts one back);
+    //  3. the file's saves written into "import-new" beside them (a full disk stops it here);
+    //  4. the swap: the saves here moved into "import-old", the new ones moved in. A move that fails (a save
+    //     in use, the game started some other way) is undone with every move before it;
+    //  5. "import-old" and "import-new" deleted.
     if (one_game >= 0) {
       const Game& game = AllGames()[size_t(one_game)];
       const std::vector<SaveSlot> slots = ListSaves(profile, one_game_exe);
-      bool readable = ReadAll(file, zip);
-      // Every file of the import whole before a save goes: a damaged file changes nothing.
-      for (const Item& item : items) {
-        if (!readable) break;
+      const fs::path user_data = profile.root / GameFolderName(one_game_exe);
+      const fs::path stage = user_data / "import-new", holding = user_data / "import-old";
+      auto entry = [&](const Item& item) -> const char* {  // an entry's bytes in `zip`, nullptr if it doesn't fit
         const auto* bytes = reinterpret_cast<const unsigned char*>(zip.data());
-        if (uint64_t(item.offset) + 30 > zip.size() || Get32(bytes + item.offset) != 0x04034B50) {
-          readable = false;
-          break;
-        }
+        if (uint64_t(item.offset) + 30 > zip.size() || Get32(bytes + item.offset) != 0x04034B50) return nullptr;
         const uint64_t data_at = uint64_t(item.offset) + 30 + Get16(bytes + item.offset + 26) +
                                  Get16(bytes + item.offset + 28);
-        readable = data_at + item.size <= zip.size() &&
-                   coreoflight::Crc32(zip.data() + data_at, item.size) == item.crc;
+        return data_at + item.size <= zip.size() ? zip.data() + data_at : nullptr;
+      };
+      bool readable = ReadAll(file, zip);
+      for (const Item& item : items) {
+        if (!readable) break;
+        const char* data = entry(item);
+        readable = data != nullptr && coreoflight::Crc32(data, item.size) == item.crc;
       }
       if (!readable) {
-        HubWarn("data import of one game: the file is damaged, nothing changed");
-        std::lock_guard lock(shared->mutex);
-        shared->summary = german ? "Nichts importiert: Die Datei ist besch\xC3\xA4" "digt." : "Nothing imported: the file is damaged.";
-        shared->done = true;
+        stop("the file is damaged", "Nothing imported: the file is damaged.",
+             "Nichts importiert: Die Datei ist besch\xC3\xA4" "digt.");
         return;
       }
-      bool backups_ok = true;
       for (const SaveSlot& slot : slots) {
-        if (!backups_ok) break;
         if (slot.options) continue;
-        backups_ok = BackupSave(profile, game, slot, "before-import");
-        backed_up += backups_ok ? 1 : 0;
-      }
-      if (!backups_ok) {
-        const std::string why = LastSaveError();
-        HubWarn("data import of one game: a backup failed, nothing changed (" + why + ")");
-        std::lock_guard lock(shared->mutex);
-        shared->summary = german ? "Nichts importiert: Die Sicherung deiner Spielst\xC3\xA4nde hat nicht geklappt."
-                                 : "Nothing imported: backing up your saves didn't work.";
-        shared->done = true;
-        return;
+        if (!BackupSave(profile, game, slot, "before-import")) {
+          stop("a backup failed (" + LastSaveError() + ")",
+               "Nothing imported: your saves couldn't be backed up first. Is the game running? Close it and try again.",
+               "Nichts importiert: Deine Spielst\xC3\xA4nde lie\xC3\x9F" "en sich nicht erst sichern. L\xC3\xA4uft das "
+               "Spiel? Schlie\xC3\x9F" "e es und versuch es noch einmal.");
+          return;
+        }
+        ++backed_up;
       }
       std::error_code ec;
-      for (const SaveSlot& slot : slots) {
-        if (slot.options) continue;
-        fs::remove_all(Long(slot.folder), ec);
-        fs::remove(Long(slot.header), ec);
+      fs::remove_all(Long(stage), ec);  // left by an import that was cut off
+      fs::remove_all(Long(holding), ec);
+      // The units the swap moves: each save folder (<root>/<title>/00000001/<save>) and each header file,
+      // relative to the user data.
+      std::vector<fs::path> units;
+      bool staged = true;
+      for (const Item& item : items) {
+        if (!staged) break;
+        if (!item.save) continue;
+        const fs::path rel = item.target.lexically_relative(user_data);
+        std::vector<fs::path> parts(rel.begin(), rel.end());
+        fs::path unit = rel;
+        if (parts.size() >= 5 && parts[2] == "00000001") unit = parts[0] / parts[1] / parts[2] / parts[3];
+        if (std::find(units.begin(), units.end(), unit) == units.end()) units.push_back(unit);
+        const fs::path to = stage / rel;
+        fs::create_directories(Long(to.parent_path()), ec);
+        std::ofstream out(Long(to), std::ios::binary | std::ios::trunc);
+        out.write(entry(item), std::streamsize(item.size));
+        out.close();
+        staged = !ec && !out.fail();
+        ++save_files;
       }
+      if (!staged) {
+        fs::remove_all(Long(stage), ec);
+        stop("the file's saves couldn't be written", "Nothing imported: the saves couldn't be written (is the disk full?).",
+             "Nichts importiert: Die Spielst\xC3\xA4nde lie\xC3\x9F" "en sich nicht schreiben (Platte voll?).");
+        return;
+      }
+      std::vector<std::pair<fs::path, fs::path>> moved;  // from -> to, undone backwards on a failure
+      auto move = [&](const fs::path& from, const fs::path& to) {
+        std::error_code e;
+        fs::create_directories(Long(to.parent_path()), e);
+        if (fs::exists(Long(to), e)) return false;  // never onto something (an options save of that name)
+        fs::rename(Long(from), Long(to), e);
+        if (e) return false;
+        moved.emplace_back(from, to);
+        return true;
+      };
+      bool swapped = true;
+      for (const SaveSlot& slot : slots) {
+        if (!swapped) break;
+        if (slot.options) continue;
+        swapped = move(slot.folder, holding / slot.folder.lexically_relative(user_data));
+        if (swapped && fs::exists(Long(slot.header), ec)) {
+          swapped = move(slot.header, holding / slot.header.lexically_relative(user_data));
+        }
+      }
+      for (const fs::path& unit : units) {
+        if (!swapped) break;
+        swapped = move(stage / unit, user_data / unit);
+      }
+      if (!swapped) {
+        bool undone = true;
+        for (auto it = moved.rbegin(); it != moved.rend(); ++it) {
+          std::error_code e;
+          fs::rename(Long(it->second), Long(it->first), e);
+          undone = undone && !e;
+        }
+        fs::remove_all(Long(stage), ec);
+        // A move back that failed leaves its save in "import-old" (and in the backups): not deleted.
+        if (undone) fs::remove_all(Long(holding), ec);
+        else HubWarn("data import of one game: a save couldn't be moved back, it stays in " + Utf8(holding));
+        stop("a save couldn't be moved (in use?)",
+             "Nothing imported: the game's saves are in use. Close the game and try again.",
+             "Nichts importiert: Die Spielst\xC3\xA4nde sind in Benutzung. Schlie\xC3\x9F" "e das Spiel und versuch es noch einmal.");
+        return;
+      }
+      fs::remove_all(Long(holding), ec);
+      fs::remove_all(Long(stage), ec);
       zip.clear();
     }
     if (ReadAll(file, zip)) {
       const auto* bytes = reinterpret_cast<const unsigned char*>(zip.data());
       for (const Item& item : items) {
+        if (item.save) continue;  // a one-game file's saves: swapped in above
         if (uint64_t(item.offset) + 30 > zip.size() || Get32(bytes + item.offset) != 0x04034B50) {
           broken.push_back(item.name);
           continue;
@@ -652,8 +726,6 @@ void DataTransfer::StartImport(bool replace_settings) {
           ++replaced;
         } else if (item.settings && item.game.empty()) {
           ++waiting;
-        } else if (item.save) {
-          ++save_files;
         } else {
           ++added;
         }
