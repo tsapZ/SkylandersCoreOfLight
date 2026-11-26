@@ -24,6 +24,7 @@
 #include "hub_log.h"  // WineVersion
 #include "platform.h"
 #include "profiles.h"
+#include "updates.h"  // Offline
 
 namespace coreoflight {
 namespace {
@@ -198,10 +199,12 @@ void FindRom(const fs::path& exe, fs::path& workdir, fs::path& rom) {
 // Where the game's installer put it: InstallLocation of its uninstall entry (per user, else for
 // everyone), wherever that is (a library folder, a folder chosen in the setup).
 fs::path InstalledByEntry(const Game& game) {
-  // Not with --documents (a copy to try, the maintainer's tests on stand-in data): then only the games
-  // folder counts. Before, a test found the PC's installed Trap Team by its entry and wrote a key page's
-  // keys into that real settings file (2026-11-26).
-  if (DocumentsMoved()) return {};
+  // Not in a test run on stand-in data (--documents with --offline, as maintainer/test/hub_keys.ps1 starts
+  // it): then only the games folder counts. Before, a test found the PC's installed Trap Team by its entry
+  // and wrote a key page's keys into that real settings file (2026-11-26). --documents alone (a copy to
+  // try) still finds the installed games (code review t19b: a game installed in a folder of its own was
+  // gone then).
+  if (DocumentsMoved() && Offline()) return {};
 #ifdef _WIN32
   const std::wstring key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
                            PathFromUtf8(game.app_id).wstring() + L"_is1";
