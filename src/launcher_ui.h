@@ -322,6 +322,16 @@ class LauncherUi {
   bool repair_disc_ = false;  // the next disc chosen is written again (DiscImport repair)
   DataTransfer data_transfer_;
   bool ask_import_settings_ = false;
+  // "Share one game's saves" (#161): which game, and whether the figures come along
+  // (DrawExportGame; each game's number of saves counted when it opens, -1: not set up); a one-game
+  // file's import asks first, its saves replace that game's (DrawOneGameImportQuestion).
+  bool DrawExportGame(float width, float height);
+  bool DrawOneGameImportQuestion(float width, float height);
+  bool ask_export_game_ = false;
+  int export_game_row_ = 0;
+  bool export_game_figures_ = false;
+  std::vector<int> export_game_saves_;
+  bool ask_one_game_import_ = false;
   DiscImport::Phase import_seen_ = DiscImport::Phase::kIdle;
   double import_shown_until_ = 0;
   double cancel_import_until_ = 0;  // B pressed once while a disc is set up: a second one until then stops it

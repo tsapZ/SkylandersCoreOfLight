@@ -489,8 +489,9 @@ void FileBrowser::Draw(float width, float height) {
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
     Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
-         for_backup_ ? (german_ ? "Die .zip aus \xE2\x80\x9EMeine Daten exportieren\xE2\x80\x9C. Was schon da ist, bleibt."
-                                : "The .zip from \"Export my data\". What's already here stays.")
+         for_backup_ ? (german_ ? "Die .zip aus \xE2\x80\x9EMeine Daten exportieren\xE2\x80\x9C oder \xE2\x80\x9E"
+                                  "Spielst\xC3\xA4nde eines Spiels teilen\xE2\x80\x9C."
+                                : "The .zip from \"Export my data\" or \"Share one game's saves\".")
          : for_sc_language_ ? (german_ ? "Ihre .iso oder ihr entpackter Ordner, auch ein anderer Build; sie selbst bleibt, wie sie ist."
                                       : "Its .iso or unpacked folder, another build too; the disc itself stays as it is.")
          : for_language_ ? (german_ ? "Eine entschl\xC3\xBCsselte .iso oder ihr entpackter Ordner; sie selbst bleibt, wie sie ist."

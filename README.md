@@ -158,6 +158,9 @@ the game.
 - **Saves with backups:** each save's earlier versions, and putting one back.
 - **Moving to a new PC:** *Export my data* puts all your saves, figures and settings into one ZIP,
   *Import my data* takes it back without overwriting anything.
+- **Sharing a save:** *Share one game's saves* puts one game's saves (and your figures, if you like) into a ZIP
+  for a friend or your other PC. Importing it replaces that game's saves there, after asking; the ones it
+  replaces go into the backups first.
 - **Portable:** with the portable ZIP, all your data can live next to the launcher instead of in
   Documents.
 - **Checked downloads:** every setup and launcher update is checked against the SHA-256 GitHub

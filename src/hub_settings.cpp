@@ -319,16 +319,35 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
   export_data.type = "action";
   export_data.options = {{"", "To the desktop", "Auf den Desktop"}};
   page.settings.push_back(std::move(export_data));
+  // A button: one game's saves into a file (#161: a save for a friend, or for the Deck); the game and
+  // the figures are picked next (LauncherUi::DrawExportGame).
+  GameSetting export_game;
+  export_game.cvar = "export_game";
+  export_game.en = "Share one game's saves";
+  export_game.de = "Spielst\xC3\xA4nde eines Spiels teilen";
+  export_game.help_en = "One game's saves in a file on the desktop, for a friend or your other PC. You pick the game "
+                        "next, and whether your figures come along. \"Import my data\" takes the file: there that "
+                        "game's saves are copied into the backups first and then replaced.";
+  export_game.help_de = "Die Spielst\xC3\xA4nde eines Spiels in einer Datei auf dem Desktop, f\xC3\xBCr einen Freund "
+                        "oder deinen anderen PC. Du w\xC3\xA4hlst gleich das Spiel und ob deine Figuren mitkommen. "
+                        "\xE2\x80\x9EMeine Daten importieren\xE2\x80\x9C nimmt die Datei: Dort werden die "
+                        "Spielst\xC3\xA4nde des Spiels erst gesichert und dann ersetzt.";
+  export_game.type = "action";
+  export_game.options = {{"", "Choose the game", "Spiel w\xC3\xA4hlen"}};
+  page.settings.push_back(std::move(export_game));
   GameSetting import_data;
   import_data.cvar = "import_data";
   import_data.en = "Import my data";
   import_data.de = "Meine Daten importieren";
   import_data.help_en = "Pick the file from \"Export my data\". What's already here stays: nothing is overwritten. "
                         "Only when a game has settings of its own here already, you're asked whether the file's "
-                        "replace them.";
+                        "replace them. A file from \"Share one game's saves\" replaces that game's saves, after "
+                        "you say so; yours are copied into the backups first.";
   import_data.help_de = "W\xC3\xA4hle die Datei aus \xE2\x80\x9EMeine Daten exportieren\xE2\x80\x9C. Was schon da "
                         "ist, bleibt: Nichts wird \xC3\xBC" "berschrieben. Nur wenn ein Spiel hier schon eigene "
-                        "Einstellungen hat, wirst du gefragt, ob die aus der Datei sie ersetzen.";
+                        "Einstellungen hat, wirst du gefragt, ob die aus der Datei sie ersetzen. Eine Datei aus "
+                        "\xE2\x80\x9ESpielst\xC3\xA4nde eines Spiels teilen\xE2\x80\x9C ersetzt die Spielst\xC3\xA4nde "
+                        "dieses Spiels, wenn du es sagst; deine werden vorher gesichert.";
   import_data.type = "action";
   import_data.options = {{"", "Choose the file", "Datei w\xC3\xA4hlen"}};
   page.settings.push_back(std::move(import_data));
