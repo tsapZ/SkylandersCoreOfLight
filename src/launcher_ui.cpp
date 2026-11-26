@@ -1196,10 +1196,7 @@ void LauncherUi::OpenHubSettings(int page) {
     for (const Found& f : found_) {
       if (f.exe.empty()) continue;
       std::string value = k.sdk_default;
-      if (auto it = f.settings.find(k.cvar); it != f.settings.end()) {
-        value = it->second;
-        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') value = value.substr(1, value.size() - 2);
-      }
+      if (auto it = f.settings.find(k.cvar); it != f.settings.end()) value = it->second;  // ReadIni: no quotes
       if (first) common = value;
       else if (value != common) common.clear();
       first = false;
@@ -3272,7 +3269,7 @@ bool LauncherUi::DrawScreens(float width, float height) {
           if (f.exe.empty()) continue;
           const std::filesystem::path toml = f.exe.parent_path() / (UserDataName(f.exe) + ".toml");
           if (WriteGameSetting(toml, kKeyBindingCategory, k.cvar, "string", it->second)) {
-            f.settings[k.cvar] = "\"" + it->second + "\"";
+            f.settings[k.cvar] = it->second;  // as ReadIni gives it: without the quotes
           } else {
             HubWarn("keyboard page: could not write " + std::string(k.cvar) + " into " +
                     std::string(reinterpret_cast<const char*>(toml.u8string().c_str())));

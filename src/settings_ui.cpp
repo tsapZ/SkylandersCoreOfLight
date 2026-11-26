@@ -90,6 +90,7 @@ void SettingsScreen::Open(const std::string& title, SettingsLoader* loader, std:
   changes_.clear();
   original_.clear();
   confirm_discard_ = false;
+  listen_cvar_.clear();  // no key row still waiting from the last time
   message_.clear();
 }
 
