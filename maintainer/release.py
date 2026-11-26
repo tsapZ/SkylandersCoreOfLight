@@ -267,6 +267,51 @@ def linux_preflight():
         raise SystemExit("the games' Linux build needs: " + "; ".join(missing))
 
 
+def sync_sibling(main, sib):
+    """The sibling checkout `sib` at the main checkout's commit, its submodules at the commits that commit asks for
+    (fetched from the main checkout's own clones of them: nothing is downloaded)."""
+    head = sk.git(main, "rev-parse", "HEAD")
+    sk.git(sib, "fetch", "-q", str(main), "HEAD")
+    sk.git(sib, "checkout", "-q", "--detach", head)
+    for path in sk.SUBMODULES:
+        want = sk.git(sib, "rev-parse", f"HEAD:{path}")
+        if sk.git(sib / path, "rev-parse", "HEAD", check=False) != want:
+            sk.git(sib / path, "fetch", "-q", str(main / path), "HEAD")
+            sk.git(sib / path, "checkout", "-q", "--detach", want)
+    sk.git(sib, "-c", "protocol.file.allow=always", "submodule", "update", "-q", "--recursive")
+    for path in sk.SUBMODULES:
+        if sk.git(sib / path, "rev-parse", "HEAD") != sk.git(main / path, "rev-parse", "HEAD"):
+            raise SystemExit(f"{sib}: {path} isn't at the main checkout's commit")
+
+
+def build_siblings(repo, d, value, logs, preset):
+    """The exes of the game's other builds (sk.SIBLINGS) into out/siblings/<triple>/ for the package recipes. A listed
+    one whose checkout isn't set up stops the build: the game would ship naming an exe that isn't there."""
+    out = d / "out" / "siblings" / preset.removesuffix("-release")
+    if out.exists():
+        shutil.rmtree(out)  # never a stale exe from an earlier build
+    for name in sk.SIBLINGS.get(repo, []):
+        # Its real path: through a junction the compiler saw the target's path while CMake mapped the junction's, so
+        # the build folder's path (with the user's name) stayed in the exe (2026-11-26, caught by `check`).
+        sib = (sk.WORK / "siblings" / name).resolve()
+        if not (sib / "rom" / "default.xex").exists():
+            raise SystemExit(f"{repo}: {name} needs its checkout at {sib}, with a disc of that build in rom\\")
+        sync_sibling(d, sib)
+        print(f"{repo}: {name} from {sib} at {sk.git(sib, 'rev-parse', '--short', 'HEAD')}")
+        for step, command in (("configure", in_vs(f"cmake --preset {preset} -DSKYLANDERS_PGO_PROFILE={value}")),
+                              ("build", in_vs(f"cmake --build --preset {preset}"))):
+            log = logs / f"{repo}_{name}_{step}.log"
+            started = datetime.datetime.now()
+            code = run(command, cwd=sib, log=log, path_first=sib / "out" / "build" / preset)
+            took = (datetime.datetime.now() - started).total_seconds()
+            print(f"{repo}: {name} {step} {'ok' if code == 0 else 'FAILED'} in {took:.0f} s ({log})")
+            if code:
+                return False
+        out.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(sib / "out" / "build" / preset / f"{sk.game(repo).exe}.exe", out / f"{name}.exe")
+    return True
+
+
 def cmd_build(a):
     logs = sk.WORK / "logs"
     failed = []
@@ -311,6 +356,10 @@ def cmd_build(a):
                 if a.test:
                     steps.append(("test", ["just", "test-release"]))
             else:
+                # The other builds' exes first, so the package recipe finds them in out\siblings.
+                if a.recipe == "package-installer" and not build_siblings(repo, d, value, logs, preset):
+                    failed.append(repo)
+                    continue
                 steps.append(("configure", in_vs(f"cmake --preset win-amd64-release -DSKYLANDERS_PGO_PROFILE={value}")))
                 steps.append((a.recipe, in_vs(f"just {a.recipe}")))
                 if a.test:
@@ -385,6 +434,17 @@ def check_repo(repo, history=False):
         problems.append(f"commits with a non-noreply e-mail: {sorted(private)}")
     scan_roots = [d / "installer" / "staging"]
     scan_roots += [p for p in (d / "dist").glob("*-linux-*-release") if p.is_dir()]
+    # The other builds' exes (sk.SIBLINGS) in every package: the game names them in its disc check.
+    for name in sk.SIBLINGS.get(repo, []):
+        for root, exe in ((d / "installer" / "staging", f"{name}.exe"),
+                          *((p, name) for p in (d / "dist").glob("*-linux-*-release") if p.is_dir())):
+            if root.exists() and not (root / exe).exists():
+                problems.append(f"{root.name} lacks {exe} (the game's other build, release.py build makes it)")
+    # The other builds' checkouts must not carry the developer kit either.
+    for name in sk.SIBLINGS.get(repo, []):
+        cache = sk.WORK / "siblings" / name / "out" / "build" / "win-amd64-release" / "CMakeCache.txt"
+        if cache.exists() and re.search(r"^SKYLANDERS_DEVKIT_DIR:\w+=\S", cache.read_text(errors="replace"), re.M):
+            problems.append(f"the {name} build has SKYLANDERS_DEVKIT_DIR set (private code would ship)")
     if user:
         needles = [f"Users\\{user}", f"Users/{user}", f"/home/{user}"]
         for root in scan_roots:
