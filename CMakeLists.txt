@@ -69,6 +69,7 @@ set(COREOFLIGHT_SOURCES
   src/textures.cpp
   src/xiso.cpp
   src/settings_ui.cpp
+  src/key_names.cpp
   src/setup_ui.cpp
   src/launcher_ui.cpp
   src/hints.cpp

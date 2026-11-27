@@ -42,8 +42,13 @@ std::filesystem::path HubSettingsFile();
 HubSettings LoadHubSettings();
 // Whether the menus are German with these settings.
 bool HubGerman(const HubSettings& settings);
-// The settings as pages for SettingsScreen (one page, the current values).
-std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings);
+// The "Keyboard" page's index (#156: the keys of all six games at once).
+constexpr int kHubKeyboardPage = 2;
+
+// The settings as pages for SettingsScreen (one page, the current values). `keys`: the keyboard page's
+// values, keybind_* -> the keys every set-up game has (empty: they differ; missing: the default).
+std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings,
+                                               const std::map<std::string, std::string>& keys = {});
 // What the "Spiele-Ordner" row shows: the games folder, "Standard: ..." while none is chosen.
 void GamesFolderLabels(std::string& en, std::string& de);
 // What the "Spieldaten-Ordner" row shows: the data folder (games.h SkylandersDir), "Standard: ..."
