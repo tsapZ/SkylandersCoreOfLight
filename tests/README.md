@@ -25,7 +25,7 @@ python3 tests/check_discs.py --exe out/build/linux-amd64-release/coreoflight --d
 ```
 
 Without `--exe`, the script takes this machine's preset (`linux-amd64-release` on x86-64,
-`linux-arm64-release` on ARM64).
+`linux-arm64-release` on ARM64) and refuses any other architecture instead of assuming amd64.
 
 A collection that holds only some of the discs is fine: the ISOs that are there are checked, the
 others are not required. The Russian Spyro's Adventure disc is in the list as `other`: the
