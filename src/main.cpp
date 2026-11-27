@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <d3d11.h>
 #include <shellapi.h>
+#include <tlhelp32.h>
 #else
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
@@ -16,6 +17,7 @@
 #include <ctime>
 #endif
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #ifdef _WIN32
@@ -383,17 +385,46 @@ void TakeForeground(HWND hwnd) {
   if (joined) AttachThreadInput(front_thread, own_thread, FALSE);
 }
 
+// The game's process and the ones it started itself: SuperChargers started with a French / Dutch or Scandinavian disc
+// starts the exe made from that build and waits for it (skylanders-portal sibling_build.h, 2026-11-26), so the window
+// belongs to the child. Looked up again, as the child comes a moment after the game, but at most twice a second: the
+// launch screen asks every frame, and a snapshot of every process on the PC costs a few milliseconds.
+std::vector<DWORD> GameProcessIds(DWORD pid) {
+  static DWORD cached_pid = 0;
+  static ULONGLONG cached_at = 0;
+  static std::vector<DWORD> cached;
+  const ULONGLONG now = GetTickCount64();
+  if (pid == cached_pid && now - cached_at < 500) return cached;
+  std::vector<DWORD> ids{pid};
+  HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snap == INVALID_HANDLE_VALUE) return ids;
+  PROCESSENTRY32W entry = {};
+  entry.dwSize = sizeof(entry);
+  for (BOOL more = Process32FirstW(snap, &entry); more; more = Process32NextW(snap, &entry)) {
+    if (entry.th32ParentProcessID == pid && entry.th32ProcessID != pid) ids.push_back(entry.th32ProcessID);
+  }
+  CloseHandle(snap);
+  cached_pid = pid;
+  cached_at = now;
+  cached = ids;
+  return ids;
+}
+
+bool OwnedByGame(HWND w, const std::vector<DWORD>& ids) {
+  DWORD owner = 0;
+  GetWindowThreadProcessId(w, &owner);
+  return std::find(ids.begin(), ids.end(), owner) != ids.end();
+}
+
 bool HasVisibleWindow(DWORD pid) {
   struct Find {
-    DWORD pid;
+    std::vector<DWORD> ids;
     bool found;
-  } find{pid, false};
+  } find{GameProcessIds(pid), false};
   EnumWindows(
       [](HWND w, LPARAM p) -> BOOL {
         auto* f = reinterpret_cast<Find*>(p);
-        DWORD owner = 0;
-        GetWindowThreadProcessId(w, &owner);
-        if (owner == f->pid && IsWindowVisible(w)) {
+        if (OwnedByGame(w, f->ids) && IsWindowVisible(w)) {
           f->found = true;
           return FALSE;
         }
@@ -407,16 +438,14 @@ bool HasVisibleWindow(DWORD pid) {
 // "SDL_app"). Not just a visible one: a hidden or minimized window is still a game that runs.
 bool HasGameWindow(DWORD pid) {
   struct Find {
-    DWORD pid;
+    std::vector<DWORD> ids;
     bool found;
-  } find{pid, false};
+  } find{GameProcessIds(pid), false};
   EnumWindows(
       [](HWND w, LPARAM p) -> BOOL {
         auto* f = reinterpret_cast<Find*>(p);
-        DWORD owner = 0;
-        GetWindowThreadProcessId(w, &owner);
         wchar_t name[32] = L"";
-        if (owner == f->pid && GetClassNameW(w, name, 32) && std::wcscmp(name, L"SDL_app") == 0) {
+        if (OwnedByGame(w, f->ids) && GetClassNameW(w, name, 32) && std::wcscmp(name, L"SDL_app") == 0) {
           f->found = true;
           return FALSE;
         }
