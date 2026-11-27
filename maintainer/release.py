@@ -332,11 +332,16 @@ def cmd_build(a):
             if linux:
                 steps.append(("configure", ["cmake", "--preset", preset, *compilers]))
                 steps.append(("build", ["cmake", "--build", "--preset", preset]))
+                if a.test:
+                    steps.append(("test", ["ctest", "--test-dir", f"out/build/{preset}", "--output-on-failure"]))
                 if a.recipe in ("package-installer", "package-linux"):
                     steps.append(("package", ["bash", str(d / "tools" / "package_linux.sh")]))
                     steps.append(("package-appimage", ["bash", str(d / "tools" / "package_appimage.sh")]))
             else:
                 steps.append(("build", in_vs("cmake --build --preset release")))
+                # --test ran nothing for Core of Light before (0.5.0-beta.7: "build ok", ctest by hand).
+                if a.test:
+                    steps.append(("test", in_vs("ctest --test-dir out/build/release --output-on-failure")))
                 if a.recipe == "package-installer":
                     steps.append(("package", ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
                                               str(d / "tools" / "package_installer.ps1")]))
@@ -624,7 +629,7 @@ def main():
     s = sub.add_parser("build", help="build release binaries/packages, logs in SKYLANDERS_WORK")
     s.add_argument("--recipe", default="build-release",
                    choices=["build-release", "package-installer", "package-linux"])
-    s.add_argument("--test", action="store_true", help="also run the games' tests")
+    s.add_argument("--test", action="store_true", help="also run the tests (the games' test-release, Core of Light's ctest)")
     s.add_argument("--pgo", action="store_true",
                    help="profile-guided: each game with its profile from SKYLANDERS_WORK\\pgo\\<Repo>.profdata")
     s.add_argument("--repos", nargs="*")
