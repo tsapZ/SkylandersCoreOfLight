@@ -2,7 +2,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <dxgi.h>
+#include <dxgi1_6.h>
 #else
 #include <SDL3/SDL_opengl.h>
 #endif
@@ -88,8 +88,17 @@ GpuInfo Detect() {
 #ifdef _WIN32
   IDXGIFactory1* factory = nullptr;
   if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return gpu;
+  // The games' card: they take the first adapter in Windows' high-performance order (rexglue-sdk
+  // d3d12_provider.cpp). EnumAdapters1 lists the one the screen hangs on first, on a laptop the processor's own
+  // graphics: an Intel UHD 630 next to a GTX 1060 was judged here, weak, and new setups got 1x (#164).
+  IDXGIFactory6* factory6 = nullptr;
+  factory->QueryInterface(IID_PPV_ARGS(&factory6));
+  const auto enum_adapter = [&](UINT i, IDXGIAdapter1** out) {
+    return factory6 ? factory6->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(out))
+                    : factory->EnumAdapters1(i, out);
+  };
   IDXGIAdapter1* adapter = nullptr;
-  for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+  for (UINT i = 0; SUCCEEDED(enum_adapter(i, &adapter)); ++i) {
     DXGI_ADAPTER_DESC1 d{};
     const bool ok = SUCCEEDED(adapter->GetDesc1(&d));
     adapter->Release();
@@ -99,6 +108,7 @@ GpuInfo Detect() {
     gpu.vram_mb = uint64_t(d.DedicatedVideoMemory) >> 20;
     break;
   }
+  if (factory6) factory6->Release();
   factory->Release();
 #else
   namespace fs = std::filesystem;
