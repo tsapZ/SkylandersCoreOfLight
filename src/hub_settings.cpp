@@ -399,13 +399,14 @@ std::shared_ptr<GameSettings> HubSettingsPages(const HubSettings& settings) {
     wiiu.en = sc ? "SuperChargers: Wii U figures" : "Imaginators: Wii U figures";
     wiiu.de = sc ? "SuperChargers: Wii-U-Figuren" : "Imaginators: Wii-U-Figuren";
     wiiu.help_en = std::string("The Wii U version of ") + (sc ? "SuperChargers" : "Imaginators") +
-                   " has Nintendo figures the Xbox 360 one lacks. Pick the folder of your own extracted Wii U game, "
-                   "and SkyP4tcher's converter puts them into your Xbox 360 game (the portal menu shows them under "
+                   " has Nintendo figures the Xbox 360 one lacks. Pick your own Wii U game, Cemu's .wua as it is or "
+                   "the extracted folder, and SkyP4tcher's converter puts them into your Xbox 360 game (the portal menu shows them under "
                    "Nintendo). The converter is downloaded once (111 MB); the conversion takes a few minutes. Your "
                    "game's original files are kept, and pressing here again puts them back.";
     wiiu.help_de = std::string("Die Wii-U-Version von ") + (sc ? "SuperChargers" : "Imaginators") +
-                   " hat Nintendo-Figuren, die der Xbox-360-Version fehlen. W\xC3\xA4hle den Ordner deines eigenen "
-                   "entpackten Wii-U-Spiels, und SkyP4tchers Konverter bringt sie in dein Xbox-360-Spiel (das "
+                   " hat Nintendo-Figuren, die der Xbox-360-Version fehlen. W\xC3\xA4hle dein eigenes Wii-U-Spiel, "
+                   "Cemus .wua, wie sie ist, oder den entpackten Ordner, und SkyP4tchers Konverter bringt sie in dein "
+                   "Xbox-360-Spiel (das "
                    "Portalmen\xC3\xBC zeigt sie unter Nintendo). Der Konverter wird einmal geladen (111 MB); die "
                    "Umwandlung dauert ein paar Minuten. Die Originaldateien des Spiels bleiben aufgehoben, und ein "
                    "erneuter Druck hier legt sie zur\xC3\xBC" "ck.";

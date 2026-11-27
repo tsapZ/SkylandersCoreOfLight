@@ -4,21 +4,17 @@
 #include <cctype>
 #include <exception>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <string_view>
-#include <vector>
 
+#include "platform.h"
 #include "zarchive/zarchivereader.h"
 
 namespace coreoflight {
 namespace fs = std::filesystem;
 
 namespace {
-
-// UTF-8 in and out of paths (C++20's u8string is std::u8string; platform.h's helpers would pull the window code into
-// the test).
-std::string Utf8(const std::u8string& s) { return std::string(s.begin(), s.end()); }
-fs::path FromUtf8(std::string_view s) { return fs::path(std::u8string(s.begin(), s.end())); }
 
 std::string Lower(std::string_view s) {
   std::string out(s);
@@ -54,25 +50,48 @@ struct File {
   uint64_t size;
 };
 
-// Every file below `dir` (recursive), with its path below it; false on a name that isn't safe.
+// Folders deeper than this below content/archives mean a damaged archive (a folder that lists itself would recurse
+// until the stack runs out, which no catch stops); the games' archives are flat.
+constexpr int kMaxDepth = 32;
+
+// Every file below `dir` into `out`, keyed by its lower-case path below content/archives: a later title's file of the
+// same name (the update's) replaces the earlier one's. False on a damaged or unsafe entry. ZArchive finds a child only
+// by its path, which it compares without case; two names that differ only in case (none in these games) end up as one
+// file, as they would on Windows anyway.
 bool Collect(ZArchiveReader& reader, ZArchiveNodeHandle dir, const std::string& archive_path, const fs::path& relative,
-             std::vector<File>& out, std::string& error) {
+             int depth, std::map<std::string, File>& out, std::string& error) {
+  if (depth > kMaxDepth) {
+    error = "the archive is damaged (folders nested too deep at " + archive_path + ")";
+    return false;
+  }
   const uint32_t count = reader.GetDirEntryCount(dir);
   for (uint32_t i = 0; i < count; ++i) {
     ZArchiveReader::DirEntry entry;
-    if (!reader.GetDirEntry(dir, i, entry)) continue;
+    if (!reader.GetDirEntry(dir, i, entry)) {
+      error = "the archive is damaged (an entry of " + archive_path + " can't be read)";
+      return false;
+    }
     if (!SafeName(entry.name)) {
       error = "unsafe name in the archive: " + std::string(entry.name);
       return false;
     }
     const std::string path = archive_path + "/" + std::string(entry.name);
     const ZArchiveNodeHandle node = reader.LookUp(path);
-    if (node == ZARCHIVE_INVALID_NODE) continue;
-    const fs::path rel = relative / FromUtf8(entry.name);
+    if (node == ZARCHIVE_INVALID_NODE) {
+      error = "the archive is damaged (" + path + " can't be found)";
+      return false;
+    }
+    const fs::path rel = relative / PathFromUtf8(entry.name);
     if (entry.isDirectory) {
-      if (!Collect(reader, node, path, rel, out, error)) return false;
+      if (!Collect(reader, node, path, rel, depth + 1, out, error)) return false;
     } else if (entry.isFile) {
-      out.push_back({node, rel, reader.GetFileSize(node)});
+      // A replaced file keeps the game's spelling of its name (what the converter asks for, on a file system that
+      // minds case) and takes the update's content.
+      const auto [it, added] = out.try_emplace(Lower(GenericPathUtf8(rel)), File{node, rel, reader.GetFileSize(node)});
+      if (!added) {
+        it->second.node = node;
+        it->second.size = reader.GetFileSize(node);
+      }
     }
   }
   return true;
@@ -80,9 +99,12 @@ bool Collect(ZArchiveReader& reader, ZArchiveNodeHandle dir, const std::string& 
 
 }  // namespace
 
-bool IsWuaFile(const fs::path& path) { return Lower(Utf8(path.extension().u8string())) == ".wua"; }
+bool IsWuaFile(const fs::path& path) {
+  std::error_code ec;
+  return Lower(PathUtf8(path.extension())) == ".wua" && fs::is_regular_file(path, ec);
+}
 
-bool UnpackWuaArchives(const fs::path& wua, const fs::path& target, const std::string& marker,
+bool UnpackWuaArchives(const fs::path& wua, const fs::path& target, const std::vector<std::string>& markers,
                        std::atomic<float>* progress, std::atomic<uint64_t>* bytes, std::string& error) {
   try {
     std::unique_ptr<ZArchiveReader> reader(ZArchiveReader::OpenFromFile(wua));
@@ -90,8 +112,8 @@ bool UnpackWuaArchives(const fs::path& wua, const fs::path& target, const std::s
       error = "not a .wua archive (or a damaged one)";
       return false;
     }
-    // The title folders at the top: the game (00050000) with content/archives, the one with the marker first; and the
-    // updates (0005000e) by their lower half.
+    // The title folders at the top: the game (00050000, or a name that isn't a title id) whose content/archives has
+    // the markers, and the updates (0005000e) by their lower half.
     struct Title {
       std::string name, high, low;
       unsigned version = 0;
@@ -108,48 +130,50 @@ bool UnpackWuaArchives(const fs::path& wua, const fs::path& target, const std::s
       t.parsed = ParseTitleFolder(entry.name, t.high, t.low, t.version);
       titles.push_back(std::move(t));
     }
-    auto has = [&](const Title& t, const std::string& below) {
-      return reader->LookUp(t.name + "/content/archives" + below) != ZARCHIVE_INVALID_NODE;
+    auto has = [&](const Title& t, const std::string& below, bool directory) {
+      return reader->LookUp(t.name + "/content/archives" + below, !directory, directory) != ZARCHIVE_INVALID_NODE;
     };
     const Title* game = nullptr;
-    for (int pass = 0; pass < 2 && !game; ++pass) {
-      for (const Title& t : titles) {
-        const bool is_game = !t.parsed || t.high == "00050000";
-        if (is_game && has(t, "") && (pass == 1 || has(t, "/" + marker))) {
-          game = &t;
-          break;
-        }
+    std::string missing = markers.empty() ? std::string() : markers.front();
+    for (const Title& t : titles) {
+      if ((t.parsed && t.high != "00050000") || !has(t, "", true)) continue;
+      const auto lacks = std::find_if(markers.begin(), markers.end(), [&](const std::string& m) { return !has(t, "/" + m, false); });
+      if (lacks == markers.end()) {
+        game = &t;
+        break;
       }
+      if (lacks != markers.begin()) missing = *lacks;  // a game with the first marker: name what it lacks
     }
     if (!game) {
-      error = "no Wii U game with a content/archives folder in the archive";
+      error = missing.empty() ? "no Wii U game with a content/archives folder in the archive"
+                              : "no game in the archive has " + missing;
       return false;
     }
     const Title* update = nullptr;
     if (game->parsed) {
       for (const Title& t : titles) {
-        if (t.parsed && t.high == "0005000e" && t.low == game->low && has(t, "") &&
+        if (t.parsed && t.high == "0005000e" && t.low == game->low && has(t, "", true) &&
             (!update || t.version > update->version)) {
           update = &t;
         }
       }
     }
 
-    // The files: the game's, then the update's (written later, so they replace the game's of the same name).
-    std::vector<File> files;
+    // The files: the game's, then the update's over them (one entry per name, so each is written once).
+    std::map<std::string, File> files;
     for (const Title* t : {game, update}) {
       if (!t) continue;
       const std::string path = t->name + "/content/archives";
-      if (!Collect(*reader, reader->LookUp(path), path, {}, files, error)) return false;
+      if (!Collect(*reader, reader->LookUp(path, false, true), path, {}, 0, files, error)) return false;
     }
     uint64_t total = 0;
-    for (const File& f : files) total += f.size;
+    for (const auto& [key, f] : files) total += f.size;
     if (bytes) *bytes = total;
     const fs::path out_dir = target / "content" / "archives";
     std::error_code ec;
     fs::create_directories(out_dir, ec);
     if (ec) {
-      error = "can't make " + Utf8(out_dir.u8string()) + ": " + ec.message();
+      error = "can't make " + PathUtf8(out_dir) + ": " + ec.message();
       return false;
     }
     const fs::space_info room = fs::space(out_dir, ec);
@@ -161,19 +185,19 @@ bool UnpackWuaArchives(const fs::path& wua, const fs::path& target, const std::s
 
     std::vector<char> buffer(4 << 20);
     uint64_t written = 0;
-    for (const File& f : files) {
+    for (const auto& [key, f] : files) {
       const fs::path out = out_dir / f.relative;
       fs::create_directories(out.parent_path(), ec);
       std::ofstream file(out, std::ios::binary | std::ios::trunc);
       if (!file) {
-        error = "can't write " + Utf8(out.u8string());
+        error = "can't write " + PathUtf8(out);
         return false;
       }
       for (uint64_t at = 0; at < f.size;) {
         const uint64_t want = std::min<uint64_t>(buffer.size(), f.size - at);
         const uint64_t got = reader->ReadFromFile(f.node, at, want, buffer.data());
         if (got != want) {
-          error = "the archive is damaged at " + Utf8(f.relative.generic_u8string());
+          error = "the archive is damaged at " + GenericPathUtf8(f.relative);
           return false;
         }
         file.write(buffer.data(), std::streamsize(got));
@@ -182,7 +206,7 @@ bool UnpackWuaArchives(const fs::path& wua, const fs::path& target, const std::s
         if (progress && total) *progress = float(double(written) / double(total));
       }
       if (!file.flush()) {
-        error = "can't write " + Utf8(out.u8string()) + " (drive full?)";
+        error = "can't write " + PathUtf8(out) + " (drive full?)";
         return false;
       }
     }

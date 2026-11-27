@@ -46,58 +46,79 @@ static std::string Read(const fs::path& p) {
 int main() {
   const fs::path dir = fs::temp_directory_path() /
                        ("coreoflight_wua_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-  fs::create_directories(dir);
+  fs::create_directories(dir / "folder.wua");
+  std::ofstream(dir / "Game.WUA") << "x";
+  std::ofstream(dir / "game.wud") << "x";
 
-  CHECK(coreoflight::IsWuaFile("games/SuperChargers.WUA"));
-  CHECK(!coreoflight::IsWuaFile("games/SuperChargers.wud"));
-  CHECK(!coreoflight::IsWuaFile("games/wua"));
+  // A file with the extension in any case; a folder named so or another extension is not one.
+  CHECK(coreoflight::IsWuaFile(dir / "Game.WUA"));
+  CHECK(!coreoflight::IsWuaFile(dir / "folder.wua"));
+  CHECK(!coreoflight::IsWuaFile(dir / "game.wud"));
+  CHECK(!coreoflight::IsWuaFile(dir / "missing.wua"));
 
-  // A game without the marker first, the game with it, two updates of it, a DLC, the game's code.
+  // A game without the markers first, the game with them, two updates of it, a DLC, the game's code.
   std::string big(300 * 1024, '\0');
   for (size_t i = 0; i < big.size(); ++i) big[i] = char(i * 7 + i / 4096);
   const fs::path full = dir / "full.wua";
   Write(full, {{"0005000010000000_v0/content/archives/Other.pak", "another game"},
                {"0005000010aabb00_v0/code/app.rpx", "code"},
                {"0005000010aabb00_v0/content/archives/Bowser.pak", "base bowser"},
+               {"0005000010aabb00_v0/content/archives/APA4.pak", "apa4"},
                {"0005000010aabb00_v0/content/archives/Keep.pak", big},
                {"0005000010aabb00_v0/content/archives/sub/Inner.pak", "inner"},
                {"0005000e10aabb00_v16/content/archives/Bowser.pak", "update v16"},
-               {"0005000E10AABB00_v32/content/archives/Bowser.pak", "update v32"},
+               {"0005000E10AABB00_v32/content/archives/bowser.PAK", "update v32"},
                {"0005000c10aabb00_v0/content/archives/Dlc.pak", "dlc"}});
   std::atomic<float> progress{0.0f};
   std::atomic<uint64_t> bytes{0};
   std::string error;
   const fs::path out = dir / "out";
-  CHECK(coreoflight::UnpackWuaArchives(full, out, "Bowser.pak", &progress, &bytes, error));
+  CHECK(coreoflight::UnpackWuaArchives(full, out, {"Bowser.pak", "APA4.pak"}, &progress, &bytes, error));
   if (!error.empty()) std::fprintf(stderr, "error: %s\n", error.c_str());
   const fs::path archives = out / "content" / "archives";
+  // The newest update's content under the game's spelling of the name (the update has it as bowser.PAK).
   CHECK(Read(archives / "Bowser.pak") == "update v32");
   CHECK(Read(archives / "Keep.pak") == big);
   CHECK(Read(archives / "sub" / "Inner.pak") == "inner");
+  CHECK(Read(archives / "APA4.pak") == "apa4");
   CHECK(!fs::exists(archives / "Other.pak"));
   CHECK(!fs::exists(archives / "Dlc.pak"));
   CHECK(!fs::exists(out / "code"));
   CHECK(progress.load() == 1.0f);
-  CHECK(bytes.load() == std::string("base bowser").size() + big.size() + 5 + std::string("update v32").size());
+  // Each file once: the game's Bowser.pak, which the update replaces, isn't written or counted.
+  CHECK(bytes.load() == std::string("update v32").size() + std::string("apa4").size() + big.size() + 5);
 
-  // Without the marker anywhere: the first game with content/archives all the same.
+  // Another marker picks the other game; one no game has stops before anything is written.
   const fs::path out2 = dir / "out2";
   error.clear();
-  CHECK(coreoflight::UnpackWuaArchives(full, out2, "Missing.pak", nullptr, nullptr, error));
+  CHECK(coreoflight::UnpackWuaArchives(full, out2, {"Other.pak"}, nullptr, nullptr, error));
   CHECK(Read(out2 / "content" / "archives" / "Other.pak") == "another game");
+  error.clear();
+  CHECK(!coreoflight::UnpackWuaArchives(full, dir / "out3", {"Bowser.pak", "APL1.pak"}, nullptr, nullptr, error));
+  CHECK(error.find("APL1.pak") != std::string::npos);
+  CHECK(!fs::exists(dir / "out3"));
 
   // Only an update: no game.
   const fs::path update_only = dir / "update.wua";
   Write(update_only, {{"0005000e10aabb00_v32/content/archives/Bowser.pak", "update"}});
   error.clear();
-  CHECK(!coreoflight::UnpackWuaArchives(update_only, dir / "out3", "Bowser.pak", nullptr, nullptr, error));
-  CHECK(error.find("no Wii U game") != std::string::npos);
+  CHECK(!coreoflight::UnpackWuaArchives(update_only, dir / "out4", {"Bowser.pak"}, nullptr, nullptr, error));
+  CHECK(error.find("Bowser.pak") != std::string::npos);
+
+  // Folders nested deeper than any game's: a damaged archive, not a crash.
+  std::string deep = "0005000010aabb00_v0/content/archives";
+  for (int i = 0; i < 40; ++i) deep += "/d";
+  const fs::path deep_wua = dir / "deep.wua";
+  Write(deep_wua, {{"0005000010aabb00_v0/content/archives/Bowser.pak", "b"}, {deep + "/x.pak", "x"}});
+  error.clear();
+  CHECK(!coreoflight::UnpackWuaArchives(deep_wua, dir / "out5", {"Bowser.pak"}, nullptr, nullptr, error));
+  CHECK(error.find("too deep") != std::string::npos);
 
   // Not an archive at all.
   const fs::path text = dir / "text.wua";
   std::ofstream(text) << "not an archive, just some text that is long enough to have a footer's size or more......";
   error.clear();
-  CHECK(!coreoflight::UnpackWuaArchives(text, dir / "out4", "Bowser.pak", nullptr, nullptr, error));
+  CHECK(!coreoflight::UnpackWuaArchives(text, dir / "out6", {"Bowser.pak"}, nullptr, nullptr, error));
   CHECK(!error.empty());
 
   std::error_code ec;

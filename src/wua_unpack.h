@@ -12,20 +12,23 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace coreoflight {
 
-// Whether `path` is a .wua file by its name (any case); whether it is a real one shows when it is opened.
+// Whether `path` is a .wua file: a file (not a folder named so) with that extension, any case.
 bool IsWuaFile(const std::filesystem::path& path);
 
 // Unpacks the game's content/archives from `wua` into `target`/content/archives (`target` made if missing). The game is
-// the title folder whose content/archives has `marker` (the file the converter looks for, "Bowser.pak"), else the
-// first game title with a content/archives folder; its update's content/archives (the highest version) goes over it.
-// Stops before writing when the drive has less room than the files plus 1 GB. `progress` (0..1 by bytes written) and
-// `bytes` (the total to write, set before the first byte) may be null. False with `error` (English, for the log) on a
-// broken archive, no game in it, no room, or a file that can't be written; what was written stays, so callers unpack
-// into a scratch folder and remove it either way.
-bool UnpackWuaArchives(const std::filesystem::path& wua, const std::filesystem::path& target, const std::string& marker,
-                       std::atomic<float>* progress, std::atomic<uint64_t>* bytes, std::string& error);
+// the title folder whose content/archives has every file in `markers` (the converter's own pick, "Bowser.pak", and one
+// only that game has); none: false before anything is written, with the first marker no game has in `error`. Its
+// update's content/archives (the highest version) goes over it, each file written once. Stops before writing when the
+// drive has less room than the files plus 1 GB. `progress` (0..1 by bytes written) and `bytes` (the total to write, set
+// before the first byte) may be null. False with `error` (English, for the log) on a broken archive, no such game, no
+// room, or a file that can't be written; what was written stays, so callers unpack into a scratch folder and remove it
+// either way.
+bool UnpackWuaArchives(const std::filesystem::path& wua, const std::filesystem::path& target,
+                       const std::vector<std::string>& markers, std::atomic<float>* progress,
+                       std::atomic<uint64_t>* bytes, std::string& error);
 
 }  // namespace coreoflight
