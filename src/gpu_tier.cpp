@@ -2,7 +2,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <dxgi.h>
+#include <dxgi1_6.h>
 #else
 #include <SDL3/SDL_opengl.h>
 #endif
@@ -13,7 +13,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string_view>
+#include <vector>
 
+#include "gpu_card_pick.h"
 #include "hub_log.h"
 
 namespace coreoflight {
@@ -86,8 +88,17 @@ GpuInfo Detect() {
 #ifdef _WIN32
   IDXGIFactory1* factory = nullptr;
   if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return gpu;
+  // The games' card: they take the first adapter in Windows' high-performance order (rexglue-sdk
+  // d3d12_provider.cpp). EnumAdapters1 lists the one the screen hangs on first, on a laptop the processor's own
+  // graphics: an Intel UHD 630 next to a GTX 1060 was judged here, weak, and new setups got 1x (#164).
+  IDXGIFactory6* factory6 = nullptr;
+  factory->QueryInterface(IID_PPV_ARGS(&factory6));
+  const auto enum_adapter = [&](UINT i, IDXGIAdapter1** out) {
+    return factory6 ? factory6->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(out))
+                    : factory->EnumAdapters1(i, out);
+  };
   IDXGIAdapter1* adapter = nullptr;
-  for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+  for (UINT i = 0; SUCCEEDED(enum_adapter(i, &adapter)); ++i) {
     DXGI_ADAPTER_DESC1 d{};
     const bool ok = SUCCEEDED(adapter->GetDesc1(&d));
     adapter->Release();
@@ -97,6 +108,7 @@ GpuInfo Detect() {
     gpu.vram_mb = uint64_t(d.DedicatedVideoMemory) >> 20;
     break;
   }
+  if (factory6) factory6->Release();
   factory->Release();
 #else
   namespace fs = std::filesystem;
@@ -105,6 +117,9 @@ GpuInfo Detect() {
     const auto* v = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
     return v ? std::string(v) : std::string();
   }();
+  std::string up = gl_vendor + " " + gpu.name;
+  std::transform(up.begin(), up.end(), up.begin(), [](unsigned char c) { return char(std::toupper(c)); });
+  std::vector<DrmCard> cards;
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator("/sys/class/drm", ec)) {
     if (ec) break;
@@ -114,17 +129,16 @@ GpuInfo Detect() {
     std::ifstream vf(dev / "vendor");
     std::string vs;
     if (!std::getline(vf, vs)) continue;
-    const uint32_t vendor = uint32_t(std::strtoul(vs.c_str(), nullptr, 0));
-    uint64_t vram = 0;
-    if (std::ifstream mf(dev / "mem_info_vram_total"); mf >> vram) vram >>= 20;
-    if (gpu.vendor == 0 || vram > gpu.vram_mb) {
-      gpu.vendor = vendor;
-      if (vram > 0) gpu.vram_mb = vram;
-    }
+    DrmCard card;
+    card.vendor = uint32_t(std::strtoul(vs.c_str(), nullptr, 0));
+    if (std::ifstream mf(dev / "mem_info_vram_total"); mf >> card.vram_mb) card.vram_mb >>= 20;
+    cards.push_back(card);
   }
+  // The games' card among them (gpu_card_pick.h: an NVIDIA card over a Ryzen's graphics, Core of Light #163).
+  const DrmCard card = PickGameCard(cards, up.find("NVIDIA") != std::string::npos);
+  gpu.vendor = card.vendor;
+  gpu.vram_mb = card.vram_mb;
   if (gpu.vendor == 0) {
-    std::string up = gl_vendor + " " + gpu.name;
-    std::transform(up.begin(), up.end(), up.begin(), [](unsigned char c) { return char(std::toupper(c)); });
     if (up.find("NVIDIA") != std::string::npos) gpu.vendor = 0x10DE;
     else if (up.find("AMD") != std::string::npos || up.find("RADEON") != std::string::npos) gpu.vendor = 0x1002;
     else if (up.find("INTEL") != std::string::npos) gpu.vendor = 0x8086;
