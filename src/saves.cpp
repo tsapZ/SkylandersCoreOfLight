@@ -141,9 +141,34 @@ std::vector<SaveCopy> ListCopies(const Profile& p, const Game& game, const fs::p
 
 bool BackupSave(const Profile& p, const Game& game, const SaveSlot& slot, const char* mark) {
   std::error_code ec;
-  const fs::path to = BackupsDir(p, game) / slot.folder.filename() / Utf8Path(NowName());
-  if (!CopyTree(slot.folder, to / "package")) return false;
-  if (fs::exists(slot.header, ec)) fs::copy_file(slot.header, to / "header", fs::copy_options::overwrite_existing, ec);
+  // Two copies of saves with the same name in the same second (the same save name under two title ids,
+  // backed up one after the other by an import) get their own folders (code review t18, 2026-11-26).
+  fs::path to = BackupsDir(p, game) / slot.folder.filename() / Utf8Path(NowName());
+  for (int n = 2; fs::exists(to, ec) && n < 100; ++n) {
+    to = BackupsDir(p, game) / slot.folder.filename() / Utf8Path(NowName() + " (" + std::to_string(n) + ")");
+  }
+  // A copy that fails half way is deleted again: ListCopies would offer its empty package as a copy to put back.
+  auto failed = [&](const std::error_code& why, const fs::path& path) {
+    Failed(why, path);
+    std::error_code ignore;
+    fs::remove_all(to, ignore);
+    return false;
+  };
+  if (!CopyTree(slot.folder, to / "package")) {
+    const std::string why = g_error;
+    std::error_code ignore;
+    fs::remove_all(to, ignore);
+    g_error = why;
+    return false;
+  }
+  // A header that is there but can't be copied fails the copy: an import deletes the save after it
+  // (code review t18: the copy said yes without its header, and the header was gone).
+  if (fs::exists(slot.header, ec)) {
+    fs::copy_file(slot.header, to / "header", fs::copy_options::overwrite_existing, ec);
+    if (ec) return failed(ec, slot.header);
+  } else if (ec) {
+    return failed(ec, slot.header);
+  }
   // The SDK's manifest: the save folder and its header, relative to the user data.
   const std::string save = RelativeSave(slot);
   const fs::path title = slot.folder.parent_path().parent_path();

@@ -28,6 +28,8 @@
 #include "handheld.h"
 #include "hub_log.h"
 #include "problem_report.h"
+#include "profiles.h"
+#include "saves.h"
 #include "textures.h"
 #include "whats_new.h"
 
@@ -1759,6 +1761,8 @@ bool LauncherUi::Draw(float width, float height) {
                        : ask_language_                 ? "language"
                        : setup_.is_open()              ? "setup"
                        : ask_import_settings_          ? "importquestion"
+                       : ask_export_game_              ? "exportgame"
+                       : ask_one_game_import_          ? "onegameimport"
                        : !ask_reimport_.empty()        ? "reimportquestion"
                        : confirm_quit_                 ? "quit"
                        : ask_update_ >= 0              ? "update"
@@ -2045,6 +2049,161 @@ bool LauncherUi::DrawImportQuestion(float width, float height) {
   } else if (keep || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     ask_import_settings_ = false;
     data_transfer_.StartImport(false);
+  }
+  return true;
+}
+
+// "Share one game's saves" (#161): the six games with their number of saves, and "Figures too";
+// up / down and A, or a click; B back. A game that isn't set up, has no saves or runs can't be chosen.
+bool LauncherUi::DrawExportGame(float width, float height) {
+  const float u = UiScale(width, height);
+  const int games = int(AllGames().size());
+  const int rows = games + 1;  // the last row: the figures too, on or off
+  export_game_row_ = std::clamp(export_game_row_, 0, rows - 1);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("exportgame", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, {});
+  const float row_h = 54 * u;
+  const float bw = 800 * u, bh = 236 * u + float(rows) * row_h;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const char* title = german_ ? "Spielst\xC3\xA4nde eines Spiels teilen" : "Share one game's saves";
+  Text(dl, bold_, 32 * u, {(width - TextWidth(bold_, 32 * u, title)) * 0.5f, a.y + 26 * u}, kGold, title);
+  const char* line = german_ ? "Welches Spiel? Seine Spielst\xC3\xA4nde kommen in eine Datei auf dem Desktop, ohne die "
+                               "Einstellungen des Spiels."
+                             : "Which game? Its saves go into a file on the desktop, without the game's settings.";
+  Text(dl, regular_, 21 * u, {a.x + 40 * u, a.y + 78 * u}, kWhite, line, bw - 80 * u);
+  const ImGuiIO& io = ImGui::GetIO();
+  int clicked = -1;
+  for (int r = 0; r < rows; ++r) {
+    const ImVec2 p{a.x + 40 * u, a.y + 150 * u + float(r) * row_h}, q{b.x - 40 * u, p.y + row_h - 8 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    if (over && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) export_game_row_ = r;
+    const bool chosen = r == export_game_row_;
+    dl->AddRectFilled(p, q, chosen ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 14 * u);
+    if (chosen) dl->AddRect(p, q, kGold, 14 * u, 0, 2 * u);
+    std::string label, right;
+    bool usable = true;
+    if (r < games) {
+      const Game& g = AllGames()[size_t(r)];
+      label = german_ ? g.name_de : g.name_en;
+      const int saves = r < int(export_game_saves_.size()) ? export_game_saves_[size_t(r)] : -1;
+      usable = saves > 0 && !(running_game_ == size_t(r) && !running_key_.empty());
+      if (saves < 0) {
+        right = german_ ? "nicht eingerichtet" : "not set up";
+      } else if (saves == 0) {
+        right = german_ ? "keine Spielst\xC3\xA4nde" : "no saves";
+      } else if (!usable) {
+        right = german_ ? "l\xC3\xA4uft gerade" : "running";
+      } else {
+        right = std::to_string(saves) + (german_ ? (saves == 1 ? " Spielstand" : " Spielst\xC3\xA4nde")
+                                                 : (saves == 1 ? " save" : " saves"));
+      }
+    } else {
+      label = german_ ? "Meine Figuren auch" : "My figures too";
+      right = export_game_figures_ ? (german_ ? "An" : "On") : (german_ ? "Aus" : "Off");
+    }
+    Text(dl, bold_, 24 * u, {p.x + 24 * u, p.y + 9 * u}, usable ? kWhite : kDim, label.c_str());
+    Text(dl, regular_, 20 * u, {q.x - 24 * u - TextWidth(regular_, 20 * u, right.c_str()), p.y + 12 * u},
+         r == games ? kGold : kDim, right.c_str());
+    if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) clicked = r;
+  }
+  const char* note = german_ ? "Wer die Datei importiert, bekommt diese Spielst\xC3\xA4nde statt seiner; seine werden "
+                               "vorher gesichert."
+                             : "Whoever imports the file gets these saves instead of theirs; theirs are backed up "
+                               "first.";
+  Text(dl, regular_, 18 * u, {a.x + 40 * u, b.y - 74 * u}, kDim, note, bw - 80 * u);
+  ButtonHint(dl, bold_, 22 * u, {a.x + 40 * u, b.y - 42 * u}, "A", Rgba(70, 170, 70), german_ ? "W\xC3\xA4hlen" : "Choose");
+  ButtonHint(dl, bold_, 22 * u, {a.x + 250 * u, b.y - 42 * u}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
+  ImGui::End();
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadDpadUp) || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickUp) ||
+      ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+    export_game_row_ = (export_game_row_ + rows - 1) % rows;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadDpadDown) || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickDown) ||
+      ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+    export_game_row_ = (export_game_row_ + 1) % rows;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_export_game_ = false;
+    return true;
+  }
+  if (clicked >= 0) export_game_row_ = clicked;
+  if (clicked < 0 && !ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) && !ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    return true;
+  }
+  if (export_game_row_ == games) {  // the figures row: A switches it
+    export_game_figures_ = !export_game_figures_;
+    return true;
+  }
+  const size_t game = size_t(export_game_row_);
+  const int saves = game < export_game_saves_.size() ? export_game_saves_[game] : -1;
+  if (saves <= 0 || (running_game_ == game && !running_key_.empty()) || data_transfer_.running()) return true;
+  ask_export_game_ = false;
+  data_transfer_.StartExportGame(game, found_[game], export_game_figures_, german_);
+  hub_screen_.ShowMessage(german_ ? "Exportiere ..." : "Exporting ...");
+  return true;
+}
+
+// A file from "Share one game's saves" (#161): replace that game's saves here with the file's? Yours
+// are copied into the backups first (RT on the card puts one back).
+bool LauncherUi::DrawOneGameImportQuestion(float width, float height) {
+  const float u = UiScale(width, height);
+  ImGui::SetNextWindowPos({0, 0});
+  ImGui::SetNextWindowSize({width, height});
+  ImGui::Begin("onegameimport", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                   ImGuiWindowFlags_NoNav);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  DrawBackdrop(dl, width, height, {});
+  const float bw = 720 * u, bh = 290 * u;
+  const ImVec2 a{(width - bw) * 0.5f, (height - bh) * 0.5f}, b{a.x + bw, a.y + bh};
+  dl->AddRectFilled(a, b, Rgba(16, 22, 60, 245), 24 * u);
+  dl->AddRect(a, b, kGold, 24 * u, 0, 3 * u);
+  const Game& g = AllGames()[size_t(std::max(0, data_transfer_.one_game()))];
+  const std::string title = std::string(german_ ? g.name_de : g.name_en) +
+                            (german_ ? ": Spielst\xC3\xA4nde ersetzen?" : ": replace the saves?");
+  Text(dl, bold_, 34 * u, {(width - TextWidth(bold_, 34 * u, title.c_str())) * 0.5f, a.y + 30 * u}, kGold, title.c_str());
+  char text[400];
+  std::snprintf(text, sizeof(text),
+                german_ ? "In der Datei: %zu Spielst\xC3\xA4nde. Sie ersetzen deine %zu; deine kommen vorher in die "
+                          "Kopien (RT auf der Karte holt einen zur\xC3\xBC" "ck). Figuren aus der Datei kommen dazu, "
+                          "ohne etwas zu \xC3\xBC" "berschreiben."
+                        : "In the file: %zu saves. They replace your %zu; yours go into the copies first (RT on the "
+                          "card puts one back). Figures in the file come in without overwriting anything.",
+                data_transfer_.one_game_saves(), data_transfer_.one_game_saves_here());
+  dl->AddText(regular_, 20 * u, {a.x + 36 * u, a.y + 88 * u}, kWhite, text, nullptr, bw - 72 * u);
+  const ImGuiIO& io = ImGui::GetIO();
+  auto button = [&](float x, const char* pad, ImU32 col, const char* label) {
+    const ImVec2 p{x, b.y - 76 * u}, q{x + 280 * u, b.y - 24 * u};
+    const bool over = io.MousePos.x >= p.x && io.MousePos.x < q.x && io.MousePos.y >= p.y && io.MousePos.y < q.y;
+    dl->AddRectFilled(p, q, over ? Rgba(70, 80, 150, 245) : Rgba(30, 40, 90, 240), 16 * u);
+    const float w = TextWidth(bold_, 24 * u, label) + 2 * 0.62f * 24 * u + 24 * u * 0.4f;
+    ButtonHint(dl, bold_, 24 * u, {p.x + (280 * u - w) * 0.5f, p.y + 12 * u}, pad, col, label);
+    return over && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  };
+  const bool replace = button(a.x + 50 * u, "A", Rgba(70, 170, 70), german_ ? "Ersetzen" : "Replace");
+  const bool back = button(b.x - 330 * u, "B", Rgba(200, 60, 60), german_ ? "Abbrechen" : "Cancel");
+  ImGui::End();
+  if (replace || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+    ask_one_game_import_ = false;
+    // Not while that game runs: it would write its saves over the file's, or read half-replaced ones.
+    if (!running_key_.empty() && running_game_ == size_t(data_transfer_.one_game())) {
+      ShowToast(std::string(german_ ? "Schlie\xC3\x9F" "e zuerst " : "Close ") + (german_ ? g.name_de : g.name_en) +
+                    (german_ ? "." : " first."),
+                8.0);
+    } else {
+      data_transfer_.StartImport(false);
+    }
+  } else if (back || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ask_one_game_import_ = false;
   }
   return true;
 }
@@ -3147,6 +3306,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
     return true;
   }
   if (ask_import_settings_) return DrawImportQuestion(width, height);
+  if (ask_export_game_) return DrawExportGame(width, height);
+  if (ask_one_game_import_) return DrawOneGameImportQuestion(width, height);
   if (!ask_reimport_.empty()) return DrawReimportQuestion(width, height);
   if (confirm_quit_) return DrawQuitConfirm(width, height);
   if (wiiu_remove_) return DrawWiiuRemove(width, height);
@@ -3161,6 +3322,8 @@ bool LauncherUi::DrawScreens(float width, float height) {
         std::string error;
         if (!data_transfer_.PlanImport(chosen, found_, german_, error)) {
           ShowToast(error, 8.0);
+        } else if (data_transfer_.one_game() >= 0) {
+          ask_one_game_import_ = true;  // its saves replace that game's: asked first (#161)
         } else if (!data_transfer_.settings_differ().empty()) {
           ask_import_settings_ = true;
         } else {
@@ -3272,6 +3435,20 @@ bool LauncherUi::DrawScreens(float width, float height) {
     if (action == "export_data" && !data_transfer_.running()) {
       data_transfer_.StartExport(found_, german_);
       hub_screen_.ShowMessage(german_ ? "Exportiere ..." : "Exporting ...");
+    }
+    // "Share one game's saves" (#161): the game and the figures picked first (DrawExportGame); each
+    // game's saves counted once here, not every frame.
+    if (action == "export_game" && !data_transfer_.running()) {
+      export_game_saves_.assign(AllGames().size(), -1);
+      for (size_t i = 0; i < AllGames().size() && i < found_.size(); ++i) {
+        if (found_[i].exe.empty()) continue;
+        int saves = 0;
+        for (const SaveSlot& slot : ListSaves(ActiveProfile(), found_[i].exe)) saves += slot.options ? 0 : 1;
+        export_game_saves_[i] = saves;
+      }
+      export_game_row_ = 0;
+      export_game_figures_ = false;
+      ask_export_game_ = true;
     }
     if (action == "import_data" && !data_transfer_.running()) {
       browse_for_language_ = false;
