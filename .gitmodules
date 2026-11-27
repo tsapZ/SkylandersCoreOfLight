@@ -5,3 +5,9 @@
 	path = thirdparty/skylanders-portal
 	url = https://github.com/tsapZ/skylanders-portal.git
 	branch = feature/portal-menu
+[submodule "thirdparty/zstd"]
+	path = thirdparty/zstd
+	url = https://github.com/facebook/zstd.git
+[submodule "thirdparty/zarchive"]
+	path = thirdparty/zarchive
+	url = https://github.com/Exzap/ZArchive.git

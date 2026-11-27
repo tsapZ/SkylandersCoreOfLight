@@ -47,8 +47,8 @@ class FileBrowser {
   // Set before Open; SetForData(false) or (true) ends it.
   void SetForFigures(bool figures) { for_figures_ = figures; }
   bool for_figures() const { return for_figures_; }
-  // In folders-only mode: the player's extracted Wii U game for the Wii U figures (wiiu_figures.h, #56): 1
-  // SuperChargers, 2 Imaginators, 0 none. Set before Open; SetForData ends it.
+  // In folders-only mode: the player's extracted Wii U game for the Wii U figures (wiiu_figures.h, #56), or Cemu's
+  // .wua of it (listed like a disc, #166): 1 SuperChargers, 2 Imaginators, 0 none. Set before Open; SetForData ends it.
   void SetForWiiu(int game) { for_wiiu_ = game; }
   int for_wiiu() const { return for_wiiu_; }
   // In disc mode: Imaginators' PS3 disc for its languages (language_import.h), not a disc to unpack;

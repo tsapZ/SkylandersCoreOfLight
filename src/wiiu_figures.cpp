@@ -12,6 +12,7 @@
 #include "language_import.h"
 #include "platform.h"
 #include "updates.h"
+#include "wua_unpack.h"
 #include "zip_extract.h"
 
 #ifdef _WIN32
@@ -319,16 +320,51 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
     const Tool& tool = ToolFor(game);
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
+    // A .wua (Cemu's compressed Wii U game, CoL #166): the game's content/archives unpacked into a scratch folder first
+    // (wua_unpack.h), which goes again before the summary shows, also when the tool failed; one an earlier run left
+    // behind (the launcher closed half way) goes at the start.
+    const fs::path scratch = PackageDir().parent_path() / ".wua-game";
+    std::error_code scratch_ec;
+    fs::remove_all(scratch, scratch_ec);
+    auto end = [&](std::string summary) {
+      std::error_code ec;
+      fs::remove_all(scratch, ec);
+      Finish(*s, std::move(summary));
+    };
+    fs::path source = wiiu;
+    float tool_from = 0.3f;
+    if (IsWuaFile(wiiu)) {
+      SetStep(*s, german ? "Entpacke deine .wua (ein paar Minuten)" : "Unpacking your .wua (a few minutes)");
+      std::atomic<float> part{0.0f};
+      std::atomic<bool> unpacking{true};
+      std::thread watch([&] {
+        while (unpacking) {
+          s->progress = 0.3f + 0.15f * part.load();
+          std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+      });
+      std::string why;
+      const bool unpacked = UnpackWuaArchives(wiiu, scratch, "Bowser.pak", &part, nullptr, why);
+      unpacking = false;
+      watch.join();
+      if (!unpacked) {
+        HubWarn("wiiu figures: " + PathUtf8(wiiu.filename()) + ": " + why);
+        return end((german ? "Die .wua lie\xC3\x9F sich nicht entpacken: " : "Couldn't unpack the .wua: ") + why);
+      }
+      HubLog("wiiu figures: " + PathUtf8(wiiu.filename()) + ": content/archives unpacked");
+      source = scratch;
+      tool_from = 0.45f;
+    }
     // Imaginators with another language imported (CoL #124): the earlier pointing of Bowser's and Donkey Kong's texts
     // undone first (the tool leaves a file alone that changed since its install), and the Wii U files of that language
     // kept next to the disc's own, so their texts can show it too.
-    std::vector<std::wstring> args = {(PackageDir() / tool.script).wstring(), L"--wiiu", wiiu.wstring(), L"--install",
+    std::vector<std::wstring> args = {(PackageDir() / tool.script).wstring(), L"--wiiu", source.wstring(), L"--install",
                                       exe_dir.wstring()};
     std::string imported;
     if (game == Game::kImaginators) {
       if (!UndoWiiuText(rom)) {
-        return Finish(*s, german ? "Imaginators l\xC3\xA4sst sich gerade nicht \xC3\xA4ndern (l\xC3\xA4uft es noch?)."
-                                 : "Imaginators can't be changed right now (is it still running?).");
+        return end(german ? "Imaginators l\xC3\xA4sst sich gerade nicht \xC3\xA4ndern (l\xC3\xA4uft es noch?)."
+                          : "Imaginators can't be changed right now (is it still running?).");
       }
       imported = ImportedLanguage(rom);
       std::vector<std::string> languages = ImaginatorsInstallLanguages(rom);
@@ -344,7 +380,7 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
       }
     }
     SetStep(*s, german ? "Wandle deine Wii-U-Dateien um (ein paar Minuten)" : "Converting your Wii U files (a few minutes)");
-    ToolOutput out{*s, 0.3f, 0.99f, {}};
+    ToolOutput out{*s, tool_from, 0.99f, {}};
     int code = RunPython(args, std::ref(out));
     if (code > 0 && !imported.empty()) {
       // A Wii U game without that language (its files missing): converted as before, with the disc's languages only.
@@ -356,16 +392,15 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
     if (code != 0) {
       const std::string why = LastLine(out);
       // A stop half way is undone by the take-out button: the tool wrote its manifest before each change.
-      return Finish(*s, (german ? "Das ging nicht: " : "That didn't work: ") +
-                            (code < 0 ? std::string(german ? "Python startete nicht." : "Python didn't start.") : why));
+      return end((german ? "Das ging nicht: " : "That didn't work: ") +
+                 (code < 0 ? std::string(german ? "Python startete nicht." : "Python didn't start.") : why));
     }
     if (!imported.empty()) {
       const int texts = PointWiiuTextAtImport(rom);
       HubLog("Wii U figures: " + std::to_string(texts) + " text(s) in " + imported);
     }
-    Finish(*s, german ? std::string("Die Wii-U-Figuren sind in ") + tool.name_de +
-                            ": im Portalmen\xC3\xBC unter Nintendo."
-                      : std::string("The Wii U figures are in ") + tool.name_en + ": in the portal menu under Nintendo.");
+    end(german ? std::string("Die Wii-U-Figuren sind in ") + tool.name_de + ": im Portalmen\xC3\xBC unter Nintendo."
+               : std::string("The Wii U figures are in ") + tool.name_en + ": in the portal menu under Nintendo.");
 #endif
   }).detach();
 }

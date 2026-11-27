@@ -52,6 +52,24 @@ endif()
 set(SKYLANDERS_STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/stb)
 add_subdirectory(${PORTAL_DIR} skylanders-portal EXCLUDE_FROM_ALL)
 
+# Cemu's .wua archives for the Wii U figures (#166, wua_unpack.h): Exzap's ZArchive (MIT-0) on zstd (BSD), pinned
+# submodules built here from their sources: the reader and zstd's decoder, and for the test's own archives the writer,
+# zstd's encoder and ZArchive's SHA-256 (the launcher's exe takes only the objects it calls). No assembly
+# (ZSTD_DISABLE_ASM): the same C on every platform.
+enable_language(C)
+set(ZSTD_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zstd/lib)
+set(ZARCHIVE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zarchive)
+if(NOT EXISTS ${ZARCHIVE_DIR}/src/zarchivereader.cpp OR NOT EXISTS ${ZSTD_LIB_DIR}/zstd.h)
+  message(FATAL_ERROR "thirdparty/zarchive or thirdparty/zstd is missing: git submodule update --init")
+endif()
+file(GLOB COREOFLIGHT_ZSTD_SOURCES ${ZSTD_LIB_DIR}/common/*.c ${ZSTD_LIB_DIR}/compress/*.c
+     ${ZSTD_LIB_DIR}/decompress/*.c)
+add_library(coreoflight_zarchive STATIC ${ZARCHIVE_DIR}/src/zarchivereader.cpp ${ZARCHIVE_DIR}/src/zarchivewriter.cpp
+            ${ZARCHIVE_DIR}/src/sha_256.c ${COREOFLIGHT_ZSTD_SOURCES})
+target_include_directories(coreoflight_zarchive PUBLIC ${ZARCHIVE_DIR}/include PRIVATE ${ZSTD_LIB_DIR})
+target_compile_definitions(coreoflight_zarchive PRIVATE ZSTD_DISABLE_ASM)
+target_compile_features(coreoflight_zarchive PUBLIC cxx_std_20)
+
 set(COREOFLIGHT_SOURCES
   src/main.cpp
   src/platform.cpp
@@ -93,6 +111,7 @@ set(COREOFLIGHT_SOURCES
   src/portable.cpp
   src/language_import.cpp
   src/zip_extract.cpp
+  src/wua_unpack.cpp
   src/wiiu_figures.cpp
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
@@ -149,6 +168,8 @@ else()
   )
   set_target_properties(coreoflight PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
 endif()
+
+target_link_libraries(coreoflight PRIVATE coreoflight_zarchive)
 
 # The fallback font next to the exe (main.cpp LoadFont: where system UI fonts aren't there).
 add_custom_command(TARGET coreoflight POST_BUILD
@@ -214,4 +235,9 @@ if(BUILD_TESTING)
     target_link_libraries(coreoflight_portable_zip_test PRIVATE LibArchive::LibArchive OpenSSL::Crypto Threads::Threads)
   endif()
   add_test(NAME portable_zip COMMAND coreoflight_portable_zip_test)
+  # The .wua unpacking for the Wii U figures (wua_unpack.cpp, #166): archives the test writes itself.
+  add_executable(coreoflight_wua_unpack_test tests/wua_unpack_test.cpp src/wua_unpack.cpp)
+  target_include_directories(coreoflight_wua_unpack_test PRIVATE src)
+  target_link_libraries(coreoflight_wua_unpack_test PRIVATE coreoflight_zarchive)
+  add_test(NAME wua_unpack COMMAND coreoflight_wua_unpack_test)
 endif()

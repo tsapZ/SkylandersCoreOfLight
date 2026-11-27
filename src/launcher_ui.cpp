@@ -30,6 +30,7 @@
 #include "problem_report.h"
 #include "textures.h"
 #include "whats_new.h"
+#include "wua_unpack.h"
 
 namespace sp = skylanders::portal;
 
@@ -3074,9 +3075,9 @@ bool LauncherUi::DrawScreens(float width, float height) {
         // The Wii U game for the Wii U figures (wiiu_figures.h); the note at the bottom right shows how far it is.
         folder_browser_.SetForData(false);
         const bool sc = wiiu == 1;
-        if (!WiiuFigures::LooksLikeWiiuGame(chosen)) {
-          ShowToast(german_ ? "Dort ist kein entpacktes Wii-U-Spiel (kein Ordner archives)."
-                            : "That isn't an extracted Wii U game (no archives folder).",
+        if (!IsWuaFile(chosen) && !WiiuFigures::LooksLikeWiiuGame(chosen)) {
+          ShowToast(german_ ? "Dort ist kein entpacktes Wii-U-Spiel (kein Ordner archives) und keine .wua."
+                            : "That isn't an extracted Wii U game (no archives folder) or a .wua.",
                     10.0);
         } else if ((sc ? SuperChargersReady() : ImaginatorsReady()) && !wiiu_figures_.running() &&
                    !language_import_.running()) {
