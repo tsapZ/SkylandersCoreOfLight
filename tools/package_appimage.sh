@@ -45,6 +45,7 @@ cp "$stage/libSDL3.so.0" "$appdir/usr/bin/libSDL3.so.0"
 cp -r "$stage/fonts" "$appdir/usr/bin/fonts"
 cp "$stage/LICENSE" "$appdir/usr/bin/LICENSE"
 cp "$stage/LICENSE-SDL3.txt" "$appdir/usr/bin/LICENSE-SDL3.txt"
+cp -r "$stage/licenses" "$appdir/usr/bin/licenses"
 if [ -f "$stage/70-portal-of-power.rules" ]; then
   cp "$stage/70-portal-of-power.rules" "$appdir/usr/share/doc/coreoflight/70-portal-of-power.rules"
 fi

@@ -102,6 +102,11 @@ fi
 
 cp -r "$repo/fonts" "$stage/fonts"
 cp "$repo/LICENSE" "$stage/LICENSE"
+# The notices of the code built into the launcher (Dear ImGui MIT, zstd BSD, ZArchive MIT-0; #166).
+mkdir -p "$stage/licenses"
+cp "$repo/thirdparty/imgui/LICENSE.txt" "$stage/licenses/imgui.txt"
+cp "$repo/thirdparty/zstd/LICENSE" "$stage/licenses/zstd.txt"
+cp "$repo/thirdparty/zarchive/LICENSE" "$stage/licenses/zarchive.txt"
 rules="$repo/thirdparty/skylanders-portal/installer/70-portal-of-power.rules"
 if [ -f "$rules" ]; then
   cp "$rules" "$stage/70-portal-of-power.rules"
