@@ -224,7 +224,9 @@ function Invoke-GameRun([string]$Repo, [string]$Script, [string]$UserData, [stri
   if (-not (Test-Path $runner)) { $runner = ".\tools\run_scripted.ps1" }
   # -ShotsFromLog: no timeline; each picture is taken a second after the game logs the route's
   # "log shot <name>" line, so a waitfor before it (any length) can't put it off (2026-11-12).
-  $timeline = if ($ShotsFromLog) { "" } else { $Shots }
+  # The runner splits its timeline at ";"; commas (as in a route's "# shots:" header) count the same, since a
+  # comma list passed straight in made the runner throw "unknown step" and ended the run (2026-11-28).
+  $timeline = if ($ShotsFromLog) { "" } else { $Shots -replace ',', ';' }
   # -RenderDocCapture <path\prefix>: the game started through RenderDoc (the runner's own option), so the dev kit's
   # "renderdoc <frames>" line can take a capture (the SDK only talks to a RenderDoc that is already loaded).
   $more = @{}
