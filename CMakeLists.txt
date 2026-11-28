@@ -52,6 +52,32 @@ endif()
 set(SKYLANDERS_STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/stb)
 add_subdirectory(${PORTAL_DIR} skylanders-portal EXCLUDE_FROM_ALL)
 
+# Cemu's .wua archives for the Wii U figures (#166, wua_unpack.h): Exzap's ZArchive (MIT-0) on zstd (BSD), pinned
+# submodules built here from their sources: the launcher gets the reader and zstd's decoder; the writer, zstd's encoder
+# and ZArchive's SHA-256 only go into the test, which writes its own archives. No assembly (ZSTD_DISABLE_ASM): the
+# same C on every platform. On Linux zstd's functions are hidden (no ZSTDLIB_VISIBLE, -fvisibility=hidden): the
+# launcher's copy must not stand in for the system libzstd that libarchive loads.
+enable_language(C)
+set(ZSTD_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zstd/lib)
+set(ZARCHIVE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zarchive)
+if(NOT EXISTS ${ZARCHIVE_DIR}/src/zarchivereader.cpp OR NOT EXISTS ${ZSTD_LIB_DIR}/zstd.h)
+  message(FATAL_ERROR "thirdparty/zarchive or thirdparty/zstd is missing: git submodule update --init")
+endif()
+function(coreoflight_zstd_flags target)
+  target_include_directories(${target} PRIVATE ${ZSTD_LIB_DIR})
+  # ZSTD_TRACE=0: no weak trace hooks (ZSTD_trace_decompress_begin) left open for another library to fill.
+  target_compile_definitions(${target} PRIVATE ZSTD_DISABLE_ASM ZSTD_TRACE=0 ZSTDLIB_VISIBLE= ZSTDERRORLIB_VISIBLE=
+                                               ZDICTLIB_VISIBLE=)
+  if(NOT WIN32)
+    set_target_properties(${target} PROPERTIES C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden)
+  endif()
+endfunction()
+file(GLOB COREOFLIGHT_ZSTD_DECODER ${ZSTD_LIB_DIR}/common/*.c ${ZSTD_LIB_DIR}/decompress/*.c)
+add_library(coreoflight_zarchive STATIC ${ZARCHIVE_DIR}/src/zarchivereader.cpp ${COREOFLIGHT_ZSTD_DECODER})
+target_include_directories(coreoflight_zarchive PUBLIC ${ZARCHIVE_DIR}/include)
+target_compile_features(coreoflight_zarchive PUBLIC cxx_std_20)
+coreoflight_zstd_flags(coreoflight_zarchive)
+
 set(COREOFLIGHT_SOURCES
   src/main.cpp
   src/platform.cpp
@@ -94,6 +120,7 @@ set(COREOFLIGHT_SOURCES
   src/portable.cpp
   src/language_import.cpp
   src/zip_extract.cpp
+  src/wua_unpack.cpp
   src/wiiu_figures.cpp
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_draw.cpp
@@ -150,6 +177,8 @@ else()
   )
   set_target_properties(coreoflight PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
 endif()
+
+target_link_libraries(coreoflight PRIVATE coreoflight_zarchive)
 
 # The fallback font next to the exe (main.cpp LoadFont: where system UI fonts aren't there).
 add_custom_command(TARGET coreoflight POST_BUILD
@@ -220,4 +249,22 @@ if(BUILD_TESTING)
     target_link_libraries(coreoflight_portable_zip_test PRIVATE LibArchive::LibArchive OpenSSL::Crypto Threads::Threads)
   endif()
   add_test(NAME portable_zip COMMAND coreoflight_portable_zip_test)
+  # The .wua unpacking for the Wii U figures (wua_unpack.cpp, #166): archives the test writes itself with ZArchive's
+  # writer on zstd's encoder (only here).
+  file(GLOB COREOFLIGHT_ZSTD_ENCODER ${ZSTD_LIB_DIR}/compress/*.c)
+  add_library(coreoflight_zarchive_writer STATIC ${ZARCHIVE_DIR}/src/zarchivewriter.cpp ${ZARCHIVE_DIR}/src/sha_256.c
+              ${COREOFLIGHT_ZSTD_ENCODER})
+  target_link_libraries(coreoflight_zarchive_writer PUBLIC coreoflight_zarchive)
+  coreoflight_zstd_flags(coreoflight_zarchive_writer)
+  add_executable(coreoflight_wua_unpack_test tests/wua_unpack_test.cpp src/wua_unpack.cpp src/platform.cpp
+                 src/hub_log.cpp)
+  target_include_directories(coreoflight_wua_unpack_test PRIVATE src)
+  target_compile_definitions(coreoflight_wua_unpack_test PRIVATE COREOFLIGHT_LINUX_ARCH="${COREOFLIGHT_LINUX_ARCH}")
+  target_link_libraries(coreoflight_wua_unpack_test PRIVATE coreoflight_zarchive_writer)
+  if(WIN32)
+    target_link_libraries(coreoflight_wua_unpack_test PRIVATE bcrypt)
+  else()
+    target_link_libraries(coreoflight_wua_unpack_test PRIVATE LibArchive::LibArchive OpenSSL::Crypto Threads::Threads)
+  endif()
+  add_test(NAME wua_unpack COMMAND coreoflight_wua_unpack_test)
 endif()

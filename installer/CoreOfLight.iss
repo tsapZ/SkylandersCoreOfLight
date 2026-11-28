@@ -66,6 +66,8 @@ Source: "staging\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 ; The fallback font where Windows' Segoe UI isn't there (Wine / Proton): Noto Sans, SIL Open Font
 ; License (fonts\OFL.txt).
 Source: "staging\fonts\*"; DestDir: "{app}\fonts"; Flags: ignoreversion
+; The notices of the code built into the exe (Dear ImGui, zstd, ZArchive; tools\package_installer.ps1).
+Source: "staging\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "staging\games\*.exe"; DestDir: "{app}\games"; Flags: ignoreversion skipifsourcedoesntexist
 
 [InstallDelete]

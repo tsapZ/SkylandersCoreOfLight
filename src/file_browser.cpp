@@ -259,8 +259,11 @@ void FileBrowser::List(const fs::path& folder) {
       folders.emplace_back(name, p);
     } else {
       const std::string ext = LowerAscii(PathUtf8(p.extension()));
-      // An export of "Meine Daten exportieren" (data_transfer.h) instead of a disc in that mode.
-      if (ext == (for_backup_ ? ".zip" : ".iso") && !folders_only_) isos.emplace_back(name, p);
+      // An export of "Meine Daten exportieren" (data_transfer.h) instead of a disc in that mode; for the Wii U figures
+      // Cemu's compressed Wii U games (.wua, wua_unpack.h, #166) next to the folders.
+      if (for_wiiu_ ? ext == ".wua" : ext == (for_backup_ ? ".zip" : ".iso") && !folders_only_) {
+        isos.emplace_back(name, p);
+      }
     }
   }
   auto by_name = [](const auto& a, const auto& b) { return LessNoCase(a.first, b.first); };
@@ -326,7 +329,7 @@ void FileBrowser::Draw(float width, float height) {
          : for_data_  ? (german_ ? "SPIELDATEN-ORDNER" : "DATA FOLDER")
                       : (german_ ? "SPIELE-ORDNER" : "GAMES FOLDER"));
     Text(dl, bold_, 40 * u, {46 * u, 56 * u}, kGold,
-         for_wiiu_      ? (german_ ? "Wo liegt dein entpacktes Wii-U-Spiel?" : "Where is your extracted Wii U game?")
+         for_wiiu_      ? (german_ ? "Wo liegt dein Wii-U-Spiel?" : "Where is your Wii U game?")
          : for_3ds_ ? (german_ ? "Wo liegen deine 3DS-Dumps?" : "Where are your 3DS dumps?")
          : for_figures_ ? (german_ ? "Welcher Ordner hat die Figurendateien?" : "Which folder has the figure files?")
          : for_data_  ? (german_ ? "Wohin mit Spielst\xC3\xA4nden und Figuren?" : "Where should saves and figures go?")
@@ -473,8 +476,8 @@ void FileBrowser::Draw(float width, float height) {
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "B", Rgba(200, 60, 60), german_ ? "Zur\xC3\xBC" "ck" : "Back");
     hx = Hint(dl, bold_, 22 * u, {hx, hy}, "LB/RB", Rgba(80, 90, 140), german_ ? "Seite" : "Page");
     Text(dl, regular_, 18 * u, {hx, hy + 2 * u}, kDim,
-         for_wiiu_ ? (german_ ? "Der Ordner mit content\\archives (oder archives selbst). Deine Wii-U-Dateien bleiben, wie sie sind."
-                              : "The folder with content\\archives (or archives itself). Your Wii U files stay as they are.")
+         for_wiiu_ ? (german_ ? "Cemus .wua oder der Ordner mit content\\archives. Deine Wii-U-Dateien bleiben, wie sie sind."
+                              : "Cemu's .wua or the folder with content\\archives. Your Wii U files stay as they are.")
          : for_3ds_ ? (german_ ? "Dumps deiner Module (.cci, .3ds) hier und zwei Ordner tiefer werden gefunden."
                              : "Dumps of your cartridges (.cci, .3ds) here and two folders down are found.")
          : for_figures_ ? (german_ ? "Unterordner z\xC3\xA4hlen mit. Imaginators pr\xC3\xBC" "ft jede Datei selbst; nur echte kommen dazu."

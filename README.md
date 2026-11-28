@@ -174,8 +174,8 @@ the game.
 - **SuperChargers in any of its six languages** from another Xbox 360 disc of the game that has it
   (each European disc has two), even one of a build that can't run here itself.
 - **Wii U figures:** the Nintendo figures of the Wii U SuperChargers and Imaginators, from your own
-  extracted Wii U game, with SkyP4tcher's converters (launcher settings). Your game's own files are
-  kept, and the same button puts them back.
+  Wii U game (extracted, or Cemu's compressed .wua as it is), with SkyP4tcher's converters (launcher
+  settings). Your game's own files are kept, and the same button puts them back.
 - **The 3DS games:** the five 3DS Skylanders, recompiled for Windows
   ([tsapZ/3dsrecomp](https://github.com/tsapZ/3dsrecomp/releases)). 3 or R3 on the start screen;
   each is installed and set up from your own cartridge dump (the European editions for now).
@@ -316,6 +316,8 @@ The pictures at the top of this page are drawn by `tools/make_banner.ps1`, the i
   (MIT).
 - **[stb_image](https://github.com/nothings/stb)** by Sean Barrett: its zlib decoder unpacks
   Imaginators' archives for the language import, in `thirdparty/stb` (public domain / MIT).
+- **[ZArchive](https://github.com/Exzap/ZArchive)** by Exzap reads Cemu's .wua files for the Wii U
+  figures (MIT-0), on **[zstd](https://github.com/facebook/zstd)** by Meta (BSD). Submodules.
 - **[Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)** by the Noto Project Authors, the
   font where Windows' Segoe UI isn't there (Wine / Proton) and on the pictures at the top, in
   `fonts/` (SIL Open Font License, `fonts/OFL.txt`).

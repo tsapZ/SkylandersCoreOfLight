@@ -29,6 +29,15 @@ New-Item -ItemType Directory -Force (Join-Path $staging "games") | Out-Null
 Copy-Item $exe $staging
 # The launcher's fallback font (Noto Sans, SIL OFL) for where Windows' Segoe UI isn't there (Wine / Proton).
 Copy-Item -Recurse (Join-Path $repo "fonts") (Join-Path $staging "fonts")
+# The licenses of the code built into the exe that ask for their notice to go with it (Dear ImGui MIT, zstd BSD;
+# ZArchive's MIT-0 doesn't, it comes along anyway; #166), from the submodules themselves.
+New-Item -ItemType Directory -Force (Join-Path $staging "licenses") | Out-Null
+foreach ($l in @(@("thirdparty\imgui\LICENSE.txt", "imgui.txt"), @("thirdparty\zstd\LICENSE", "zstd.txt"),
+                 @("thirdparty\zarchive\LICENSE", "zarchive.txt"))) {
+  $from = Join-Path $repo $l[0]
+  if (-not (Test-Path $from)) { throw "$from is missing: git submodule update --init" }
+  Copy-Item $from (Join-Path $staging "licenses\$($l[1])")
+}
 
 # The CRT DLLs of the newest MSVC redist folder of any Visual Studio 2022 edition.
 $crt = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" -Directory -ErrorAction SilentlyContinue |

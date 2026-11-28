@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <thread>
@@ -12,6 +13,7 @@
 #include "language_import.h"
 #include "platform.h"
 #include "updates.h"
+#include "wua_unpack.h"
 #include "zip_extract.h"
 
 #ifdef _WIN32
@@ -77,6 +79,41 @@ void Finish(WiiuFigures::Shared& s, std::string summary) {
 
 fs::path PackageDir() { return LocalAppDataDir() / "CoreOfLight" / "wiiu-tools" / kPackageName; }
 
+// Where a .wua's content/archives is unpacked for the converter (wua_unpack.h, #166). Gone again before a run's summary
+// shows; one a closed or crashed launcher left behind goes at the next start or take-out. True when it is gone.
+fs::path WuaScratch() { return LocalAppDataDir() / "CoreOfLight" / "wiiu-tools" / ".wua-game"; }
+bool RemoveWuaScratch() {
+  std::error_code ec;
+  fs::remove_all(WuaScratch(), ec);
+  return !fs::exists(WuaScratch(), ec);
+}
+
+// Runs `work` while a second thread moves the progress from `from` by `span` times `part` (0..1) every 200 ms and calls
+// `tick` (may be empty) each time; `work`'s result.
+template <class Work>
+auto WithProgress(WiiuFigures::Shared& s, const std::atomic<float>& part, float from, float span,
+                  const std::function<void()>& tick, Work&& work) {
+  std::atomic<bool> running{true};
+  std::thread watch([&] {
+    while (running) {
+      s.progress = from + span * part.load();
+      if (tick) tick();
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+  });
+  auto result = work();
+  running = false;
+  watch.join();
+  return result;
+}
+
+// The files the converter's game has and the other one hasn't, besides the one both look for (find_wiiu: Bowser.pak):
+// SuperChargers' driver challenge APA4 (superpatcher needs it); Imaginators has none known, the converter tells.
+std::vector<std::string> WuaMarkers(WiiuFigures::Game game) {
+  if (game == WiiuFigures::Game::kSuperChargers) return {"Bowser.pak", "APA4.pak"};
+  return {"Bowser.pak"};
+}
+
 // The package unpacked in PackageDir(): there already (its manifest.json), else downloaded (or copied from
 // COREOFLIGHT_WIIU_PACKAGE), checked against kPackageSha256 and unpacked. Progress 0..0.3.
 bool EnsurePackage(WiiuFigures::Shared& s, bool german, std::string& error) {
@@ -95,16 +132,8 @@ bool EnsurePackage(WiiuFigures::Shared& s, bool german, std::string& error) {
       return false;
     } else {
       std::atomic<float> got{0.0f};
-      std::atomic<bool> done{false};
-      std::thread watch([&] {
-        while (!done) {
-          s.progress = 0.25f * got.load();
-          std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
-      });
-      const bool ok = DownloadFile(kPackageUrl, zip, &got, nullptr, kPackageSha256);
-      done = true;
-      watch.join();
+      const bool ok =
+          WithProgress(s, got, 0.0f, 0.25f, {}, [&] { return DownloadFile(kPackageUrl, zip, &got, nullptr, kPackageSha256); });
       if (!ok) {
         error = german ? "Der Wii-U-Konverter lie\xC3\x9F sich nicht laden (Internet?)."
                        : "Couldn't download the Wii U converter (internet?).";
@@ -317,18 +346,61 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
     Finish(*s, german ? "Die Wii-U-Figuren gibt es bisher nur unter Windows." : "The Wii U figures are Windows only for now.");
 #else
     const Tool& tool = ToolFor(game);
+    // A .wua (Cemu's compressed Wii U game, CoL #166): the game's content/archives unpacked into a scratch folder first
+    // (wua_unpack.h), which goes again before the summary shows, also when the tool failed. One an earlier run left
+    // behind goes first, before anything can stop this run; if it can't, the tool would read its files: stop.
+    if (!RemoveWuaScratch()) {
+      return Finish(*s, german ? "Ein alter Zwischenordner l\xC3\xA4sst sich nicht l\xC3\xB6schen (" +
+                                     PathUtf8(WuaScratch()) + ")."
+                               : "An old scratch folder can't be removed (" + PathUtf8(WuaScratch()) + ").");
+    }
+    const fs::path scratch = WuaScratch();
+    auto end = [&](std::string summary) {
+      RemoveWuaScratch();
+      Finish(*s, std::move(summary));
+    };
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
+    fs::path source = wiiu;
+    float tool_from = 0.3f;
+    if (IsWuaFile(wiiu)) {
+      SetStep(*s, german ? "Entpacke deine .wua" : "Unpacking your .wua");
+      std::atomic<float> part{0.0f};
+      std::atomic<uint64_t> total{0};
+      bool sized = false;
+      auto size_step = [&] {
+        // The size once it is known: some GB, a few minutes.
+        if (sized || !total.load()) return;
+        sized = true;
+        char gb[32];
+        std::snprintf(gb, sizeof(gb), "%.1f", double(total.load()) / double(1ull << 30));
+        std::string text = gb;
+        if (german) std::replace(text.begin(), text.end(), '.', ',');
+        SetStep(*s, german ? "Entpacke deine .wua (" + text + " GB, ein paar Minuten)"
+                           : "Unpacking your .wua (" + text + " GB, a few minutes)");
+      };
+      std::string why;
+      const bool unpacked = WithProgress(*s, part, 0.3f, 0.15f, size_step, [&] {
+        return UnpackWuaArchives(wiiu, scratch, WuaMarkers(game), &part, &total, why);
+      });
+      if (!unpacked) {
+        HubWarn("wiiu figures: " + PathUtf8(wiiu.filename()) + ": " + why);
+        return end((german ? "Die .wua lie\xC3\x9F sich nicht entpacken: " : "Couldn't unpack the .wua: ") + why);
+      }
+      HubLog("wiiu figures: " + PathUtf8(wiiu.filename()) + ": content/archives unpacked");
+      source = scratch;
+      tool_from = 0.45f;
+    }
     // Imaginators with another language imported (CoL #124): the earlier pointing of Bowser's and Donkey Kong's texts
     // undone first (the tool leaves a file alone that changed since its install), and the Wii U files of that language
     // kept next to the disc's own, so their texts can show it too.
-    std::vector<std::wstring> args = {(PackageDir() / tool.script).wstring(), L"--wiiu", wiiu.wstring(), L"--install",
+    std::vector<std::wstring> args = {(PackageDir() / tool.script).wstring(), L"--wiiu", source.wstring(), L"--install",
                                       exe_dir.wstring()};
     std::string imported;
     if (game == Game::kImaginators) {
       if (!UndoWiiuText(rom)) {
-        return Finish(*s, german ? "Imaginators l\xC3\xA4sst sich gerade nicht \xC3\xA4ndern (l\xC3\xA4uft es noch?)."
-                                 : "Imaginators can't be changed right now (is it still running?).");
+        return end(german ? "Imaginators l\xC3\xA4sst sich gerade nicht \xC3\xA4ndern (l\xC3\xA4uft es noch?)."
+                          : "Imaginators can't be changed right now (is it still running?).");
       }
       imported = ImportedLanguage(rom);
       std::vector<std::string> languages = ImaginatorsInstallLanguages(rom);
@@ -344,7 +416,7 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
       }
     }
     SetStep(*s, german ? "Wandle deine Wii-U-Dateien um (ein paar Minuten)" : "Converting your Wii U files (a few minutes)");
-    ToolOutput out{*s, 0.3f, 0.99f, {}};
+    ToolOutput out{*s, tool_from, 0.99f, {}};
     int code = RunPython(args, std::ref(out));
     if (code > 0 && !imported.empty()) {
       // A Wii U game without that language (its files missing): converted as before, with the disc's languages only.
@@ -356,16 +428,15 @@ void WiiuFigures::Start(Game game, const fs::path& wiiu, const fs::path& rom, co
     if (code != 0) {
       const std::string why = LastLine(out);
       // A stop half way is undone by the take-out button: the tool wrote its manifest before each change.
-      return Finish(*s, (german ? "Das ging nicht: " : "That didn't work: ") +
-                            (code < 0 ? std::string(german ? "Python startete nicht." : "Python didn't start.") : why));
+      return end((german ? "Das ging nicht: " : "That didn't work: ") +
+                 (code < 0 ? std::string(german ? "Python startete nicht." : "Python didn't start.") : why));
     }
     if (!imported.empty()) {
       const int texts = PointWiiuTextAtImport(rom);
       HubLog("Wii U figures: " + std::to_string(texts) + " text(s) in " + imported);
     }
-    Finish(*s, german ? std::string("Die Wii-U-Figuren sind in ") + tool.name_de +
-                            ": im Portalmen\xC3\xBC unter Nintendo."
-                      : std::string("The Wii U figures are in ") + tool.name_en + ": in the portal menu under Nintendo.");
+    end(german ? std::string("Die Wii-U-Figuren sind in ") + tool.name_de + ": im Portalmen\xC3\xBC unter Nintendo."
+               : std::string("The Wii U figures are in ") + tool.name_en + ": in the portal menu under Nintendo.");
 #endif
   }).detach();
 }
@@ -378,6 +449,7 @@ void WiiuFigures::StartRestore(Game game, const fs::path& rom, const fs::path& e
     Finish(*s, german ? "Die Wii-U-Figuren gibt es bisher nur unter Windows." : "The Wii U figures are Windows only for now.");
 #else
     const Tool& tool = ToolFor(game);
+    RemoveWuaScratch();  // what a closed or crashed .wua run left behind (#166)
     std::string error;
     if (!EnsurePackage(*s, german, error)) return Finish(*s, error);
     // Bowser's and Donkey Kong's texts pointed at the imported language (CoL #124) back first, or the tool would
